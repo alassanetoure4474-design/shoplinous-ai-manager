@@ -1,0 +1,331 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111827">
+<title>SHOPLINOUS AI Manager</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--dark:#111827;--primary:#5145e5;--muted:#6b7280;--border:#e5e7eb;--green:#07845a}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#172033}
+header{background:linear-gradient(120deg,#111827,#25245b);color:white;padding:25px 20px}
+.header-inner,main{max-width:1100px;margin:auto}
+.brand{font-size:25px;font-weight:800;letter-spacing:.5px}
+.brand span{color:#a5b4fc}
+header p{color:#cbd5e1;margin:8px 0 0;font-size:14px}
+main{padding:22px 16px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:20px}
+.card,.panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:17px;box-shadow:0 4px 14px #11182706}
+.stat-label{color:var(--muted);font-size:12px}
+.stat-value{font-size:clamp(17px,3vw,25px);font-weight:800;margin-top:12px;overflow-wrap:anywhere}
+.panel{margin-bottom:18px}
+.panel h2{font-size:18px;margin:0 0 7px}
+.sub{font-size:13px;color:var(--muted);margin:0 0 18px;line-height:1.5}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:7px}
+input,select{width:100%;padding:12px;border:1px solid #d6dbe6;border-radius:8px;background:white;color:#111827;font-size:15px;min-width:0}
+input:focus,select:focus{outline:2px solid #c7d2fe;border-color:var(--primary)}
+button{border:0;border-radius:8px;padding:12px 15px;font-size:14px;font-weight:700;cursor:pointer}
+.primary{background:var(--primary);color:white}
+.secondary{background:#eef2ff;color:#3730a3}
+.danger{background:#fee2e2;color:#991b1b;padding:8px 10px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:17px}
+.toolbar button{flex:1}
+.search{margin:14px 0}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:680px}
+th,td{padding:13px 10px;text-align:left;border-bottom:1px solid #edf0f5;font-size:13px}
+th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.profit{color:var(--green);font-weight:700}
+.badge{display:inline-block;padding:5px 8px;border-radius:20px;background:#dcfce7;color:#166534;font-size:11px}
+.badge.low{background:#fef3c7;color:#92400e}
+.empty{text-align:center;color:var(--muted);padding:25px}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+.notice{background:#fffbeb;border:1px solid #fde68a;color:#92400e;padding:12px;border-radius:9px;font-size:12px;line-height:1.5;margin-top:15px}
+@media(max-width:600px){.stats{grid-template-columns:1fr}.stat-value{margin-top:7px}.form-grid{grid-template-columns:1fr}main{padding:14px 10px}header{padding:22px 15px}.card{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-inner">
+    <div class="brand">SHOPLINOUS <span>AI</span></div>
+    <p>Votre centre de gestion e-commerce</p>
+  </div>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="card">
+      <div class="stat-label">Produits enregistrés</div>
+      <div class="stat-value" id="total">0</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Valeur du stock</div>
+      <div class="stat-value" id="stockValue">0 FCFA</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">Marge potentielle</div>
+      <div class="stat-value" id="totalMargin">0 FCFA</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Ajouter un produit</h2>
+    <p class="sub">Enregistre les produits et calcule automatiquement leur marge.</p>
+    <form id="productForm">
+      <div class="form-grid">
+        <div>
+          <label for="name">Nom du produit *</label>
+          <input id="name" required maxlength="120" placeholder="Ex. Montre connectée">
+        </div>
+        <div>
+          <label for="supplier">Fournisseur</label>
+          <input id="supplier" maxlength="120" placeholder="Nom du fournisseur">
+        </div>
+        <div>
+          <label for="supplierUrl">Lien du fournisseur</label>
+          <input id="supplierUrl" type="url" placeholder="https://...">
+        </div>
+        <div>
+          <label for="cost">Prix d'achat (FCFA) *</label>
+          <input id="cost" type="number" min="0" step="1" required value="0">
+        </div>
+        <div>
+          <label for="selling">Prix de vente (FCFA) *</label>
+          <input id="selling" type="number" min="0" step="1" required value="0">
+        </div>
+        <div>
+          <label for="stock">Quantité en stock *</label>
+          <input id="stock" type="number" min="0" step="1" required value="1">
+        </div>
+        <div>
+          <label for="status">Statut</label>
+          <select id="status">
+            <option value="Disponible">Disponible</option>
+            <option value="En commande">En commande</option>
+            <option value="Épuisé">Épuisé</option>
+          </select>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="primary" type="submit">+ Ajouter le produit</button>
+        <button class="secondary" type="button" id="exportBtn">Exporter CSV</button>
+      </div>
+    </form>
+    <div class="notice">
+      Version de démonstration : les données sont stockées dans le navigateur de cet appareil. Aucune connexion à Freewebstore ou à un service IA n'est encore activée.
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Mon catalogue</h2>
+    <p class="sub">Recherche, contrôle du stock et suivi des marges.</p>
+    <input class="search" id="search" type="search" placeholder="Rechercher un produit ou fournisseur...">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Produit</th>
+            <th>Achat</th>
+            <th>Vente</th>
+            <th>Stock</th>
+            <th>Marge/unité</th>
+            <th>Statut</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="productList"></tbody>
+      </table>
+      <div id="empty" class="empty">Aucun produit enregistré.</div>
+    </div>
+  </section>
+</main>
+
+<footer>SHOPLINOUS AI Manager · Gestion simplifiée de votre boutique</footer>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const STORAGE_KEY = "shoplinous_manager_products_v1";
+let products = [];
+
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  if (Array.isArray(saved)) products = saved;
+} catch (error) {
+  console.warn("Lecture des données locales impossible.");
+}
+
+const money = value =>
+  new Intl.NumberFormat("fr-FR", {
+    maximumFractionDigits: 0
+  }).format(value) + " FCFA";
+
+function saveProducts() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    render();
+  } catch (error) {
+    alert("Impossible d'enregistrer les données sur cet appareil.");
+  }
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function render() {
+  const query = $("search").value.trim().toLowerCase();
+
+  const filtered = products.filter(p =>
+    p.name.toLowerCase().includes(query) ||
+    (p.supplier || "").toLowerCase().includes(query)
+  );
+
+  $("total").textContent = products.length;
+
+  $("stockValue").textContent = money(
+    products.reduce((sum, p) => sum + p.cost * p.stock, 0)
+  );
+
+  $("totalMargin").textContent = money(
+    products.reduce((sum, p) => sum + (p.selling - p.cost) * p.stock, 0)
+  );
+
+  const list = $("productList");
+  list.replaceChildren();
+  $("empty").hidden = filtered.length > 0;
+
+  filtered.forEach(p => {
+    const tr = document.createElement("tr");
+
+    const values = [
+      p.name,
+      money(p.cost),
+      money(p.selling),
+      String(p.stock),
+      money(p.selling - p.cost),
+      p.status
+    ];
+
+    values.forEach((value, index) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+
+      if (index === 4) td.className = "profit";
+
+      if (index === 3 && p.stock <= 3) {
+        td.className = "badge low";
+      }
+
+      if (index === 5) {
+        const badge = document.createElement("span");
+        badge.className = "badge" + (
+          p.status === "Épuisé" ? " low" : ""
+        );
+        badge.textContent = value;
+        td.replaceChildren(badge);
+      }
+
+      tr.appendChild(td);
+    });
+
+    const action = document.createElement("td");
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger";
+    remove.textContent = "Supprimer";
+
+    remove.addEventListener("click", () => {
+      if (confirm("Supprimer ce produit ?")) {
+        products = products.filter(item => item.id !== p.id);
+        saveProducts();
+      }
+    });
+
+    action.appendChild(remove);
+    tr.appendChild(action);
+    list.appendChild(tr);
+  });
+}
+
+$("productForm").addEventListener("submit", event => {
+  event.preventDefault();
+
+  const cost = Number($("cost").value);
+  const selling = Number($("selling").value);
+  const stock = Number($("stock").value);
+
+  if (cost < 0 || selling < 0 || stock < 0) {
+    alert("Les montants et le stock doivent être positifs.");
+    return;
+  }
+
+  const name = $("name").value.trim();
+  if (!name) {
+    alert("Saisis le nom du produit.");
+    return;
+  }
+
+  products.unshift({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+    name,
+    supplier: $("supplier").value.trim(),
+    supplierUrl: safeUrl($("supplierUrl").value.trim()),
+    cost,
+    selling,
+    stock,
+    status: $("status").value
+  });
+
+  saveProducts();
+  event.target.reset();
+  $("cost").value = 0;
+  $("selling").value = 0;
+  $("stock").value = 1;
+});
+
+$("search").addEventListener("input", render);
+
+$("exportBtn").addEventListener("click", () => {
+  const headers = [
+    "Produit", "Fournisseur", "Lien fournisseur",
+    "Prix achat FCFA", "Prix vente FCFA", "Stock", "Statut"
+  ];
+
+  const rows = products.map(p => [
+    p.name, p.supplier, p.supplierUrl,
+    p.cost, p.selling, p.stock, p.status
+  ]);
+
+  const csv = [headers, ...rows].map(row =>
+    row.map(value =>
+      '"' + String(value ?? "").replace(/"/g, '""') + '"'
+    ).join(";")
+  ).join("\r\n");
+
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: "text/csv;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "shoplinous-produits.csv";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+render();
+</script>
+</body>
+</html>
