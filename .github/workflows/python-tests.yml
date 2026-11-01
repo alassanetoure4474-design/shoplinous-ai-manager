@@ -33,4 +33,19 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt mistralai-workflows
 
       - name: Executer pytest (verbose)
-        run: python -m pytest -v test_daily.py
+        run: |
+          set +e
+          python -m pytest -v test_daily.py 2>&1 | tee pytest_output.txt
+          exit_code=${PIPESTATUS[0]}
+          echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
+          exit "$exit_code"
+
+      - name: Publier les echecs en annotations publiques
+        if: failure()
+        run: |
+          grep -E "^(FAILED|ERROR)" pytest_output.txt | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          tail -n 25 pytest_output.txt | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
