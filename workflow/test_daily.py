@@ -1,8 +1,9 @@
 """Tests pytest SHOPLINOUS workflow v5 (branche workflow-v5-review).
 
-ATTENTION - HONNETETE : ces tests n'ont PAS ete executes dans
-l'environnement de preparation (aucun interpreteur Python disponible,
-`python3: command not available`). Execution attendue par l'utilisateur :
+HONNETETE : non executes dans l'environnement de preparation
+(aucun Python disponible). EXECUTION REELLE via GitHub Actions sur la
+branche workflow-v5-fix1 (.github/workflows/python-tests.yml), egalement
+executable localement :
     pip install -r requirements.txt -r requirements-dev.txt
     python -m pytest test_daily.py -v
 
@@ -158,7 +159,7 @@ class TestCjFreightQuantity:
         seen = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
-            if request.url.path == "/logistic/freight/calculate":
+            if request.url.path.endswith("/logistic/freight/calculate"):
                 seen.update(json.loads(request.content))
                 return httpx.Response(200, json={
                     "code": 200, "data": [{"logisticName": "CJPacket",
@@ -193,7 +194,9 @@ class TestProcessOrderReadOnly:
         def handler(request: httpx.Request) -> httpx.Response:
             if request.method == "POST" and request.url.host != "api.frankfurter.app":
                 posts.append(request.url.path)
-            if request.url.path == "/logistic/freight/calculate":
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            if request.url.path.endswith("/logistic/freight/calculate"):
                 return httpx.Response(200, json={
                     "code": 200, "data": [{"logisticName": "CJPacket",
                                            "logisticPrice": 4.69,
@@ -211,7 +214,7 @@ class TestProcessOrderReadOnly:
                  "items": [{"vid": "vid123", "quantity": 2}]}
         report = run(daily.process_order(order))
         assert report["mode"] == "lecture_seule"
-        assert posts == ["/logistic/freight/calculate"]
+        assert len(posts) == 1 and posts[0].endswith("/logistic/freight/calculate")
         assert report["lignes"][0]["quantite"] == 2
         assert report["alertes"] == []
 
@@ -540,7 +543,7 @@ class TestProcessOrderV51:
                 if rate_down:
                     return httpx.Response(500)
                 return httpx.Response(200, json={"rates": {"EUR": rate}})
-            if request.url.path == "/logistic/freight/calculate":
+            if request.url.path.endswith("/logistic/freight/calculate"):
                 return httpx.Response(200, json={
                     "code": 200, "data": freights})
             raise AssertionError(
@@ -568,7 +571,7 @@ class TestProcessOrderV51:
         assert rep["fret_total_eur"] == 5.06   # 5.65 USD x 0.895
         assert rep["lignes"][0]["statut"] == "verifie"
         assert rep["alertes"] == []
-        assert all(p == "/logistic/freight/calculate"
+        assert all(p.endswith("/logistic/freight/calculate")
                    for m, h, p in calls if h != "api.frankfurter.app")
 
     def test_multi_lignes_tarif_par_ligne(self, monkeypatch):
@@ -581,7 +584,7 @@ class TestProcessOrderV51:
         assert rep["repartition_livraison"] == "par_ligne"
         assert rep["lignes"][0]["tarif_facture_eur"] == 4.50
         assert rep["lignes"][1]["tarif_facture_eur"] == 8.00
-        fret_posts = [c for c in calls if c[2] == "/logistic/freight/calculate"]
+        fret_posts = [c for c in calls if c[2].endswith("/logistic/freight/calculate")]
         assert len(fret_posts) == 2
 
     def test_multi_lignes_repartition_totale(self, monkeypatch):
@@ -726,8 +729,8 @@ class TestProcessOrderV51:
             if host == "api.frankfurter.app":
                 assert method == "GET"
             else:
-                assert (method, path) == ("POST",
-                                          "/logistic/freight/calculate")
+                assert (method == "POST"
+                                          and path.endswith("/logistic/freight/calculate"))
         import inspect
         src = inspect.getsource(daily.process_order)
         for forbidden in ("shopping/order", "purchase", "createOrder",
