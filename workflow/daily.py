@@ -12,6 +12,13 @@ C. NOUVELLE activite process_order(order) : analyse de commande en
    LECTURE SEULE - recalcule le fret CJ avec la quantite reelle,
    verifie la couverture du tarif facture, alerte si ecart > 10 %.
    NE MODIFIE AUCUNE COMMANDE, NE CREE NI NE PAIE AUCUNE COMMANDE CJ.
+D. v5.1 : process_order est APPELEE par le workflow pour CHAQUE commande
+   recue (analyse reelle, lecture seule). Repartition multi-lignes
+   securisee : par ligne si chaque ligne porte son tarif, sinon UNE SEULE
+   comparaison au total commande (jamais de repartition inventee).
+   Commandes > 5 unites : statut depasse_plafond, AUCUN appel CJ,
+   verification manuelle obligatoire. AUCUNE creation, modification,
+   paiement ni annulation de commande fournisseur, par construction.
 
 Regles de reference (base de connaissances SHOPLINOUS, 01/11/2026) :
 1. Stock China Warehouse >= 1000 pour CHAQUE variante conservee
@@ -369,7 +376,7 @@ async def fw_orders() -> dict:
 
 @workflows.activity(start_to_close_timeout=timedelta(minutes=5), retry_policy_max_attempts=2)
 async def process_order(order: dict) -> dict:
-    """v5 : analyse de commande en LECTURE SEULE STRICTE.
+    """v5.1 : analyse de commande en LECTURE SEULE STRICTE.
 
     Pour chaque ligne de commande :
     - recalcule le fret CJ avec la QUANTITE REELLE (cj_freight quantity),
@@ -377,70 +384,158 @@ async def process_order(order: dict) -> dict:
     - compare au tarif de livraison facture au client,
     - emet une ALERTE si la marge livraison n'est pas couverte (>10 %).
 
-    GARANTIES : ne modifie aucune commande, ne cree aucune commande CJ,
-    ne paie rien, n'expedie rien. Aucun achat fournisseur automatique."""
+    v5.1 - REPARTITION MULTI-LIGNES SECURISEE :
+    - si CHAQUE ligne porte son propre 'shipping_charged' -> comparaison
+      ligne par ligne ;
+    - sinon, si la commande porte un 'shipping_charged' global -> UNE SEULE
+      comparaison au niveau commande (somme des frets reels vs total
+      facture). AUCUNE repartition n'est inventee entre les lignes ;
+    - sinon -> alerte 'tarif inconnu', verification manuelle.
+      Si au moins une ligne n'a pas pu etre verifiee, la comparaison au
+      niveau commande est ANNULEE (jamais de conclusion sur un total de
+      fret incomplet).
+
+    v5.1 - COMMANDES DEPASSANT MAX_ORDER_QTY (5) UNITES :
+    la ligne est marquee statut 'depasse_plafond', AUCUN appel fret CJ
+    n'est emis (fret non mesure au-dela de 5 unites), alerte explicite
+    de verification manuelle OBLIGATOIRE.
+
+    v5.1 - PROTECTION FOURNISSEUR (par construction) :
+    cette activite n'emet QUE des calculs de fret CJ
+    (/logistic/freight/calculate, endpoint de calcul sans effet de bord).
+    Elle ne cree, ne paie, ne modifie et n'annule AUCUNE commande CJ,
+    et n'ecrit rien chez CJ ni Freewebstore. Les lignes invalides
+    (quantite, vid, pays) ne declenchent AUCUN appel CJ.
+    """
     report = {"order_id": order.get("id"), "pays": None, "lignes": [],
-              "alertes": [], "mode": "lecture_seule"}
+              "alertes": [], "mode": "lecture_seule", "statut": "analyse"}
     country = ((order.get("deliveryAddress") or {}).get("country")
                or order.get("country"))
     report["pays"] = country
     if not country or country not in DEST_COUNTRIES:
+        report["statut"] = "hors_marche"
         report["alertes"].append(f"pays hors marche ou inconnu: {country!r}")
         return report
     items = order.get("items") or []
-    if not items:
+    if not isinstance(items, list) or not items:
+        report["statut"] = "sans_lignes"
         report["alertes"].append("commande sans lignes")
         return report
     try:
         rate = await usd_eur_rate()
     except Exception as exc:
+        report["statut"] = "taux_indisponible"
         report["alertes"].append(f"taux USD/EUR indisponible: {exc}")
         return report
     report["usd_eur"] = rate
-    charged_total = order.get("shipping_charged")
-    if charged_total is not None and len(items) == 1:
-        charged_per_line = [charged_total]
+
+    # --- repartition securisee du tarif de livraison facture ---
+    line_charged = [it.get("shipping_charged") for it in items
+                    if isinstance(it, dict)]
+    order_charged = order.get("shipping_charged")
+    per_line = (len(line_charged) == len(items)
+                and all(isinstance(c, (int, float))
+                        and not isinstance(c, bool) for c in line_charged))
+    if per_line:
+        report["repartition_livraison"] = "par_ligne"
+    elif isinstance(order_charged, (int, float)) and not isinstance(order_charged, bool):
+        report["repartition_livraison"] = "total_commande"
     else:
-        charged_per_line = [it.get("shipping_charged") for it in items]
-    for it, charged in zip(items, charged_per_line):
+        report["repartition_livraison"] = "inconnue"
+        report["alertes"].append(
+            "tarif de livraison facture inconnu (ni par ligne ni total) : "
+            "verification manuelle")
+
+    total_actual_eur = 0.0
+    all_lines_checked = True
+    for idx, it in enumerate(items):
+        if not isinstance(it, dict):
+            report["alertes"].append(f"ligne {idx + 1} mal formee")
+            all_lines_checked = False
+            continue
         vid = it.get("vid") or it.get("cj_vid")
         qty_raw = it.get("quantity", it.get("qty", 1))
         line = {"vid": vid, "quantite": qty_raw}
         try:
             qty = validate_quantity(qty_raw)
         except RuntimeError as exc:
-            line["alerte"] = str(exc)
-            report["alertes"].append(f"ligne {vid}: {exc}")
+            if (isinstance(qty_raw, int) and not isinstance(qty_raw, bool)
+                    and qty_raw > MAX_ORDER_QTY):
+                line["statut"] = "depasse_plafond"
+                line["alerte"] = (
+                    f"quantite {qty_raw} > plafond {MAX_ORDER_QTY} : fret CJ "
+                    "non mesure au-dela de 5 unites, verification manuelle "
+                    "OBLIGATOIRE (aucun appel CJ emis)")
+            else:
+                line["statut"] = "quantite_invalide"
+                line["alerte"] = (f"quantite invalide: {qty_raw!r} : "
+                                  "verification manuelle")
+            report["alertes"].append(f"ligne {idx + 1} ({vid}): {line['alerte']}")
             report["lignes"].append(line)
+            all_lines_checked = False
             continue
         if not vid:
+            line["statut"] = "sans_vid"
             line["alerte"] = "ligne sans vid CJ : verification manuelle"
-            report["alertes"].append(line["alerte"])
+            report["alertes"].append(f"ligne {idx + 1}: {line['alerte']}")
             report["lignes"].append(line)
+            all_lines_checked = False
             continue
         try:
             fres = await cj_freight(vid, country, quantity=qty)
         except Exception as exc:
+            line["statut"] = "fret_indisponible"
             line["alerte"] = f"fret non verifiable: {exc}"
-            report["alertes"].append(f"ligne {vid}: {line['alerte']}")
+            report["alertes"].append(f"ligne {idx + 1} ({vid}): {line['alerte']}")
             report["lignes"].append(line)
+            all_lines_checked = False
             continue
-        options = fres["data"]
-        if not options:
+        prices = []
+        for o in fres["data"]:
+            try:
+                if o.get("logisticPrice") is not None:
+                    prices.append(float(o["logisticPrice"]))
+            except (TypeError, ValueError):
+                continue
+        if not prices:
+            line["statut"] = "fret_indisponible"
             line["alerte"] = "aucune option de fret CJ disponible"
-            report["alertes"].append(f"ligne {vid}: {line['alerte']}")
+            report["alertes"].append(f"ligne {idx + 1} ({vid}): {line['alerte']}")
             report["lignes"].append(line)
+            all_lines_checked = False
             continue
-        cheapest = min(float(o.get("logisticPrice")) for o in options
-                       if o.get("logisticPrice") is not None)
-        actual_eur = cheapest * rate
+        actual_eur = min(prices) * rate
+        line["statut"] = "verifie"
         line["fret_cj_eur"] = round(actual_eur, 2)
-        line["tarif_facture_eur"] = charged
-        alert = freight_coverage_alert(charged, actual_eur)
-        if alert:
-            line["alerte"] = alert
-            report["alertes"].append(f"ligne {vid} x{qty}: {alert}")
+        total_actual_eur += actual_eur
+        if report["repartition_livraison"] == "par_ligne":
+            charged = line_charged[idx]
+            line["tarif_facture_eur"] = charged
+            alert = freight_coverage_alert(charged, actual_eur)
+            if alert:
+                line["alerte"] = alert
+                report["alertes"].append(
+                    f"ligne {idx + 1} ({vid}) x{qty}: {alert}")
         report["lignes"].append(line)
+
+    if report["repartition_livraison"] == "total_commande":
+        report["fret_total_eur"] = round(total_actual_eur, 2)
+        if not all_lines_checked:
+            report["alertes"].append(
+                "comparaison au niveau commande ANNULEE : au moins une ligne "
+                "n'a pas pu etre verifiee (total fret incomplet)")
+        else:
+            alert = freight_coverage_alert(order_charged, total_actual_eur
+                                            if total_actual_eur > 0 else None)
+            if alert:
+                report["alertes"].append(
+                    f"commande {order.get('id')}: {alert}")
+    if not all_lines_checked:
+        report["statut"] = "lignes_non_verifiees"
+    elif report["alertes"]:
+        report["statut"] = "alertes"
+    else:
+        report["statut"] = "verifie"
     return report
 
 
@@ -822,11 +917,36 @@ class ShoplinousDailyWorkflow:
                     report["errors"].append(f"produit {pid}: {exc}")
 
         # Surveillance commandes : lecture seule, AUCUN paiement fournisseur.
-        # v5 : chaque commande recue est analysee par process_order (lecture
-        # seule : fret reel vs tarif facture). Aucune action automatique.
+        # v5.1 : chaque commande recue est REELLEMENT analysee par
+        # process_order (lecture seule stricte : fret CJ reel avec la
+        # quantite reelle, repartition securisee, vs tarif facture).
+        # PROTECTION FOURNISSEUR : aucune creation, modification,
+        # paiement ni annulation de commande CJ, jamais, par construction.
         try:
-            orders = await fw_orders()
-            report["orders_found"] = orders.get("found", 0)
+            orders_body = await fw_orders()
+            if not isinstance(orders_body, dict):
+                raise RuntimeError("structure commandes inattendue")
+            order_list = (orders_body.get("orders")
+                          or orders_body.get("list")
+                          or orders_body.get("data") or [])
+            if not isinstance(order_list, list):
+                raise RuntimeError("structure commandes inattendue")
+            report["orders_found"] = len(order_list)
+            report["orders_analyzed"] = []
+            for o in order_list:
+                if not isinstance(o, dict):
+                    report["errors"].append("commande mal formee ignoree")
+                    continue
+                try:
+                    oreport = await process_order(o)
+                except Exception as exc:
+                    report["errors"].append(
+                        f"process_order {o.get('id')}: {exc}")
+                    continue
+                report["orders_analyzed"].append(oreport)
+                for a in oreport.get("alertes", []):
+                    report["alerts"].append(
+                        {"order": oreport.get("order_id"), "alerte": a})
         except Exception as exc:
             report["errors"].append(f"orders: {exc}")
 
