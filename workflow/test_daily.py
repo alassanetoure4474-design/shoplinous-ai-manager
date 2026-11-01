@@ -14,6 +14,8 @@ Couverture v5 :
   tarif inconnu -> alerte manuelle) ;
 - cj_freight appelée avec la quantite reelle (MockTransport, payload verifie) ;
 - process_order lecture seule (jamais de POST/PUT vers CJ) ;
+- v5.1 : process_order APPELE par le workflow pour chaque commande,
+  repartition multi-lignes securisee, > 5 unites, protection fournisseur ;
 - regressions v4 : taux invalide (NaN/negatif/nul), images (octets
   magiques menteurs, 404, trop petite), pagination, confirmation de
   creation, allow_publish=False par defaut, aucune cle API en dur.
@@ -515,3 +517,227 @@ class TestSecurite:
         for secret in ("CJ_API_KEY=", "FREEWEBSTORE_API_KEY=",
                         "sk-", "Bearer eyJ"):
             assert secret + '"' not in source and secret + "'" not in source
+
+
+# ================= process_order v5.1 : tests dedies (correctif) =================
+class TestProcessOrderV51:
+    """Analyse COMPLETE de process_order avec commandes simulees :
+    1 ligne, plusieurs lignes, quantite invalide, pays inconnu,
+    fret indisponible, tarif insuffisant, > 5 unites, protection
+    fournisseur (aucune creation ni modification de commande CJ)."""
+
+    def _mock(self, monkeypatch, rate=0.895, freights=None, rate_down=False):
+        """Mock httpx : retourne la liste des requetes emises."""
+        calls = []
+        freights = freights or [{"logisticName": "CJPacket",
+                                 "logisticPrice": 4.69,
+                                 "logisticAging": "4-10"}]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append((request.method, request.url.host,
+                          request.url.path))
+            if request.url.host == "api.frankfurter.app":
+                if rate_down:
+                    return httpx.Response(500)
+                return httpx.Response(200, json={"rates": {"EUR": rate}})
+            if request.url.path == "/logistic/freight/calculate":
+                return httpx.Response(200, json={
+                    "code": 200, "data": freights})
+            raise AssertionError(
+                "endpoint non autorise : " + request.method + " "
+                + str(request.url))
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
+        return calls
+
+    def test_une_ligne_valide(self, monkeypatch):
+        calls = self._mock(monkeypatch, freights=[
+            {"logisticName": "CJPacket", "logisticPrice": 5.65,
+             "logisticAging": "4-10"}])
+        order = {"id": "O1", "country": "FR", "shipping_charged": 5.90,
+                 "items": [{"vid": "v1", "quantity": 2}]}
+        rep = run(daily.process_order(order))
+        assert rep["statut"] == "verifie"
+        assert rep["repartition_livraison"] == "total_commande"
+        assert rep["fret_total_eur"] == 5.06   # 5.65 USD x 0.895
+        assert rep["lignes"][0]["statut"] == "verifie"
+        assert rep["alertes"] == []
+        assert all(p == "/logistic/freight/calculate"
+                   for m, h, p in calls if h != "api.frankfurter.app")
+
+    def test_multi_lignes_tarif_par_ligne(self, monkeypatch):
+        calls = self._mock(monkeypatch)
+        order = {"id": "O2", "country": "FR", "items": [
+            {"vid": "v1", "quantity": 1, "shipping_charged": 4.50},
+            {"vid": "v2", "quantity": 3, "shipping_charged": 8.00}]}
+        rep = run(daily.process_order(order))
+        assert rep["statut"] == "verifie"
+        assert rep["repartition_livraison"] == "par_ligne"
+        assert rep["lignes"][0]["tarif_facture_eur"] == 4.50
+        assert rep["lignes"][1]["tarif_facture_eur"] == 8.00
+        fret_posts = [c for c in calls if c[2] == "/logistic/freight/calculate"]
+        assert len(fret_posts) == 2
+
+    def test_multi_lignes_repartition_totale(self, monkeypatch):
+        """Tarif global uniquement : UNE comparaison au niveau commande,
+        aucune repartition inventee entre les lignes."""
+        self._mock(monkeypatch)
+        order = {"id": "O3", "country": "FR", "shipping_charged": 12.00,
+                 "items": [{"vid": "v1", "quantity": 1},
+                           {"vid": "v2", "quantity": 2}]}
+        rep = run(daily.process_order(order))
+        assert rep["repartition_livraison"] == "total_commande"
+        assert rep["fret_total_eur"] == 8.39   # 2 x 4.69 USD x 0.895
+        assert "tarif_facture_eur" not in rep["lignes"][0]
+        assert rep["statut"] == "verifie"
+
+    def test_tarif_insuffisant_alerte(self, monkeypatch):
+        self._mock(monkeypatch)
+        order = {"id": "O4", "country": "FR", "shipping_charged": 1.00,
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["statut"] == "alertes"
+        assert any("non couverte" in a for a in rep["alertes"])
+
+    def test_tarif_totalement_inconnu(self, monkeypatch):
+        self._mock(monkeypatch)
+        order = {"id": "O5", "country": "FR",
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["repartition_livraison"] == "inconnue"
+        assert any("inconnu" in a for a in rep["alertes"])
+        assert rep["statut"] == "alertes"
+
+    def test_quantite_invalide_aucun_appel_cj(self, monkeypatch):
+        calls = self._mock(monkeypatch)
+        order = {"id": "O6", "country": "FR", "shipping_charged": 5.00,
+                 "items": [{"vid": "v1", "quantity": "beaucoup"}]}
+        rep = run(daily.process_order(order))
+        assert rep["lignes"][0]["statut"] == "quantite_invalide"
+        assert rep["statut"] == "lignes_non_verifiees"
+        assert all(h == "api.frankfurter.app" for m, h, p in calls)
+
+    def test_quantite_superieure_a_5_explicite(self, monkeypatch):
+        calls = self._mock(monkeypatch)
+        order = {"id": "O7", "country": "FR", "shipping_charged": 15.00,
+                 "items": [{"vid": "v1", "quantity": 7}]}
+        rep = run(daily.process_order(order))
+        assert rep["lignes"][0]["statut"] == "depasse_plafond"
+        assert any("verification manuelle" in a for a in rep["alertes"])
+        assert all(h == "api.frankfurter.app" for m, h, p in calls)
+        assert rep["statut"] == "lignes_non_verifiees"
+
+    def test_pays_inconnu_aucun_appel(self, monkeypatch):
+        calls = self._mock(monkeypatch)
+        order = {"id": "O8", "country": "US",
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["statut"] == "hors_marche"
+        assert calls == []
+
+    def test_malte_hors_marche(self, monkeypatch):
+        self._mock(monkeypatch)
+        order = {"id": "O9", "country": "MT",
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["statut"] == "hors_marche"
+
+    def test_fret_indisponible(self, monkeypatch):
+        """Erreur metier CJ (ex. code 1600200) -> statut fret_indisponible,
+        alerte, lecture seule conservee."""
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append((request.method, request.url.host,
+                          request.url.path))
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            return httpx.Response(200, json={
+                "code": 1600200, "message": "erreur CJ",
+                "data": None})
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
+        order = {"id": "O10", "country": "FR", "shipping_charged": 5.00,
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["lignes"][0]["statut"] == "fret_indisponible"
+        assert rep["statut"] == "lignes_non_verifiees"
+        assert any("fret non verifiable" in a for a in rep["alertes"])
+
+    def test_aucune_option_de_fret(self, monkeypatch):
+        self._mock(monkeypatch, freights=[])
+        order = {"id": "O11", "country": "FR", "shipping_charged": 5.00,
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["lignes"][0]["statut"] == "fret_indisponible"
+
+    def test_taux_indisponible(self, monkeypatch):
+        self._mock(monkeypatch, rate_down=True)
+        order = {"id": "O12", "country": "FR",
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        assert rep["statut"] == "taux_indisponible"
+
+    def test_commande_sans_lignes(self, monkeypatch):
+        self._mock(monkeypatch)
+        rep = run(daily.process_order({"id": "O13", "country": "FR",
+                                       "items": []}))
+        assert rep["statut"] == "sans_lignes"
+
+    def test_ligne_sans_vid(self, monkeypatch):
+        self._mock(monkeypatch)
+        order = {"id": "O14", "country": "FR", "shipping_charged": 5.00,
+                 "items": [{"quantity": 2}]}
+        rep = run(daily.process_order(order))
+        assert rep["lignes"][0]["statut"] == "sans_vid"
+
+    def test_multi_lignes_avec_ligne_ko_comparaison_annulee(self, monkeypatch):
+        """Une ligne > 5 unites : le total fret est incomplet, la
+        comparaison au niveau commande doit etre ANNULEE (securite)."""
+        self._mock(monkeypatch)
+        order = {"id": "O15", "country": "FR", "shipping_charged": 20.00,
+                 "items": [{"vid": "v1", "quantity": 1},
+                           {"vid": "v2", "quantity": 9}]}
+        rep = run(daily.process_order(order))
+        assert rep["lignes"][1]["statut"] == "depasse_plafond"
+        assert any("ANNULEE" in a for a in rep["alertes"])
+        assert rep["statut"] == "lignes_non_verifiees"
+
+    def test_protection_aucune_creation_commande_fournisseur(self, monkeypatch):
+        """process_order ne doit toucher AUCUN endpoint d'ordre fournisseur :
+        verifie les appels emis ET le code source de l'activite."""
+        calls = self._mock(monkeypatch)
+        order = {"id": "O16", "country": "FR", "shipping_charged": 5.00,
+                 "items": [{"vid": "v1", "quantity": 1}]}
+        rep = run(daily.process_order(order))
+        for method, host, path in calls:
+            if host == "api.frankfurter.app":
+                assert method == "GET"
+            else:
+                assert (method, path) == ("POST",
+                                          "/logistic/freight/calculate")
+        import inspect
+        src = inspect.getsource(daily.process_order)
+        for forbidden in ("shopping/order", "purchase", "createOrder",
+                          "cancelOrder", "payOrder"):
+            assert forbidden not in src, "endpoint interdit : " + forbidden
+
+    def test_workflow_appelle_process_order_pour_chaque_commande(self):
+        """Le workflow run() doit reellement appeler process_order sur
+        chaque commande recue (bug v5 : simple comptage)."""
+        import inspect
+        src = inspect.getsource(daily.ShoplinousDailyWorkflow)
+        assert "await process_order(o)" in src
+        assert "orders_analyzed" in src
