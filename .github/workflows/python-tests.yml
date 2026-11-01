@@ -22,15 +22,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            workflow/requirements.txt
-            workflow/requirements-dev.txt
 
-      - name: Installer les dependances
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt mistralai-workflows
+      - name: Installer pip a jour
+        run: python -m pip install --upgrade pip
+
+      - name: Installer les dependances (runtime requirements.txt)
+        run: pip install -r requirements.txt
+
+      - name: Installer les dependances tests (requirements-dev.txt)
+        run: pip install -r requirements-dev.txt
+
+      - name: Installer mistralai-workflows (namespace mistralai)
+        run: pip install mistralai-workflows
 
       - name: Executer pytest (verbose)
         run: |
@@ -38,7 +41,7 @@ jobs:
           python -m pytest -v test_daily.py 2>&1 | tee pytest_output.txt
           exit_code=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
-          exit "$exit_code"
+          exit "${exit_code}"
 
       - name: Publier les echecs en annotations publiques
         if: failure()
