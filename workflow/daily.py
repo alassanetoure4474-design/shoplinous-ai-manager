@@ -608,7 +608,9 @@ def cn_stock_of(stock_payload: dict) -> int:
         stocks = entry.get("stock") or []
         if stocks and isinstance(stocks[0], dict):
             inventory = stocks[0].get("inventory")
-            if isinstance(inventory, int) and inventory > 0:
+            if (isinstance(inventory, int)
+                    and not isinstance(inventory, bool)
+                    and inventory > 0):
                 return inventory
     return 0
 
