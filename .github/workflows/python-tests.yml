@@ -1,0 +1,36 @@
+# Tests pytest SHOPLINOUS - branche workflow-v5-fix1 uniquement.
+# Aucun secret, aucune cle API : les tests utilisent des mocks httpx.
+name: Tests pytest workflow
+
+on:
+  push:
+    branches: [workflow-v5-fix1]
+  pull_request:
+    branches: [workflow-v5-fix1]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workflow
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            workflow/requirements.txt
+            workflow/requirements-dev.txt
+
+      - name: Installer les dependances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Executer pytest (verbose)
+        run: python -m pytest -v test_daily.py
