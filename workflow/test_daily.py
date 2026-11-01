@@ -209,6 +209,7 @@ class TestProcessOrderReadOnly:
                 super().__init__(*a, **kw)
 
         monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
         order = {"id": "ORD-1", "country": "FR",
                  "shipping_charged": 5.90,
                  "items": [{"vid": "vid123", "quantity": 2}]}
@@ -532,9 +533,10 @@ class TestProcessOrderV51:
     def _mock(self, monkeypatch, rate=0.895, freights=None, rate_down=False):
         """Mock httpx : retourne la liste des requetes emises."""
         calls = []
-        freights = freights or [{"logisticName": "CJPacket",
-                                 "logisticPrice": 4.69,
-                                 "logisticAging": "4-10"}]
+        if freights is None:
+            freights = [{"logisticName": "CJPacket",
+                         "logisticPrice": 4.69,
+                         "logisticAging": "4-10"}]
 
         def handler(request: httpx.Request) -> httpx.Response:
             calls.append((request.method, request.url.host,
@@ -596,7 +598,7 @@ class TestProcessOrderV51:
                            {"vid": "v2", "quantity": 2}]}
         rep = run(daily.process_order(order))
         assert rep["repartition_livraison"] == "total_commande"
-        assert rep["fret_total_eur"] == 8.39   # 2 x 4.69 USD x 0.895
+        assert rep["fret_total_eur"] == 8.4    # 2 x 4.69 USD x 0.895 = 8.3971
         assert "tarif_facture_eur" not in rep["lignes"][0]
         assert rep["statut"] == "verifie"
 
