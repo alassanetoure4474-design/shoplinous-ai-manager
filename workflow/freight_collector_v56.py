@@ -245,14 +245,16 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
                         frais_paiement_fixe_eur=0.0,
                         marge_min=0.20,
                         delai_max_jours=MAX_SHIP_DAYS,
-                        aujourdhui=None):
+                        aujourdhui=None,
+                        freight_fetch_fn=None):
     """Moteur v5.6 : prix fonde UNIQUEMENT sur un tarif reel conforme
     15 jours de LA variante demandee.
 
     Statuts :
     - "recommandation_ok" : prix calcule, marge verifiee ;
     - "incoherence_defensive" : marge hors tolerance, verification manuelle ;
-    - "depasse_plafond" : quantite > 5, aucun prix ;
+    - "tarif_dynamique_requis" : quantite > 5 sans callback CJ, aucun prix ;
+    - "tarif_dynamique_indisponible" : echec du devis CJ, aucun prix ;
     - "quantite_invalide" / "cout_invalide" / "parametres_invalides" ;
     - "variante_inconnue" : vid absent des donnees (aucun melange) ;
     - "destination_inconnue" : pays/quantite sans tarif mesure ;
@@ -288,12 +290,40 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
                      "verification_manuelle": True,
                      "message": "Cout d'achat invalide."})
         return base
-    vq = p55.validate_quantity(quantite)
-    if vq["statut"] != "ok":
-        base.update({"statut": vq["statut"],
+    # Toute quantite entiere positive est acceptee. Les tarifs 1-5
+    # restent servis par le cache ; au-dela, CJ doit fournir un devis live.
+    if isinstance(quantite, bool) or not isinstance(quantite, int) or quantite < 1:
+        base.update({"statut": "quantite_invalide",
                      "verification_manuelle": True,
-                     "message": vq["message"]})
+                     "message": "Quantite invalide : un entier positif est attendu."})
         return base
+
+    # Devis a la demande pour les quantites hors du cache historique.
+    # Le callback injecte appelle CJ calculate_cj_shipping en lecture seule.
+    if quantite > QTE_MAX:
+        if not callable(freight_fetch_fn):
+            base.update({"statut": "tarif_dynamique_requis",
+                         "verification_manuelle": True,
+                         "message": "Devis CJ dynamique requis ; aucune extrapolation."})
+            return base
+        try:
+            options = freight_fetch_fn(vid, pays, quantite)
+            mini, mini15 = choisir_option_v56(options or [])
+        except Exception as exc:
+            base.update({"statut": "tarif_dynamique_indisponible",
+                         "verification_manuelle": True,
+                         "message": "Devis CJ impossible : " + str(exc)[:180]})
+            return base
+        if mini15 is None:
+            base.update({"statut": "aucun_transporteur_15j",
+                         "verification_manuelle": True,
+                         "message": "Aucun transporteur conforme au delai maximal : " + MSG_VERIF_MANUELLE})
+            return base
+        quote = {"usd": mini15["usd"], "canal": mini15.get("canal") or "",
+                 "delai": mini15.get("delai") or "",
+                 "date_collecte": (_date(aujourdhui) or date.today()).isoformat(),
+                 "region": p55.REGIONS.get(pays, "region_inconnue")}
+        table = {"vid": vid, "entrees": {pays: {quantite: quote}}}
 
     # --- table : par variante, conformite 15 jours, jamais de melange ---
     if table is None:

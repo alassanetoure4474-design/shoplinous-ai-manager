@@ -6,8 +6,8 @@ A. cn_stock_of() CORRIGE : la reponse reelle du stock CJ montre
    storageNum / totalInventoryNum (mesure reelle : storageNum 11347,
    stock[0].inventory 0). Priorite corrigee : storageNum >
    totalInventoryNum > stock[0].inventory.
-B. cj_freight() accepte la quantite REELLE (parametre quantity,
-   plafond MAX_ORDER_QTY = 5, donnees fret CJ mesurees de 1 a 5 unites).
+B. cj_freight() accepte toute quantite entiere positive et transmet
+   exactement cette quantite a CJ ; le tarif est toujours demande en direct.
 C. NOUVELLE activite process_order(order) : analyse de commande en
    LECTURE SEULE - recalcule le fret CJ avec la quantite reelle,
    verifie la couverture du tarif facture, alerte si ecart > 10 %.
@@ -16,9 +16,9 @@ D. v5.1 : process_order est APPELEE par le workflow pour CHAQUE commande
    recue (analyse reelle, lecture seule). Repartition multi-lignes
    securisee : par ligne si chaque ligne porte son tarif, sinon UNE SEULE
    comparaison au total commande (jamais de repartition inventee).
-   Commandes > 5 unites : statut depasse_plafond, AUCUN appel CJ,
-   verification manuelle obligatoire. AUCUNE creation, modification,
-   paiement ni annulation de commande fournisseur, par construction.
+   Toute quantite positive est envoyee a CJ pour devis reel ; si CJ refuse
+   ou ne retourne aucune option, la ligne reste non verifiee. AUCUN achat
+   fournisseur n'est effectue.
 E. v5.2 : compatibilite REELLE Freewebstore confirmee (GET /orders et
    GET /orders/abandoned, 01/11/2026) : en-tete x-api-key (doc
    officielle), URI /orders, pagination limit/offset, adaptateur
@@ -113,7 +113,8 @@ MARGIN_MULTIPLE = 3.0
 MAX_PUBLISH_PER_RUN = 3
 SAFETY_STOCK = 100
 DISPLAY_STOCK_CAP = 100
-MAX_ORDER_QTY = 5            # v5 : fret CJ mesure de 1 a 5 unites
+MAX_CACHED_FREIGHT_QTY = 5  # couverture du cache historique uniquement
+MAX_ORDER_QTY = MAX_CACHED_FREIGHT_QTY  # alias historique, aucun plafond API
 FREIGHT_ALERT_TOLERANCE = 0.10   # v5 : alerte si tarif facture < fret reel -10%
 PAYMENT_FEE_RATE = float(os.environ.get("PAYMENT_FEE_RATE", "0.029"))
 PAYMENT_FEE_FIXED_EUR = float(os.environ.get("PAYMENT_FEE_FIXED_EUR", "0.30"))
@@ -211,17 +212,14 @@ def cj_check(data: dict, what: str) -> dict:
 
 
 def validate_quantity(qty) -> int:
-    """v5 : valide la quantite d'une ligne de commande.
-    Plafond MAX_ORDER_QTY = 5 (donnees fret CJ mesurees de 1 a 5 unites ;
-    au-dela, fret non mesure -> verification manuelle)."""
-    if not isinstance(qty, int) or isinstance(qty, bool):
+    """Valide une quantite entiere strictement positive, sans plafond local.
+
+    Le devis reel est demande a CJ avec cette quantite exacte. Si CJ refuse
+    la quantite ou ne propose aucun transporteur, l'appelant doit bloquer
+    le calcul et demander une verification manuelle.
+    """
+    if not isinstance(qty, int) or isinstance(qty, bool) or qty < 1:
         raise RuntimeError(f"quantite invalide: {qty!r}")
-    if qty < 1:
-        raise RuntimeError(f"quantite invalide: {qty!r}")
-    if qty > MAX_ORDER_QTY:
-        raise RuntimeError(
-            f"quantite {qty} > plafond {MAX_ORDER_QTY} : fret CJ non mesure, "
-            "verification manuelle requise")
     return qty
 
 
@@ -408,10 +406,10 @@ async def cj_stock(vid: str) -> dict:
 
 @workflows.activity(start_to_close_timeout=timedelta(minutes=2), retry_policy_max_attempts=3)
 async def cj_freight(vid: str, country: str, quantity: int = 1) -> dict:
-    """v5 : fret CJ avec la QUANTITE REELLE de la commande.
-    Fret mesure reellement (01/11/2026) : le fret croit d'environ
-    +0,96 USD par unite supplementaire. Quantite validee par
-    validate_quantity() : 1 a 5 unites, plafond garde-fou."""
+    """Demande un devis de fret CJ avec la quantite exacte de la commande.
+    Toute quantite entiere positive est transmise sans plafond arbitraire.
+    Les refus/limites metier de CJ remontent comme erreurs ; aucun tarif
+    n'est extrapole et cet endpoint de calcul ne cree aucune commande."""
     qty = validate_quantity(quantity)
     await _THROTTLE.wait()
     async with httpx.AsyncClient(timeout=60) as c:
@@ -423,6 +421,40 @@ async def cj_freight(vid: str, country: str, quantity: int = 1) -> dict:
         if not isinstance(data["data"], list):
             raise RuntimeError(f"CJ fret {country}: structure inattendue")
         return data
+
+
+@workflows.activity(start_to_close_timeout=timedelta(minutes=3), retry_policy_max_attempts=1)
+async def compute_product_price_v56_live(
+        cost_usd: float, vid: str, country: str, quantity: int,
+        margin_min: float = 0.20,
+        payment_fee_rate: float = 0.0,
+        payment_fee_fixed_eur: float = 0.0) -> dict:
+    """Prix v5.6 : cache 1-5 ; devis CJ reel pour toute quantite > 5.
+
+    Le callback reseau reste dans cette activite : le moteur v5.6 demeure
+    pur/testable. Aucun prix n'est retourne si CJ refuse le devis ou si
+    aucun transporteur conforme au delai maximal n'est disponible.
+    """
+    import freight_collector_v56 as freight
+
+    qty = validate_quantity(quantity)
+    rate = await usd_eur_rate()
+    data = freight.charger_donnees()
+    live_options = None
+    if qty > freight.QTE_MAX:
+        quote_payload = await cj_freight(vid, country, quantity=qty)
+        live_options = quote_payload.get("data")
+        if not isinstance(live_options, list):
+            raise RuntimeError("CJ fret: options de transport invalides")
+
+    fetch_fn = (lambda _vid, _country, _qty: live_options) if live_options is not None else None
+    return freight.compute_pricing_v56(
+        cost_usd, vid, country, qty, donnees=data,
+        exchange_rate=rate, marge_min=margin_min,
+        frais_paiement_taux=payment_fee_rate,
+        frais_paiement_fixe_eur=payment_fee_fixed_eur,
+        freight_fetch_fn=fetch_fn,
+    )
 
 
 @workflows.activity(start_to_close_timeout=timedelta(seconds=45), retry_policy_max_attempts=2)
@@ -725,10 +757,9 @@ async def process_order(order: dict, vid_table: dict | None = None) -> dict:
       niveau commande est ANNULEE (jamais de conclusion sur un total de
       fret incomplet).
 
-    v5.1 - COMMANDES DEPASSANT MAX_ORDER_QTY (5) UNITES :
-    la ligne est marquee statut 'depasse_plafond', AUCUN appel fret CJ
-    n'est emis (fret non mesure au-dela de 5 unites), alerte explicite
-    de verification manuelle OBLIGATOIRE.
+    Les quantites positives sans limite locale sont demandees a CJ en direct.
+    Un refus API, une erreur ou une absence d'options produit fret_indisponible
+    et verification manuelle ; aucun cout n'est extrapole.
 
     v5.1 - PROTECTION FOURNISSEUR (par construction) :
     cette activite n'emet QUE des calculs de fret CJ
@@ -798,18 +829,10 @@ async def process_order(order: dict, vid_table: dict | None = None) -> dict:
             line["vid_source"] = "table_sku_vid"
         try:
             qty = validate_quantity(qty_raw)
-        except RuntimeError as exc:
-            if (isinstance(qty_raw, int) and not isinstance(qty_raw, bool)
-                    and qty_raw > MAX_ORDER_QTY):
-                line["statut"] = "depasse_plafond"
-                line["alerte"] = (
-                    f"quantite {qty_raw} > plafond {MAX_ORDER_QTY} : fret CJ "
-                    "non mesure au-dela de 5 unites, verification manuelle "
-                    "OBLIGATOIRE (aucun appel CJ emis)")
-            else:
-                line["statut"] = "quantite_invalide"
-                line["alerte"] = (f"quantite invalide: {qty_raw!r} : "
-                                  "verification manuelle")
+        except RuntimeError:
+            line["statut"] = "quantite_invalide"
+            line["alerte"] = (f"quantite invalide: {qty_raw!r} : "
+                              "un entier positif est requis ; verification manuelle")
             report["alertes"].append(f"ligne {idx + 1} ({vid}): {line['alerte']}")
             report["lignes"].append(line)
             all_lines_checked = False

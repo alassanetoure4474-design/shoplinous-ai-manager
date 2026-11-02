@@ -10,7 +10,7 @@ executable localement :
 Couverture v5 :
 - corrections A (cn_stock_of : structure reelle stock[0].inventory=0,
   storageNum=11347 -> 11347) ;
-- validate_quantity (1-5 acceptes ; 0, -1, 6, bool, str refuses) ;
+- validate_quantity (toute quantite entiere positive acceptee ; 0, -1, bool, str refuses) ;
 - freight_coverage_alert (couvert -> None ; non couvert -> alerte ;
   tarif inconnu -> alerte manuelle) ;
 - cj_freight appelée avec la quantite reelle (MockTransport, payload verifie) ;
@@ -20,7 +20,8 @@ Couverture v5 :
   GET /orders et /orders/abandoned) : adaptateur securise
   fw_normalize_order, pagination limit/offset, en-tete x-api-key,
   fixtures reelles anonymisees, zero donnee personnelle ;
-  repartition multi-lignes securisee, > 5 unites, protection fournisseur ;
+  repartition multi-lignes securisee, devis CJ dynamique sans plafond local,
+  refus CJ sans tarif invente, protection fournisseur ;
 - regressions v4 : taux invalide (NaN/negatif/nul), images (octets
   magiques menteurs, 404, trop petite), pagination, confirmation de
   creation, allow_publish=False par defaut, aucune cle API en dur.
@@ -119,12 +120,12 @@ class TestCnStockOf:
 
 # ------------------------------------------- B. validate_quantity (correctif) ----
 class TestValidateQuantity:
-    @pytest.mark.parametrize("qty", [1, 2, 3, 4, 5])
-    def test_quantites_1_a_5_acceptees(self, qty):
+    @pytest.mark.parametrize("qty", [1, 2, 3, 4, 5, 6, 10, 50, 100, 1000])
+    def test_toute_quantite_positive_acceptee(self, qty):
         assert daily.validate_quantity(qty) == qty
 
-    @pytest.mark.parametrize("qty", [0, -1, 6, 10, 100])
-    def test_quantites_hors_plafond_refusees(self, qty):
+    @pytest.mark.parametrize("qty", [0, -1])
+    def test_quantites_non_positives_refusees(self, qty):
         with pytest.raises(RuntimeError):
             daily.validate_quantity(qty)
 
@@ -182,12 +183,65 @@ class TestCjFreightQuantity:
         assert seen["quantity"] == 3
         assert result["data"][0]["logisticPrice"] == 5.65
 
-    def test_quantite_invalide_refusee_avant_appel(self, monkeypatch):
+    @pytest.mark.parametrize("quantity", [6, 50, 100])
+    def test_grande_quantite_transmise_exactement_a_cj(self, monkeypatch, quantity):
+        seen = {}
+
         def handler(request):
-            raise AssertionError("aucun appel CJ ne doit etre emis")
-        monkeypatch.setattr(httpx, "AsyncClient", httpx.AsyncClient)
+            seen.update(json.loads(request.content))
+            return httpx.Response(200, json={"code": 200, "data": [
+                {"logisticName": "CJPacket", "logisticPrice": 18.0,
+                 "logisticAging": "5-12"}]})
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
+        result = run(daily.cj_freight("vid123", "FR", quantity=quantity))
+        assert seen["quantity"] == quantity
+        assert result["data"][0]["logisticPrice"] == 18.0
+
+    def test_quantite_invalide_refusee_avant_appel(self, monkeypatch):
         with pytest.raises(RuntimeError):
-            run(daily.cj_freight("vid123", "FR", quantity=6))
+            run(daily.cj_freight("vid123", "FR", quantity=0))
+
+
+# --------------------------- calcul commercial live : CJ dynamique -------
+class TestLivePricingV56:
+    @pytest.mark.parametrize("quantity", [6, 50])
+    def test_calcul_prix_appelle_cj_avec_quantite_exacte(self, monkeypatch, quantity):
+        import freight_collector_v56 as freight
+
+        seen = {}
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            if request.url.path.endswith("/logistic/freight/calculate"):
+                seen.update(json.loads(request.content))
+                return httpx.Response(200, json={"code": 200, "data": [
+                    {"logisticName": "CJPacket", "logisticPrice": 12.5,
+                     "logisticAging": "5-12"}]})
+            raise AssertionError("endpoint inattendu : " + request.url.path)
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
+        result = run(daily.compute_product_price_v56_live(
+            2.81, freight.VID_BLANCHE, "FR", quantity
+        ))
+        assert seen["vid"] == freight.VID_BLANCHE
+        assert seen["countryCode"] == "FR"
+        assert seen["quantity"] == quantity
+        assert result["statut"] == "recommandation_ok"
+        assert result["quantite"] == quantity
+        assert result["fret"]["usd"] == 12.5
 
 
 # ------------------------------------------ process_order : lecture seule ----
@@ -516,8 +570,10 @@ class TestSecurite:
     def test_29_pays(self):
         assert len(daily.DEST_COUNTRIES) == 29
 
-    def test_plafond_quantite_5(self):
-        assert daily.MAX_ORDER_QTY == 5
+    def test_limite_5_concerne_uniquement_le_cache_historique(self):
+        assert daily.MAX_CACHED_FREIGHT_QTY == 5
+        assert daily.MAX_ORDER_QTY == 5  # alias historique, non applique au devis CJ
+        assert daily.validate_quantity(6) == 6
 
     def test_aucune_cle_en_dur(self):
         import inspect
@@ -632,15 +688,17 @@ class TestProcessOrderV51:
         assert rep["statut"] == "lignes_non_verifiees"
         assert all(h == "api.frankfurter.app" for m, h, p in calls)
 
-    def test_quantite_superieure_a_5_explicite(self, monkeypatch):
+    @pytest.mark.parametrize("quantity", [6, 7, 50])
+    def test_commande_superieure_a_cinq_demande_un_devis_cj_reel(self, monkeypatch, quantity):
         calls = self._mock(monkeypatch)
-        order = {"id": "O7", "country": "FR", "shipping_charged": 15.00,
-                 "items": [{"vid": "v1", "quantity": 7}]}
+        order = {"id": "O7", "country": "FR", "shipping_charged": 150.00,
+                 "items": [{"vid": "v1", "quantity": quantity}]}
         rep = run(daily.process_order(order))
-        assert rep["lignes"][0]["statut"] == "depasse_plafond"
-        assert any("verification manuelle" in a for a in rep["alertes"])
-        assert all(h == "api.frankfurter.app" for m, h, p in calls)
-        assert rep["statut"] == "lignes_non_verifiees"
+        assert rep["lignes"][0]["statut"] == "verifie"
+        assert rep["lignes"][0]["quantite"] == quantity
+        assert rep["statut"] == "verifie"
+        assert any(p.endswith("/logistic/freight/calculate")
+                   for m, h, p in calls if h != "api.frankfurter.app")
 
     def test_pays_inconnu_aucun_appel(self, monkeypatch):
         calls = self._mock(monkeypatch)
@@ -712,15 +770,22 @@ class TestProcessOrderV51:
         rep = run(daily.process_order(order))
         assert rep["lignes"][0]["statut"] == "sans_vid"
 
-    def test_multi_lignes_avec_ligne_ko_comparaison_annulee(self, monkeypatch):
-        """Une ligne > 5 unites : le total fret est incomplet, la
-        comparaison au niveau commande doit etre ANNULEE (securite)."""
+    def test_multi_lignes_avec_devis_cj_refuse_comparaison_annulee(self, monkeypatch):
+        """Si CJ refuse le devis d'une ligne, le total fret incomplet est annule."""
         self._mock(monkeypatch)
+        original = daily.cj_freight
+
+        async def refuse_large_quote(vid, country, quantity=1):
+            if quantity == 9:
+                raise RuntimeError("CJ limite cette quantite")
+            return await original(vid, country, quantity=quantity)
+
+        monkeypatch.setattr(daily, "cj_freight", refuse_large_quote)
         order = {"id": "O15", "country": "FR", "shipping_charged": 20.00,
                  "items": [{"vid": "v1", "quantity": 1},
                            {"vid": "v2", "quantity": 9}]}
         rep = run(daily.process_order(order))
-        assert rep["lignes"][1]["statut"] == "depasse_plafond"
+        assert rep["lignes"][1]["statut"] == "fret_indisponible"
         assert any("ANNULEE" in a for a in rep["alertes"])
         assert rep["statut"] == "lignes_non_verifiees"
 
