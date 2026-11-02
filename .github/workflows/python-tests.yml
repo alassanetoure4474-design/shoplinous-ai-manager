@@ -37,6 +37,15 @@ jobs:
       - name: Installer mistralai-workflows (namespace mistralai)
         run: pip install mistralai-workflows
 
+      - name: Diagnostic imports (logs visibles si echec)
+        run: |
+          python -c "import sys; print('python ok'); sys.path.insert(0, '.')"
+          python -c "import ai_manager; print('AI_MANAGER_IMPORT_OK', ai_manager.__file__)"
+          python -c "import daily; print('DAILY_IMPORT_OK')"
+          python -c "import freight_collector_v56; print('FC56_IMPORT_OK')"
+          python -c "import httpx; print('HTTPX_OK', httpx.__version__)"
+          python -m pytest --collect-only -q test_ai_manager.py
+
       - name: Executer pytest (verbose)
         run: |
           set +e
