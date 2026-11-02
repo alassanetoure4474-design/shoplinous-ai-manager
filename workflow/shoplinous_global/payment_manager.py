@@ -151,6 +151,13 @@ class GestionnairePaiements:
         self._par_idempotence[cle_idempotence] = tx
         return tx, True
 
+    def obtenir_transaction(self, transaction_id):
+        """Retourne une transaction suivie sans modifier son statut."""
+        return next(
+            (tx for tx in self._transactions if tx.id == transaction_id),
+            None,
+        )
+
     def confirmer_redirection(self, transaction_id):
         """Une redirection navigateur ne prouve RIEN. Toujours refuse."""
         for tx in self._transactions:
