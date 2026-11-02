@@ -3,6 +3,8 @@
 market_manager, country_manager, currency_manager,
 exchange_rate_manager, pricing_manager. Aucun reseau.
 """
+from decimal import Decimal
+
 import pytest
 
 import global as g

@@ -40,7 +40,7 @@ class AdaptateurPaiement:
             self.nom + " n est pas connecte : webhook secret requis")
 
 
-class CinetPay(AadaptateurPaiement if False else AdaptateurPaiement):
+class CinetPay(AdaptateurPaiement):
     nom = "cinetpay"
     pays_supportes = ("CI", "SN", "CM", "BF", "ML", "TG")
     devises_reglement = ("XOF", "XAF", "USD")
@@ -49,7 +49,7 @@ class CinetPay(AadaptateurPaiement if False else AdaptateurPaiement):
     conditions_kyc = ("registre de commerce", "compte bancaire local")
 
 
-class PayDunya(AadaptateurPaiement if False else AdaptateurPaiement):
+class PayDunya(AdaptateurPaiement):
     nom = "paydunya"
     pays_supportes = ("CI", "SN", "BF", "ML", "TG", "BJ")
     devises_reglement = ("XOF",)
@@ -58,7 +58,7 @@ class PayDunya(AadaptateurPaiement if False else AdaptateurPaiement):
     conditions_kyc = ("registre de commerce",)
 
 
-class KoraPay(AadaptateurPaiement if False else AdaptateurPaiement):
+class KoraPay(AdaptateurPaiement):
     nom = "korapay"
     pays_supportes = ("NG", "GH", "KE", "ZA")
     devises_reglement = ("NGN", "GHS", "KES", "ZAR", "USD")
@@ -67,7 +67,7 @@ class KoraPay(AadaptateurPaiement if False else AdaptateurPaiement):
     conditions_kyc = ("KYC renforce selon volume")
 
 
-class Stripe(AadaptateurPaiement if False else AdaptateurPaiement):
+class Stripe(AdaptateurPaiement):
     nom = "stripe"
     pays_supportes = ("FR", "GB", "US", "CA")
     devises_reglement = ("EUR", "GBP", "USD", "CAD")
@@ -76,7 +76,7 @@ class Stripe(AadaptateurPaiement if False else AdaptateurPaiement):
     conditions_kyc = ("identite du representant", "rib")
 
 
-class PayPal(AadaptateurPaiement if False else AdaptateurPaiement):
+class PayPal(AdaptateurPaiement):
     nom = "paypal"
     pays_supportes = ("FR", "GB", "US", "CA", "MA")
     devises_reglement = ("EUR", "GBP", "USD", "CAD")
