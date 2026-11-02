@@ -118,6 +118,8 @@ docker run --env-file .env shoplinous.
 - Le client GeniusPay utilise `https://geniuspay.ci/api/v1/merchant`.
 - Premier controle : `GET /account` (lecture seule) et `GET /pawapay/providers` (decouverte PawaPay des pays/opérateurs, pas de la passerelle Wave Direct).
 - Le checkout heberge standard est cree par `POST /payments` sans `payment_method` : GeniusPay affiche les canaux disponibles. La reference de commande est transmise dans `metadata.order_id`.
+- Pour Wave Direct, `GestionnaireCommandes.initier_paiement` transmet le choix explicite `payment_method=wave` et `gateway=wave`. Le code limite ce chemin a CI/XOF et refuse le checkout si la reponse API ne confirme pas la route Wave, le montant, la devise, la commande et l'environnement. Le checkout generique reste disponible separement.
+- `GestionnaireCommandes` conserve l'association entre le numero de commande et l'identifiant interne de transaction. Le webhook est verifie contre cette transaction ; une redirection navigateur ne change jamais le statut de la commande.
 - Le test specifique Wave Direct utilise `payment_method=wave` et `gateway=wave` pour la CI, en Sandbox et pour 200 XOF. Il relit ensuite la transaction par reference et exige que le gateway Wave, l'environnement, le montant, la devise et les metadata correspondent.
 - Ce test technique cree une transaction simulee dans l'historique Sandbox. Il n'effectue aucun debit reel. Le code refuse le mode Live avant tout appel reseau.
 - Les paiements clients restent bloques par le module tant que les deux cles API et le secret webhook ne sont pas configures.
@@ -189,3 +191,6 @@ Etapes :
    mode veille (allow_publish=False).
 
 Aucune fusion vers main ni deploiement sans autorisation explicite.
+
+
+Etat d'activation Wave Direct : le routage technique est valide en Sandbox, mais cela ne constitue pas une mise en production. Le serveur qui execute les paiements doit avoir ses propres cles API et son secret webhook ; les secrets GitHub Actions ne sont pas automatiquement transmis au worker. Un endpoint HTTPS public de reception des webhooks et l'interface qui redirige le client vers `checkout_url` doivent etre deployes et testes en Sandbox avant toute activation Live ou utilisation par des clients. Aucun reglage de paiement Freewebstore n'est modifie par ces modules Python.
