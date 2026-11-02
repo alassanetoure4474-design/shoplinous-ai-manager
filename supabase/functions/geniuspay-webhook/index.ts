@@ -49,6 +49,17 @@ async function hmacHex(secret: string, message: string): Promise<string> {
   return bytesToHex(signature);
 }
 
+function phpJsonEncode(value: unknown): string {
+  // GeniusPay documents PHP json_encode($payload): compact JSON, escaped
+  // forward slashes and escaped non-ASCII code units.
+  const compact = JSON.stringify(value);
+  return compact
+    .replace(/\//g, "\\/")
+    .replace(/[\u007f-\uffff]/g, (character) =>
+      "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0")
+    );
+}
+
 async function sha256Hex(value: string): Promise<string> {
   return bytesToHex(await crypto.subtle.digest("SHA-256", encoder.encode(value)));
 }
@@ -140,16 +151,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const providedSignature = signatureHeader.trim().replace(/^sha256=/i, "").toLowerCase();
-  let expectedSignature = "";
+  let canonicalPayload = "";
+  let signatureIsValid = false;
   try {
-    expectedSignature = await hmacHex(
-      webhookSecret,
-      timestampHeader + "." + rawBody,
+    canonicalPayload = phpJsonEncode(payload);
+    const [phpStyleSignature, rawBodySignature] = await Promise.all([
+      hmacHex(webhookSecret, timestampHeader + "." + canonicalPayload),
+      hmacHex(webhookSecret, timestampHeader + "." + rawBody),
+    ]);
+    signatureIsValid = (
+      constantTimeEqual(providedSignature, phpStyleSignature)
+      || constantTimeEqual(providedSignature, rawBodySignature)
     );
   } catch {
     return jsonResponse(500, { error: "signature_verification_unavailable" });
   }
-  if (!constantTimeEqual(providedSignature, expectedSignature)) {
+  if (!signatureIsValid) {
     return jsonResponse(401, { error: "invalid_webhook_signature" });
   }
 
@@ -188,7 +205,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   let payloadHash = "";
   try {
-    payloadHash = await sha256Hex(rawBody);
+    payloadHash = await sha256Hex(canonicalPayload);
   } catch {
     return jsonResponse(500, { error: "payload_hash_unavailable" });
   }
