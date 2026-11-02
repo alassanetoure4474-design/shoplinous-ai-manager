@@ -68,9 +68,7 @@ alter table public.geniuspay_webhook_events enable row level security;
 revoke all on table public.shoplinous_orders from public, anon, authenticated;
 revoke all on table public.shoplinous_payments from public, anon, authenticated;
 revoke all on table public.geniuspay_webhook_events from public, anon, authenticated;
-grant select, insert, update, delete on table public.shoplinous_orders to service_role;
-grant select, insert, update, delete on table public.shoplinous_payments to service_role;
-grant select, insert, update, delete on table public.geniuspay_webhook_events to service_role;
+-- Table access remains closed even to the service role; only the RPCs below may mutate state.
 
 create or replace function public.shoplinous_reserve_wave_payment(
     p_order_number text,
@@ -163,32 +161,16 @@ begin
         );
     end if;
 
-    select * into v_payment
-    from public.shoplinous_payments
-    where order_id = v_order.id
-      and status in ('creating', 'pending', 'succeeded')
-    order by created_at desc
-    limit 1
-    for update;
-
-    if v_payment.id is not null then
-        if v_payment.amount <> p_amount
-           or v_payment.currency <> 'XOF'
-           or v_payment.country <> 'CI'
-           or v_payment.method <> 'wave'
-           or v_payment.environment <> lower(p_environment) then
-            raise exception 'another_payment_already_reserved_for_order'
-                using errcode = '23505';
-        end if;
-        return jsonb_build_object(
-            'created', false,
-            'payment_id', v_payment.id,
-            'order_number', trim(p_order_number),
-            'status', v_payment.status,
-            'provider_reference', v_payment.provider_reference,
-            'checkout_url', v_payment.checkout_url,
-            'environment', v_payment.environment
-        );
+    if exists (
+        select 1
+        from public.shoplinous_payments
+        where order_id = v_order.id
+          and status in ('creating', 'pending', 'succeeded')
+    ) then
+        -- A different key must not silently alias an existing checkout.
+        -- Reuse the original idempotency key or reconcile the attempt first.
+        raise exception 'payment_already_reserved_use_same_idempotency_key'
+            using errcode = '23505';
     end if;
 
     insert into public.shoplinous_payments (
