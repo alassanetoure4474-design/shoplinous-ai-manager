@@ -330,8 +330,12 @@ class TestCollecteConserveEnEchec:
 
         rapport = fc.collecte_v56(fetch, ["FR"], donnees, VID_N,
                                   "X", "Noir", aujourdhui=DATE_COLLECTE)
-        assert rapport["collectes"] == 1
+        # 1 pays (FR) x 5 quantites (1-5) = 5 collectes
+        assert rapport["collectes"] == 5
+        assert rapport["conserves"] == 0
+        assert len(donnees["variantes"][0]["tarifs"]) == 5
         t = donnees["variantes"][0]["tarifs"][0]
+        assert t["quantite"] == 1
         assert t["usd"] == 5.55           # le moins cher
         assert t["usd_15j"] == 5.55       # le moins cher conforme 15 j
         assert t["date_collecte"] == "2026-11-02"
