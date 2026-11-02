@@ -302,7 +302,13 @@ class GeniusPayClient:
                 raise GeniusPayError(
                     "GeniusPay n'a pas confirme le routage Wave Direct"
                 )
-            if Decimal(str(data.get("amount", amount))) != amount:
+            try:
+                montant_retourne = Decimal(str(data.get("amount", amount)))
+            except (InvalidOperation, TypeError, ValueError):
+                raise GeniusPaySecurityError(
+                    "Montant du checkout Wave invalide"
+                ) from None
+            if not montant_retourne.is_finite() or montant_retourne != amount:
                 raise GeniusPaySecurityError("Montant du checkout Wave incoherent")
             if str(data.get("currency", code_devise)).upper() != code_devise:
                 raise GeniusPaySecurityError("Devise du checkout Wave incoherente")
