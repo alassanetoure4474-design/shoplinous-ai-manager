@@ -393,3 +393,53 @@ class TestSecurite:
     def test_schema_v56(self, donnees):
         assert donnees["schema_version"] == "5.6"
         assert fc.SCHEMA_V56 == "5.6"
+
+
+# ============ audit finalisation : TTL verifier MEME si table= fournie ======
+class TestTtlTableFournie:
+    """Correctif finalisation : avant ce correctif, fournir table=
+    contournait le controle TTL (un tarif perime etait utilise pour
+    calculer un prix). Le TTL 7 jours s'applique maintenant a TOUTES
+    les entrees, quelle que soit la provenance de la table."""
+
+    def test_table_expiree_refusee_meme_si_fournie(self, donnees):
+        table_n = fc.table_frets_v56(donnees, VID_N)
+        for par_q in table_n["entrees"].values():
+            for e in par_q.values():
+                e["date_collecte"] = "2026-10-01"   # perime (> 7 jours)
+        res = fc.compute_pricing_v56(2.81, VID_N, "FR", 1, table=table_n,
+                                     aujourdhui=DATE_COLLECTE)
+        assert res["statut"] == "expire"
+        assert res["verification_manuelle"] is True
+        assert "verification manuelle" in res["message"]
+        assert "calcul" not in res
+
+    def test_table_fraiche_acceptee(self, donnees):
+        table_n = fc.table_frets_v56(donnees, VID_N)
+        res = fc.compute_pricing_v56(2.81, VID_N, "FR", 1, table=table_n,
+                                     aujourdhui=DATE_COLLECTE)
+        assert res["statut"] == "recommandation_ok"
+        assert "calcul" in res
+
+    def test_table_sans_date_de_collecte_expiree(self, donnees):
+        """Entree de table sans date : EXPIREE (jamais supposee valide)."""
+        table_n = fc.table_frets_v56(donnees, VID_N)
+        for par_q in table_n["entrees"].values():
+            for e in par_q.values():
+                e["date_collecte"] = ""
+        res = fc.compute_pricing_v56(2.81, VID_N, "FR", 1, table=table_n,
+                                     aujourdhui=DATE_COLLECTE)
+        assert res["statut"] == "expire"
+        assert "calcul" not in res
+
+    def test_table_perimee_n_infecte_pas_les_autres_entrees(self, donnees):
+        """Seule l'entree demandee est verifiee : aucune mutation des
+        donnees d'origine (la table est une copie defensive)."""
+        table_n = fc.table_frets_v56(donnees, VID_N)
+        table_n["entrees"]["FR"][1]["date_collecte"] = "2026-10-01"
+        res = fc.compute_pricing_v56(2.81, VID_N, "FR", 1, table=table_n,
+                                     aujourdhui=DATE_COLLECTE)
+        assert res["statut"] == "expire"
+        # donnees d'origine intactes
+        assert fc.statut_tarif(donnees, VID_N, "FR", 1,
+                              aujourdhui=DATE_COLLECTE) == "actif"

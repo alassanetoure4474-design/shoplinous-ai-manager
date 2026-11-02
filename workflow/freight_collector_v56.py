@@ -345,6 +345,19 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
                               + " jours dans la table : "
                               + MSG_VERIF_MANUELLE + "."})
         return base
+    # AUDIT FINALISATION : le controle TTL s'applique AUSSI lorsque
+    # table= est fournie directement (avant, une table construite
+    # ailleurs contournait l'expiration : un tarif perime pouvait etre
+    # utilise). Une entree de table sans date de collecte est EXPIREE
+    # (est_expire ne suppose jamais une donnee valide).
+    if est_expire(quote, aujourdhui):
+        base.update({"statut": "expire",
+                     "verification_manuelle": True,
+                     "message": "Tarif expire (TTL "
+                              + str(TARIF_TTL_JOURS)
+                              + " jours), jamais present comme actuel : "
+                              + MSG_VERIF_MANUELLE + "."})
+        return base
     dmax = _delai_max(quote.get("delai"))
     if dmax is not None and dmax > delai_max_jours:
         base.update({"statut": "aucun_transporteur_15j",
