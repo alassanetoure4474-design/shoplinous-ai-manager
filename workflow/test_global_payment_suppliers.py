@@ -3,9 +3,9 @@ aucun vrai prestataire : la NON-connexion est testee elle-meme."""
 import pytest
 
 from shoplinous_global import payment_manager as pay
-from shoplinous_global from shoplinous_global import payment_providers as prv
+from shoplinous_global import payment_providers as prv
 from shoplinous_global import supplier_manager as sup
-from shoplinous_global from shoplinous_global import supplier_adapters as sad
+from shoplinous_global import supplier_adapters as sad
 from shoplinous_global import product_catalog as cat
 from shoplinous_global import inventory as inv
 
@@ -39,15 +39,12 @@ class TestGestionnairePaiements:
                                          "Wave", "cle-1")
 
     def test_idempotence_meme_cle_meme_transaction(self):
-        mgr = pay.GestionnairePaiements(
-            prv.RegistrePrestataires(), {},
-            )
-        # on force un prestataire connecte pour tester l idempotence
         reg = prv.RegistrePrestataires()
         reg.tous()[0].connected = True
         reg.tous()[0].methode = "wave"
+        mgr = pay.GestionnairePaiements(reg, {})
         tx1, neuve1 = mgr.creer_transaction("C1", 100, "XOF", "CI",
-                                            "wave", "cle-abc")
+                                           "wave", "cle-abc")
         tx2, neuve2 = mgr.creer_transaction("C1", 100, "XOF", "CI",
                                             "wave", "cle-abc")
         assert tx1 is tx2 and neuve1 and not neuve2
@@ -115,9 +112,12 @@ class TestFournisseurs:
 
     def test_import_csv_strict(self):
         csv_ok = ("nom_fournisseur,sku,nom_produit,prix_achat,devise,"
-                  "stock,pays_expedition,delai_jours\n"
-                  "ACME,A1,Montre,4.50,USD,120,CN,12\n"
-                  "ACME,A2,Casque,abc,USD,50,CN,12\n")
+                  "stock,pays_expedition,delai_jours
+"
+                  "ACME,A1,Montre,4.50,USD,120,CN,12
+"
+                  "ACME,A2,Casque,abc,USD,50,CN,12
+")
         g = sup.GestionnaireFournisseurs(sad.RegistreFournisseurs())
         r = g.importer_csv(csv_ok)
         assert r["ajoutes"] == [2] and r["refuses"] == [3]
