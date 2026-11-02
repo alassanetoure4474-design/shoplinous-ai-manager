@@ -89,7 +89,7 @@ class GeniusPay(AdaptateurPaiement):
     """Checkout heberge GeniusPay. Actif uniquement avec API + secret webhook."""
     nom = "geniuspay"
     methode = "geniuspay_checkout"
-    moyens_supportes = ("geniuspay_checkout", "wave")
+    moyens_supportes = ("geniuspay_checkout", "wave", "wave_direct")
     # La devise reste un filtre strict : ne jamais proposer une devise que
     # l'endpoint checkout standard ne documente pas.
     pays_supportes = (
