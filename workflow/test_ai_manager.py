@@ -199,13 +199,19 @@ class TestSecurite:
         assert appels == []
 
     def test_cle_jamais_dans_le_journal(self, monkeypatch):
+        # le corps de la reponse 429 contient la CLE ACTIVE : si le
+        # journal n'etait pas filtre par _sans_secret, la cle y
+        # figurerait en clair ; le filtre doit la remplacer par
+        # [REDACTE] (la cle de _patch doit etre la MEME que celle
+        # embarquee dans le corps - sinon la redaction est invérifiable)
+        cle = "cle-super-secrete-789"
         def handler(request):
             corps = json.loads(request.content)
             if corps["model"].startswith("mistral"):
                 return httpx.Response(429,
-                                      json={"error": "quota cle-test-123"})
+                                      json={"error": "quota " + cle})
             return httpx.Response(200, json=OK)
-        _patch(monkeypatch, handler, cle="cle-super-secrete-789")
+        _patch(monkeypatch, handler, cle=cle)
         run(ai.appeler_ia(MESSAGES))
         blob = json.dumps(ai.journal())
         assert "cle-super-secrete-789" not in blob
