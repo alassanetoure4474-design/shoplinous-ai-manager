@@ -203,9 +203,12 @@ class TestAuditFreight:
         ], RATE)
         assert len(fa["options"]) == 1
 
-    def test_quantite_hors_plafond_refusee(self):
-        with pytest.raises(RuntimeError):
-            audit_v54.audit_freight_by_quantity(6, [], RATE)
+    def test_quantite_superieure_a_cinq_acceptee_sans_tarif_invente(self):
+        result = audit_v54.audit_freight_by_quantity(6, [], RATE)
+        assert result["quantite"] == 6
+        assert result["options"] == []
+        assert result["conformes"] == []
+        assert "quantite 6" in result["alerte"]
 
 
 class TestSimulations:
@@ -275,14 +278,14 @@ class TestSimulations:
         assert "non couverte" in res["motif"]
         assert res["tarif_facture_eur"] == 0.0
 
-    def test_sim_quantite_superieure_a_5(self):
+    def test_sim_quantite_superieure_a_cinq_sans_fret_fourni(self):
         s = next(x for x in audit_v54.simulation_scenarios(
             audit_v54.REAL_DATA["vid_table"])
             if x["id"] == "SIM-QUANTITE-SUPERIEURE-A-5")
         res = audit_v54.simulate_order(s, audit_v54.REAL_DATA["vid_table"],
                                        freight_by_qty=self._frets_reels())
-        assert res["statut"] == "depasse_plafond"
-        assert "AUCUN appel CJ" in res["motif"]
+        assert res["statut"] == "fret_indisponible_en_simulation"
+        assert "jamais invente" in res["motif"]
 
     def test_sim_fret_non_fourni_jamais_invente(self):
         s = next(x for x in audit_v54.simulation_scenarios(
