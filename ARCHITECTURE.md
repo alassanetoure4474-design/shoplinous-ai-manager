@@ -5,7 +5,7 @@ e-commerce internationale (Afrique, Europe, monde). Les 32 outils du
 workflow (workflow/daily.py), les cinq modeles IA (ai_manager) et les
 integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 
-## Les 18 modules (workflow/global/)
+## Les 18 modules (workflow/shoplinous_global/)
 
 | # | Module | Role | Etat |
 |---|--------|------|------|

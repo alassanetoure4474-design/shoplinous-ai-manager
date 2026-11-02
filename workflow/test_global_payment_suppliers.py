@@ -2,12 +2,12 @@
 aucun vrai prestataire : la NON-connexion est testee elle-meme."""
 import pytest
 
-from global import payment_manager as pay
-from global import payment_providers as prv
-from global import supplier_manager as sup
-from global import supplier_adapters as sad
-from global import product_catalog as cat
-from global import inventory as inv
+from shoplinous_global import payment_manager as pay
+from shoplinous_global from shoplinous_global import payment_providers as prv
+from shoplinous_global import supplier_manager as sup
+from shoplinous_global from shoplinous_global import supplier_adapters as sad
+from shoplinous_global import product_catalog as cat
+from shoplinous_global import inventory as inv
 
 
 class TestPrestataires:

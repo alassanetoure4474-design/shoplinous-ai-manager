@@ -7,12 +7,12 @@ from decimal import Decimal
 
 import pytest
 
-import global as g
-from global import market_manager as mm
-from global import country_manager as cm
-from global import currency_manager as cu
-from global import exchange_rate_manager as fx
-from global import pricing_manager as pm
+import shoplinous_global as g
+from shoplinous_global import market_manager as mm
+from shoplinous_global import country_manager as cm
+from shoplinous_global import currency_manager as cu
+from shoplinous_global import exchange_rate_manager as fx
+from shoplinous_global import pricing_manager as pm
 
 
 class TestInventaireModules:
@@ -56,7 +56,6 @@ class TestCountryManager:
         assert commande["devise"] == "XOF"
 
     def test_client_peut_toujours_changer_de_pays(self):
-        # meme apres detection, le changement reste possible
         commande = cm.changer_pays({"pays": None}, "FR")
         commande = cm.changer_pays(commande, "TG")
         assert commande["pays"] == "TG"
@@ -117,9 +116,9 @@ class TestExchangeRateManager:
 
 class TestPricingManager:
     ENTREE = {
-        "prix_fournisseur": "4.00",  # USD
-        "transport": "2.00",         # USD
-        "taux_vers_reference": "0.92",  # USD->EUR
+        "prix_fournisseur": "4.00",
+        "transport": "2.00",
+        "taux_vers_reference": "0.92",
         "frais_paiement_taux": "0.029",
         "frais_paiement_fixe": "0.30",
         "frais_plateforme": "0.20",
@@ -141,9 +140,8 @@ class TestPricingManager:
         comp = r["composition"]
         assert comp["cout_fournisseur"] == "3.68"
         assert comp["cout_transport"] == "1.84"
-        # couts 5.52 + paiement (5.52*0.029+0.30=0.46) + plateforme 0.20
         assert r["cout_total"] == "6.18"
-        assert float(r["prix_plancher"]) >= 8.18  # + marge 2.00
+        assert float(r["prix_plancher"]) >= 8.18
 
     def test_marge_insuffisante_bloque_le_prix(self):
         r = pm.verifier_prix_propose("6.50", self.ENTREE)

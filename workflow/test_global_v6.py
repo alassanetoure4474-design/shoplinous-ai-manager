@@ -2,13 +2,13 @@
 ai decision, notification, security, monitoring. Aucun reseau."""
 import pytest
 
-from global import shipping_manager as sh
-from global import order_manager as om
-from global import tracking_manager as tr
-from global import ai_decision_engine as ai
-from global import notification_manager as nt
-from global import security_audit as sec
-from global import monitoring as mo
+from shoplinous_global import shipping_manager as sh
+from shoplinous_global import order_manager as om
+from shoplinous_global import tracking_manager as tr
+from shoplinous_global import ai_decision_engine as ai
+from shoplinous_global import notification_manager as nt
+from shoplinous_global import security_audit as sec
+from shoplinous_global import monitoring as mo
 
 
 def devis(cout, delai, dest="CI", qty=6, restrictions=True):
@@ -68,7 +68,7 @@ class TestOrderManager:
 
     def test_transmission_fournisseur_exige_autorisation(self):
         g, c = self._cmd()
-        c.statut = "preparation"  # etat atteignable apres paiement
+        c.statut = "preparation"
         with pytest.raises(om.TransitionInvalide,
                            match="autorisation"):
             c.transition("transmission_fournisseur_autorisee")
