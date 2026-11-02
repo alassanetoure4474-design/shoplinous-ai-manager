@@ -29,6 +29,8 @@ class Transaction:
         self.moyen = moyen
         self.prestataire = prestataire
         self.cle_idempotence = cle_idempotence
+        self.reference_externe = None
+        self.url_paiement = None
         self.statut = "creee"
         self.historique = [("creee", time.time())]
 
@@ -95,6 +97,13 @@ class GestionnairePaiements:
         demandes = {_normaliser_moyen(m) for m in (moyens_pays or [])}
         proposables = []
         for p in self.registre.pour_pays(code_pays, devise):
+            if p.nom == "geniuspay":
+                # Le checkout heberge presente dynamiquement les canaux
+                # disponibles chez GeniusPay pour le client.
+                proposables.append({
+                    "moyen": "geniuspay_checkout",
+                    "prestataire": p.nom, "devise": devise})
+                continue
             for moyen in sorted(_moyens_configures(p)):
                 if _normaliser_moyen(moyen) in demandes:
                     proposables.append({
@@ -125,6 +134,10 @@ class GestionnairePaiements:
         ).hexdigest()[:16]
         tx = Transaction(identifiant, commande, montant, devise, pays,
                          moyen, prestataire.nom, cle_idempotence)
+        if prestataire.nom == "geniuspay":
+            checkout = prestataire.creer_paiement(tx)
+            tx.reference_externe = checkout["reference"]
+            tx.url_paiement = checkout["checkout_url"]
         tx._passer("en_attente")
         self._transactions.append(tx)
         self._par_idempotence[cle_idempotence] = tx
@@ -146,10 +159,28 @@ class GestionnairePaiements:
                           hashlib.sha256).hexdigest()
         return hmac.compare_digest(attendu, str(signature))
 
-    def confirmer_webhook(self, transaction_id, contenu, signature):
+    def confirmer_webhook(self, transaction_id, contenu, signature,
+                          headers=None):
         """Confirme uniquement un webhook signe et lie au bon paiement."""
         for tx in self._transactions:
             if tx.id == transaction_id:
+                if tx.statut in ("reussie", "remboursee"):
+                    return True
+                if tx.prestataire == "geniuspay":
+                    fournisseur = next(
+                        (p for p in self.registre.tous()
+                         if p.nom == "geniuspay"), None)
+                    if fournisseur is None:
+                        tx._passer("webhook_refuse")
+                        return False
+                    try:
+                        fournisseur.verifier_webhook(
+                            tx, contenu, signature, headers=headers)
+                    except Exception:
+                        tx._passer("webhook_refuse")
+                        return False
+                    tx._passer("reussie")
+                    return True
                 if not self.verifier_signature(tx.prestataire, contenu,
                                               signature):
                     tx._passer("signature_refusee")
@@ -157,8 +188,6 @@ class GestionnairePaiements:
                 if not _payload_webhook_coherent(tx, contenu):
                     tx._passer("webhook_refuse")
                     return False
-                if tx.statut in ("reussie", "remboursee"):
-                    return True
                 tx._passer("reussie")
                 return True
         raise KeyError("transaction inconnue")
