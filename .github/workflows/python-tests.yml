@@ -1,0 +1,66 @@
+# Tests pytest SHOPLINOUS - branches fix1 a fix8.
+# Aucun secret, aucune cle API : les tests utilisent des mocks httpx.
+name: Tests pytest workflow
+
+on:
+  push:
+    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
+  pull_request:
+    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workflow
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v5
+
+      - name: Installer Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Installer pip a jour
+        run: python -m pip install --upgrade pip
+
+      - name: Installer les dependances (runtime requirements.txt)
+        run: pip install -r requirements.txt
+
+      - name: Installer les dependances tests (requirements-dev.txt)
+        run: pip install -r requirements-dev.txt
+
+      - name: Installer mistralai-workflows (namespace mistralai)
+        run: pip install mistralai-workflows
+
+      - name: Executer toute la suite pytest (verbose)
+        run: |
+          set +e
+          python -m pytest -v test_daily.py test_audit_v54.py test_pricing_v55.py test_freight_collector_v55.py test_freight_collector_v56.py test_ai_manager.py test_ai_product_copy.py test_fournisseurs.py 2>&1 | tee pytest_output.txt
+          exit_code=${PIPESTATUS[0]}
+          echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
+          exit "${exit_code}"
+
+      - name: Publier les echecs en annotations publiques
+        if: failure()
+        run: |
+          grep -E "^(FAILED|ERROR)" pytest_output.txt | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+          tail -n 25 pytest_output.txt | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
+
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v5
+
+      - name: Construire l'image Docker
+        run: docker build -f workflow/Dockerfile -t shoplinous-worker:test .
+
+      - name: Demarrer le conteneur et verifier les imports du worker
+        run: docker run --rm --entrypoint python shoplinous-worker:test -c "import mistralai.workflows; import daily; print('WORKER_IMPORTS_OK')"
