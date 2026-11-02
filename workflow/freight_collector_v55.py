@@ -172,7 +172,9 @@ def rapport_couverture(donnees, aujourdhui=None):
     """Rapport : pays reellement couverts / non desservis, regle 3, monde.
 
     Un pays est COUVERT s'il possede les 5 quantites (1 a 5) avec un prix
-    reel. Les entrees expirees sont listees separement (a actualiser)."""
+    reel. Les entrees expirees sont listees separement (a actualiser).
+    Regle 3 : conformite a la quantite 1 (reference) ET sur les 5
+    quantites (champs separes, aucune confusion)."""
     aujourdhui = _date(aujourdhui)
     index = _index_tarifs(donnees)
     quantites_par_pays = {}
@@ -191,12 +193,18 @@ def rapport_couverture(donnees, aujourdhui=None):
     expires = sorted({p for (p, q), t in index.items()
                       if est_expire(t, aujourdhui)})
 
-    europe_conformes = sorted(
+    # Regle 3 verifiee a la QUANTITE DE REFERENCE 1 (validation historique
+    # pays par pays du 01/11/2026) PUIS sur TOUTES les quantites : avec les
+    # tarifs reels, seuls GB et PL restent <= 6 EUR pour q1 a q5 (limite
+    # honnete, aucun arrondi cache).
+    europe_conformes_q1 = sorted(
+        p for p in EUROPE_30 if est_conforme_regle3(index.get((p, 1))))
+    europe_non_conformes_q1 = sorted(p for p in EUROPE_30
+                                      if p not in europe_conformes_q1)
+    europe_conformes_q1_a_5 = sorted(
         p for p in EUROPE_30
         if all(est_conforme_regle3(index.get((p, q)))
                for q in range(QTE_MIN, QTE_MAX + 1)))
-    europe_non_conformes = sorted(p for p in EUROPE_30
-                                  if p not in europe_conformes)
     monde = sorted(p for p in couverts if p not in EUROPE_30)
     return {
         "date_rapport": aujourdhui.isoformat(),
@@ -204,8 +212,9 @@ def rapport_couverture(donnees, aujourdhui=None):
         "pays_partiels": partiels,
         "non_desservis": non_desservis,
         "tarifs_expires": expires,
-        "europe_30_regle3_conformes": europe_conformes,
-        "europe_30_regle3_non_conformes": europe_non_conformes,
+        "europe_30_regle3_conformes_q1": europe_conformes_q1,
+        "europe_30_regle3_non_conformes_q1": europe_non_conformes_q1,
+        "europe_30_regle3_conformes_q1_a_5": europe_conformes_q1_a_5,
         "destinations_mondiales_couvertes": monde,
     }
 
