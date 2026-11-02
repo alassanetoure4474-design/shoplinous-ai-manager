@@ -279,7 +279,12 @@ class GeniusPayClient:
         if not _url_https_valide(checkout_url):
             raise GeniusPayError("URL de checkout GeniusPay absente ou invalide")
         host = urlparse(checkout_url).hostname
-        if host not in ("geniuspay.ci", "www.geniuspay.ci"):
+        domaines_autorises = (
+            ("wave.com", "www.wave.com")
+            if methode == "wave"
+            else ("geniuspay.ci", "www.geniuspay.ci")
+        )
+        if host not in domaines_autorises:
             raise GeniusPayError("Domaine de checkout inattendu : redirection refusee")
         if str(data.get("status", "")).lower() not in ("pending", "processing"):
             raise GeniusPayError("Statut initial inattendu pour le checkout")
@@ -330,6 +335,9 @@ class GeniusPayClient:
     ) -> dict:
         """Cree un paiement Wave Direct pour une commande ivoirienne."""
         infos_client = dict(client or {})
+        pays_fourni = str(infos_client.get("country", "CI")).strip().upper()
+        if pays_fourni != "CI":
+            raise ValueError("Wave Direct GeniusPay est reserve a CI/XOF")
         infos_client["country"] = "CI"
         return self.creer_checkout(
             montant=montant,
