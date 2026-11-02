@@ -84,6 +84,64 @@ class TestGestionnairePaiements:
         assert mgr.confirmer_webhook(tx.id, "{}", "deadbeef") is False
         assert tx.statut == "signature_refusee"
 
+
+    def test_le_moyen_demande_selectionne_le_bon_prestataire(self):
+        reg = prv.RegistrePrestataires()
+        reg.tous()[0].connected = True
+        reg.tous()[0].methode = "wave"
+        reg.tous()[1].connected = True
+        reg.tous()[1].methode = "orange_money"
+        tx, _ = pay.GestionnairePaiements(reg, {}).creer_transaction(
+            "C1", 100, "XOF", "CI", "Orange Money", "cle-orange")
+        assert tx.prestataire == "paydunya"
+
+    def test_moyens_disponibles_respecte_les_moyens_du_pays(self):
+        reg = prv.RegistrePrestataires()
+        reg.tous()[0].connected = True
+        reg.tous()[0].moyens_supportes = ("wave", "orange_money")
+        mgr = pay.GestionnairePaiements(reg, {})
+        disponibles = mgr.moyens_disponibles(
+            "CI", ["Wave", "Visa"], "XOF")
+        assert disponibles == [
+            {"moyen": "wave", "prestataire": "cinetpay", "devise": "XOF"}]
+
+    def test_moyen_non_pris_en_charge_refuse(self):
+        reg = prv.RegistrePrestataires()
+        reg.tous()[0].connected = True
+        reg.tous()[0].methode = "wave"
+        with pytest.raises(RuntimeError, match="ne prend pas en charge"):
+            pay.GestionnairePaiements(reg, {}).creer_transaction(
+                "C1", 100, "XOF", "CI", "paypal", "cle-wrong-method")
+
+    def test_webhook_signe_d_une_autre_transaction_refuse(self):
+        import hashlib, hmac as h
+        reg = prv.RegistrePrestataires()
+        reg.tous()[0].connected = True
+        reg.tous()[0].methode = "wave"
+        mgr = pay.GestionnairePaiements(reg, {"cinetpay": "secret"})
+        tx, _ = mgr.creer_transaction("C1", 100, "XOF", "CI", "wave",
+                                      "cle-other-tx")
+        contenu = '{"transaction": "AUTRE-TX", "statut": "ok"}'
+        signature = h.new(b"secret", contenu.encode(),
+                          hashlib.sha256).hexdigest()
+        assert mgr.confirmer_webhook(tx.id, contenu, signature) is False
+        assert tx.statut == "webhook_refuse"
+
+    def test_webhook_montant_ou_devise_incorrects_refuses(self):
+        import hashlib, hmac as h
+        reg = prv.RegistrePrestataires()
+        reg.tous()[0].connected = True
+        reg.tous()[0].methode = "wave"
+        mgr = pay.GestionnairePaiements(reg, {"cinetpay": "secret"})
+        tx, _ = mgr.creer_transaction("C1", 100, "XOF", "CI", "wave",
+                                      "cle-wrong-amount")
+        contenu = ('{"transaction": "' + tx.id
+                   + '", "statut": "ok", "amount": 999, "currency": "XOF"}')
+        signature = h.new(b"secret", contenu.encode(),
+                          hashlib.sha256).hexdigest()
+        assert mgr.confirmer_webhook(tx.id, contenu, signature) is False
+        assert tx.statut == "webhook_refuse"
+
     def test_rapprochement_comptable(self):
         reg = prv.RegistrePrestataires()
         reg.tous()[0].connected = True
