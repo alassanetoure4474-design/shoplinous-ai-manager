@@ -10,7 +10,7 @@ executable localement :
 Couverture v5 :
 - corrections A (cn_stock_of : structure reelle stock[0].inventory=0,
   storageNum=11347 -> 11347) ;
-- validate_quantity (1-5 acceptes ; 0, -1, 6, bool, str refuses) ;
+- validate_quantity (toute quantite entiere positive acceptee ; 0, -1, bool, str refuses) ;
 - freight_coverage_alert (couvert -> None ; non couvert -> alerte ;
   tarif inconnu -> alerte manuelle) ;
 - cj_freight appelée avec la quantite reelle (MockTransport, payload verifie) ;
@@ -20,7 +20,8 @@ Couverture v5 :
   GET /orders et /orders/abandoned) : adaptateur securise
   fw_normalize_order, pagination limit/offset, en-tete x-api-key,
   fixtures reelles anonymisees, zero donnee personnelle ;
-  repartition multi-lignes securisee, > 5 unites, protection fournisseur ;
+  repartition multi-lignes securisee, devis CJ dynamique sans plafond local,
+  refus CJ sans tarif invente, protection fournisseur ;
 - regressions v4 : taux invalide (NaN/negatif/nul), images (octets
   magiques menteurs, 404, trop petite), pagination, confirmation de
   creation, allow_publish=False par defaut, aucune cle API en dur.
