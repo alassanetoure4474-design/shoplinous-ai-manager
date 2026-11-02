@@ -1122,7 +1122,9 @@ class TestVidTableV53:
         (structure reelle du 02/11/2026)."""
         monkeypatch.setattr(daily, "fw_get_product",
                             _async(FW_DETAIL_ATTRAPE_REEL))
-        recs = run(daily.fw_variant_records(FW_CATALOGUE_REEL))
+        catalogue_un_seul = [FW_CATALOGUE_REEL[1]]   # produit SHOPLINOUS
+        recs = run(daily.fw_variant_records(catalogue_un_seul))
+        assert len(recs) == 2
         ids = {(r["fw_variant_id"], r["variant_sku"]) for r in recs}
         assert ids == {("ZsKQFt", "CJJT205244501AZ"),
                        ("WPPmLB", "CJJT205244502BY")}
@@ -1235,7 +1237,8 @@ class TestVidTableV53:
                 for v in obj:
                     collecte(v)
         collecte(res)
-        hors = cles - AUTORISES
+        # les SKU variantes sont des CLES de la table (identifiants metier)
+        hors = cles - AUTORISES - set(res["table"])
         assert not hors, "cles hors liste blanche : " + repr(hors)
         blob = json.dumps(res).lower()
         for interdit in ("email", "telephone", "forename", "surname",
