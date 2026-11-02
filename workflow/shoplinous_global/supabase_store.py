@@ -5,6 +5,7 @@ Il ne journalise jamais les clés, signatures ou payloads de paiement.
 """
 from __future__ import annotations
 
+import json
 import os
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
@@ -58,12 +59,25 @@ class SupabaseStore:
 
     @classmethod
     def from_env(cls, **kwargs) -> "SupabaseStore":
+        service_key = (
+            os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+            or os.getenv("SUPABASE_SECRET_KEY", "")
+        )
+        if not service_key:
+            encoded_keys = os.getenv("SUPABASE_SECRET_KEYS", "")
+            try:
+                named_keys = json.loads(encoded_keys) if encoded_keys else {}
+                if isinstance(named_keys, dict):
+                    service_key = named_keys.get("default") or next(
+                        (value for value in named_keys.values()
+                         if isinstance(value, str)),
+                        "",
+                    )
+            except (TypeError, ValueError):
+                service_key = ""
         return cls(
             supabase_url=os.getenv("SUPABASE_URL", ""),
-            service_key=(
-                os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-                or os.getenv("SUPABASE_SECRET_KEY", "")
-            ),
+            service_key=service_key,
             **kwargs,
         )
 
@@ -129,8 +143,10 @@ class SupabaseStore:
             raise ValueError("Référence de commande invalide")
         if not 8 <= len(key) <= 128:
             raise ValueError("Clé d'idempotence invalide (8 à 128 caractères)")
-        if env not in ("sandbox", "live"):
-            raise ValueError("Environnement GeniusPay invalide")
+        if env != "sandbox":
+            raise SupabasePersistenceError(
+                "Les paiements Live restent bloqués dans SHOPLINOUS"
+            )
 
         result = self._rpc(
             "shoplinous_reserve_wave_payment",
@@ -174,8 +190,10 @@ class SupabaseStore:
             raise ValueError(
                 "La redirection du checkout doit utiliser le domaine HTTPS Wave"
             )
-        if env not in ("sandbox", "live"):
-            raise ValueError("Environnement GeniusPay invalide")
+        if env != "sandbox":
+            raise SupabasePersistenceError(
+                "Les paiements Live restent bloqués dans SHOPLINOUS"
+            )
 
         result = self._rpc(
             "shoplinous_finalize_wave_checkout",
@@ -217,6 +235,10 @@ class WavePersistentPaymentService:
         environment = str(
             getattr(self.geniuspay, "environment", "sandbox")
         ).lower()
+        if environment != "sandbox":
+            raise SupabasePersistenceError(
+                "Les paiements Live restent bloqués dans SHOPLINOUS"
+            )
         reservation = self.store.reserver_paiement_wave(
             order_number=order_number,
             amount=amount,
