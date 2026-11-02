@@ -409,9 +409,14 @@ async def fw_orders() -> dict:
             if not isinstance(batch, list):
                 raise RuntimeError("Freewebstore /orders: liste commandes inattendue")
             collected.extend(o for o in batch if isinstance(o, dict))
-            if isinstance(found, int) and len(collected) >= found:
+            if not batch:
                 break
-            if len(batch) < FW_ORDERS_PAGE:
+            if isinstance(found, int):
+                # 'found' connu : paginer jusqu'a recuperation complete
+                if len(collected) >= found:
+                    break
+            elif len(batch) < FW_ORDERS_PAGE:
+                # 'found' inconnu : une page courte signale la fin
                 break
             offset += len(batch)
     return {"found": found if isinstance(found, int) else len(collected),
