@@ -205,10 +205,10 @@ class TestSecurite:
                 return httpx.Response(429,
                                       json={"error": "quota cle-test-123"})
             return httpx.Response(200, json=OK)
-        _patch(monkeypatch, handler, cle="cle-super-secrète-789")
+        _patch(monkeypatch, handler, cle="cle-super-secrete-789")
         run(ai.appeler_ia(MESSAGES))
         blob = json.dumps(ai.journal())
-        assert "cle-super-secrète-789" not in blob
+        assert "cle-super-secrete-789" not in blob
         assert "[REDACTE]" in blob
 
     def test_aucune_cle_en_dur(self):
