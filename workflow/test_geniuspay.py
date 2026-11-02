@@ -206,7 +206,7 @@ def test_checkout_wave_direct_refuse_si_geniuspay_ne_confirme_pas_wave():
             "data": {
                 "reference": "MTX-NOT-WAVE",
                 "status": "pending",
-                "checkout_url": "https://geniuspay.ci/checkout/MTX-NOT-WAVE",
+                "checkout_url": "https://wave.com/pay/MTX-NOT-WAVE",
                 "environment": "sandbox",
                 "gateway": "paystack",
                 "amount": 2500,
