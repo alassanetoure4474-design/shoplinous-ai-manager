@@ -1,12 +1,12 @@
-# Tests pytest SHOPLINOUS - branche workflow-v5-fix1 uniquement.
+# Tests pytest SHOPLINOUS - branches workflow-v5-fix1 et workflow-v5-fix2.
 # Aucun secret, aucune cle API : les tests utilisent des mocks httpx.
 name: Tests pytest workflow
 
 on:
   push:
-    branches: [workflow-v5-fix1]
+    branches: [workflow-v5-fix1, workflow-v5-fix2]
   pull_request:
-    branches: [workflow-v5-fix1]
+    branches: [workflow-v5-fix1, workflow-v5-fix2]
 
 jobs:
   pytest:
