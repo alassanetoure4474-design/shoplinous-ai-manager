@@ -68,6 +68,9 @@ alter table public.geniuspay_webhook_events enable row level security;
 revoke all on table public.shoplinous_orders from public, anon, authenticated;
 revoke all on table public.shoplinous_payments from public, anon, authenticated;
 revoke all on table public.geniuspay_webhook_events from public, anon, authenticated;
+revoke all on table public.shoplinous_orders from service_role;
+revoke all on table public.shoplinous_payments from service_role;
+revoke all on table public.geniuspay_webhook_events from service_role;
 -- Table access remains closed even to the service role; only the RPCs below may mutate state.
 
 create or replace function public.shoplinous_reserve_wave_payment(
