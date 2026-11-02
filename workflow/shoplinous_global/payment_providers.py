@@ -6,7 +6,7 @@ fournis dans l environnement. Un adaptateur non connecte est visible
 dans le registre mais JAMAIS propose au client. Aucune simulation
 n est presentee comme une connexion reelle.
 
-Prestataires prevus : CinetPay, PayDunya, KoraPay, Stripe, PayPal.
+Prestataires prevus : GeniusPay, CinetPay, PayDunya, KoraPay, Stripe, PayPal.
 Chaque adaptateur documente ses conditions (pays autorises, devises
 de reglement, frais, delais de reversement, KYC) telles que
 declarees publiquement ; elles doivent etre reconfirmees au moment
