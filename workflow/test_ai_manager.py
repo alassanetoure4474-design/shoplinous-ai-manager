@@ -21,7 +21,13 @@ import inspect
 import json
 
 import httpx
+import os
 import pytest
+import sys
+
+# Bootstrap robuste : le dossier du test est garanti sur sys.path
+# quelle que soit la politique d import de la version de pytest.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import ai_manager as ai
 

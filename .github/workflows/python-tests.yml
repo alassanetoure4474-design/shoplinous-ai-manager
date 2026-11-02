@@ -10,6 +10,9 @@ on:
   pull_request:
     branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7]
 
+permissions:
+  contents: write
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
@@ -44,6 +47,17 @@ jobs:
           exit_code=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
           exit "${exit_code}"
+
+      - name: Archiver pytest_output.txt sur la branche [skip ci]
+        if: always()
+        run: |
+          if [ -f pytest_output.txt ]; then
+            git config user.name "ci-diag"
+            git config user.email "ci-diag@users.noreply.github.com"
+            git add pytest_output.txt || true
+            git commit -m "log pytest [skip ci]" || true
+            git push origin HEAD:workflow-v5-fix7 || true
+          fi
 
       - name: Publier les echecs en annotations publiques
         if: failure()
