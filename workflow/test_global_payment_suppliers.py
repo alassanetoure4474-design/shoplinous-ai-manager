@@ -112,12 +112,10 @@ class TestFournisseurs:
 
     def test_import_csv_strict(self):
         csv_ok = ("nom_fournisseur,sku,nom_produit,prix_achat,devise,"
-                  "stock,pays_expedition,delai_jours
-"
-                  "ACME,A1,Montre,4.50,USD,120,CN,12
-"
-                  "ACME,A2,Casque,abc,USD,50,CN,12
-")
+                  "stock,pays_expedition,delai_jours"
+                  + chr(10) + "ACME,A1,Montre,4.50,USD,120,CN,12"
+                  + chr(10) + "ACME,A2,Casque,abc,USD,50,CN,12"
+                  + chr(10))
         g = sup.GestionnaireFournisseurs(sad.RegistreFournisseurs())
         r = g.importer_csv(csv_ok)
         assert r["ajoutes"] == [2] and r["refuses"] == [3]
