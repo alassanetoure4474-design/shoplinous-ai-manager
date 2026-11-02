@@ -15,6 +15,7 @@ de la boutique Freewebstore avec assistance IA.
 - `workflow/freight_collector_v56.py` : moteur de tarifs fret par variante
   (usd_15j, TTL 7 jours, aucune substitution silencieuse, aucun melange
   entre variantes ; devis CJ en direct au-dela de 5 unites).
+- `workflow/shoplinous_global/geniuspay.py` : client serveur GeniusPay (Sandbox par defaut, checkout heberge, decouverte mobile money, verification HMAC des webhooks) ; aucun secret dans le depot.
 - `workflow/ai_manager.py` : acces multi-IA via FreeLLMAPI (cinq
   fournisseurs actifs par defaut : mistral, gemini, groq, qwen, gpt_oss ;
   bascule automatique sur 429/5xx/timeout ; cache ; modeles payants
