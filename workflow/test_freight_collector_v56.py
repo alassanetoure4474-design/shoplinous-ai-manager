@@ -382,13 +382,19 @@ class TestSecurite:
                          "import socket", "import subprocess"):
             assert interdit not in source
 
-    def test_daily_non_modifiee(self):
+    def test_daily_integration_v56_lecture_seule(self):
+        """Finalisation (autorisation explicite du 02/11/2026) : le moteur
+        v5.6 est integre a daily.py en LECTURE SEULE (rapport d'integrite).
+        Gardes : allow_publish=False inchange, AUCUN calcul de prix v5.6
+        ni collecte v5.6 depuis daily.py (pas de double calcul)."""
         chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "daily.py")
         with open(chemin, "r", encoding="utf-8") as f:
             source = f.read()
         assert "allow_publish: bool = False" in source
-        assert "freight_collector_v56" not in source
+        assert "import freight_collector_v56 as fc56" in source
+        for interdit in ("fc56.compute_pricing_v56", "fc56.collecte_v56"):
+            assert interdit not in source, interdit
 
     def test_schema_v56(self, donnees):
         assert donnees["schema_version"] == "5.6"
