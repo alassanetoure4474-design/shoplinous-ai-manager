@@ -60,13 +60,13 @@ class GeniusPayWaveSandboxTester(GeniusPayClient):
             )
 
         created_environment = str(created.get("environment", "")).lower()
-        if created_environment and created_environment != "sandbox":
+        if created_environment != "sandbox":
             raise GeniusPaySecurityError(
-                "GeniusPay a retourne un environnement autre que Sandbox"
+                "GeniusPay n'a pas confirme l'environnement Sandbox a la creation"
             )
 
         detail = self.obtenir_paiement(reference)
-        detail_environment = str(detail.get("environment", "sandbox")).lower()
+        detail_environment = str(detail.get("environment", "")).lower()
         if detail_environment != "sandbox":
             raise GeniusPaySecurityError(
                 "La transaction Wave retournee n'est pas en Sandbox"
