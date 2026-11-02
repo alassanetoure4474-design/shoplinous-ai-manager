@@ -109,7 +109,7 @@ class TestGestionnairePaiements:
         reg = prv.RegistrePrestataires()
         reg.tous()[0].connected = True
         reg.tous()[0].methode = "wave"
-        with pytest.raises(RuntimeError, match="ne prend pas en charge"):
+        with pytest.raises(RuntimeError, match="ne prend en charge"):
             pay.GestionnairePaiements(reg, {}).creer_transaction(
                 "C1", 100, "XOF", "CI", "paypal", "cle-wrong-method")
 
