@@ -28,7 +28,7 @@ def test_quantity_six_uses_live_cj_quote_and_calculates_price():
     assert result["quantite"] == 6
     assert result["fret"]["usd"] == 12.5
     assert result["calcul"]["cout_produit_total_eur"] == round(
-        round(2.81 * fc.TAUX_USD_EUR, 2) * 6, 2
+        round(2.81 * fc.p55.EXCHANGE_RATE_USD_EUR, 2) * 6, 2
     )
 
 
