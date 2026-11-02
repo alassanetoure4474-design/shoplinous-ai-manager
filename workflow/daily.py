@@ -101,6 +101,7 @@ import mistralai.workflows as workflows
 # calculs du workflow restent fondes sur les frets CJ vivants : aucun
 # double calcul, aucun appel reseau supplementaire, aucune ecriture.
 import freight_collector_v56 as fc56
+import ai_manager
 
 # ---------------------------------------------------------------- regles ----
 MIN_STOCK_CN = 1000
@@ -261,6 +262,29 @@ def parse_cj_images(detail_payload: dict) -> list:
 
 
 # ------------------------------------------------------------- activites ----
+@workflows.activity(start_to_close_timeout=timedelta(seconds=45), retry_policy_max_attempts=1)
+async def ai_product_description(product_name: str) -> str:
+    """Redige une courte description marketing en francais.
+    L'IA ne recoit aucun prix, stock, marge, commande ou secret metier.
+    Elle ne peut ni publier ni modifier une donnee commerciale."""
+    messages = [
+        {"role": "system", "content":
+         "Tu es redacteur e-commerce francophone. Redige uniquement une "
+         "description courte et naturelle en francais (2 phrases maximum). "
+         "Ne suppose aucune caracteristique, matiere, dimension, fonction, "
+         "performance ou certification absente du nom fourni. Si le nom est "
+         "trop vague, reste general. N'ajoute ni prix, ni livraison, ni "
+         "delai, ni promesse. Retourne uniquement le texte."},
+        {"role": "user", "content": "Nom fournisseur du produit : "
+         + str(product_name)[:180]},
+    ]
+    result = await ai_manager.appeler_ia(messages)
+    description = " ".join(str(result.get("contenu", "")).split()).strip()
+    if not description:
+        raise RuntimeError("description IA vide")
+    return description[:500]
+
+
 @workflows.activity(start_to_close_timeout=timedelta(seconds=30), retry_policy_max_attempts=2)
 async def usd_eur_rate() -> float:
     """Taux USD/EUR OBLIGATOIRE en direct (BCE via Frankfurter).
@@ -1151,6 +1175,21 @@ class ShoplinousDailyWorkflow:
                              "hypothese_livraison_client": params.checkout_shipping_eur
                              if params.checkout_shipping_eur is not None
                              else "inconnue (scenario pessimiste 0 EUR)"}
+                    # Redaction IA purement textuelle. En cas d'indisponibilite,
+                    # le workflow conserve une description neutre sans bloquer
+                    # l'evaluation ni toucher aux calculs deterministes.
+                    try:
+                        description_ia = await ai_product_description(cj_name)
+                    except Exception as exc:
+                        description_ia = (
+                            f"{cj_name}. Produit selectionne par SHOPLINOUS.")
+                        report["alerts"].append({
+                            "id": pid,
+                            "alerte": "description IA indisponible : "
+                                      + type(exc).__name__
+                                      + " ; texte neutre utilise"})
+                    entry["description"] = description_ia
+
                     if not params.allow_publish:
                         report["valides_en_veille"].append(entry)
                         validated_count += 1
@@ -1168,7 +1207,7 @@ class ShoplinousDailyWorkflow:
                     } for i, v in enumerate(retained)]
                     core = {
                         "name": f"{cj_name} - SHOPLINOUS",
-                        "abstract": (f"{cj_name}. Produit selectionne par SHOPLINOUS. "
+                        "abstract": (description_ia + " "
                                      f"Livraison verifiee en {dmin} a {dmax} jours ouvres "
                                      "selon le pays de destination (Union europeenne, "
                                      "Royaume-Uni, Suisse, Norvege)."),
