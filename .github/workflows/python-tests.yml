@@ -1,12 +1,12 @@
-# Tests pytest SHOPLINOUS - branches fix1, fix2 et workflow-v5-fix3.
+# Tests pytest SHOPLINOUS - branches fix1 a fix4 (audit v5.4 inclus).
 # Aucun secret, aucune cle API : les tests utilisent des mocks httpx.
 name: Tests pytest workflow
 
 on:
   push:
-    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3]
+    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4]
   pull_request:
-    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3]
+    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4]
 
 jobs:
   pytest:
@@ -38,7 +38,7 @@ jobs:
       - name: Executer pytest (verbose)
         run: |
           set +e
-          python -m pytest -v test_daily.py 2>&1 | tee pytest_output.txt
+          python -m pytest -v test_daily.py test_audit_v54.py 2>&1 | tee pytest_output.txt
           exit_code=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
           exit "${exit_code}"
