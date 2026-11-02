@@ -182,6 +182,7 @@ def test_create_webhook_exige_https_et_retourne_un_secret():
 
 def _signed_payload(payload, secret="whsec_test", timestamp=None):
     ts = str(int(time.time()) if timestamp is None else timestamp)
+    payload["timestamp"] = int(ts)
     raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
     sig = hmac.new(
         secret.encode(), ts.encode() + b"." + raw, hashlib.sha256
