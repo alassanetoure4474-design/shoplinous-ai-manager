@@ -32,6 +32,12 @@ Obligatoires (le run est SUSPENDU proprement si absentes) :
 - GENIUSPAY_WEBHOOK_SECRET : secret retourne lors de la creation du webhook, a stocker apres deploiement de l'endpoint HTTPS.
 - GENIUSPAY_ALLOW_LIVE=false : verrou de production ; ne passer a true qu'apres tests et autorisation explicite.
 
+Controle de connexion (lecture seule, aucun paiement) :
+
+    cd workflow && python test_geniuspay_connection.py
+
+Le script verifie le statut du compte et liste les pays/opérateurs retournes par GeniusPay. Les cles ne sont jamais affichees.
+
 Facultatives (valeurs par defaut indiquees) :
 - PAYMENT_FEE_RATE (0.029), PAYMENT_FEE_FIXED_EUR (0.30)
 - CJ_API_BASE, FREEWEBSTORE_API_BASE
@@ -54,6 +60,7 @@ Codes de sortie : 0 = les 5 modeles declares existent sur l'instance ;
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
 SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
+Pour GeniusPay, ajouter aussi GENIUSPAY_API_KEY, GENIUSPAY_API_SECRET et, apres creation du webhook HTTPS, GENIUSPAY_WEBHOOK_SECRET dans les secrets du service qui execute les paiements.
 
 Les secrets GitHub Actions ne sont pas automatiquement transmis au worker
 heberge. Definir aussi FREE_LLM_API_BASE et FREE_LLM_API_KEY dans les
