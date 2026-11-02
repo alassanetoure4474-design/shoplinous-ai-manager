@@ -49,6 +49,19 @@ class TestGestionnairePaiements:
                                             "wave", "cle-abc")
         assert tx1 is tx2 and neuve1 and not neuve2
 
+    def test_cle_idempotence_ne_peut_pas_etre_reutilisee_pour_une_autre_commande(self):
+        reg = prv.RegistrePrestataires()
+        reg.tous()[0].connected = True
+        reg.tous()[0].methode = "wave"
+        mgr = pay.GestionnairePaiements(reg, {})
+        mgr.creer_transaction(
+            "CMD-1", 100, "XOF", "CI", "wave", "cle-unique"
+        )
+        with pytest.raises(ValueError, match="autre demande"):
+            mgr.creer_transaction(
+                "CMD-2", 100, "XOF", "CI", "wave", "cle-unique"
+            )
+
     def test_redirection_ne_confirme_jamais(self):
         reg = prv.RegistrePrestataires()
         reg.tous()[0].connected = True
