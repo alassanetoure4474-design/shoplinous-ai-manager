@@ -229,6 +229,17 @@ async def appeler_ia(messages, fournisseurs=None, modele=None,
                 continue
             r.raise_for_status()
             corps = r.json()
+        except httpx.HTTPStatusError as exc:
+            # 4xx hors 429 = configuration/authentification/requete invalide.
+            # Reessayer avec un autre fournisseur masquerait le vrai probleme.
+            status = exc.response.status_code
+            _compter(fournisseur, "erreurs")
+            _journaliser("erreur_http_client", fournisseur,
+                         "HTTP " + str(status) +
+                         " : erreur 4xx non recuperable, arret des bascules")
+            raise ValueError("FreeLLMAPI a refuse la requete (HTTP " +
+                             str(status) +
+                             "). Verifier la cle, le modele et la configuration.") from None
         except (httpx.HTTPError, ValueError) as exc:
             _compter(fournisseur, "bascules")
             _journaliser("erreur", fournisseur,
