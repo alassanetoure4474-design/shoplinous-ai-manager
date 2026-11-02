@@ -26,6 +26,16 @@ E. v5.2 : compatibilite REELLE Freewebstore confirmee (GET /orders et
    order_details[].quantity/productSKU). AUCUNE donnee personnelle
    copiee. Le vid CJ n'est pas transporte par Freewebstore : lignes en
    verification manuelle (sans_vid + SKU) jusqu'a correspondance.
+F. v5.3 : TABLE SKU->vid (correspondance Freewebstore -> CJ) :
+   fw_variant_records() collecte en LECTURE SEULE, pour CHAQUE produit
+   FW, son productId, son productSKU et ses variantId (champ 'uvid'
+   reel du detail produit) ; build_vid_table() consulte le produit CJ
+   correspondant (recherche par SKU variante - methode confirmee en
+   lecture seule le 02/11/2026 - puis variantes: vid, variantSku) et
+   n'associe JAMAIS d'approximation : uniquement SKU EXACT et UNIVOQUE.
+   Absent ou ambigu -> sans_vid CONSERVE + alerte manuelle. Amorce
+   VID_TABLE_SEED verifiee (lecture seule, 02/11/2026). Aucune ecriture
+   boutique ni CJ ; allow_publish=False inchange.
 
 Regles de reference (base de connaissances SHOPLINOUS, 01/11/2026) :
 1. Stock China Warehouse >= 1000 pour CHAQUE variante conservee
@@ -104,6 +114,23 @@ CJ_BASE = os.environ.get("CJ_API_BASE", "https://developers.cjdropshipping.com/a
 FW_BASE = os.environ.get("FREEWEBSTORE_API_BASE", "https://api.freewebstore.com")
 FW_PER_PAGE = 100
 FW_ORDERS_PAGE = 50    # v5.2 : pagination GET /orders (limit/offset)
+
+# v5.3 : AMORCE de table SKU -> vid, verifiee en LECTURE SEULE le
+# 02/11/2026 (boutique storeid 1107499, produit Attrape-reves 18809643,
+# produit CJ pid 1797521453303214080). Cette amorce est un filet de
+# securite : build_vid_table() reconstruit la table COMPLETE depuis les
+# donnees vivantes a chaque execution (lecture seule FW + CJ) ; les
+# entrees reconstruites prevaleulent toujours sur l'amorce.
+VID_TABLE_SEED = {
+    "CJJT205244501AZ": {"vid": "1797521453382905856",
+                        "fw_product_id": "18809643",
+                        "fw_variant_id": "ZsKQFt",
+                        "cj_pid": "1797521453303214080"},
+    "CJJT205244502BY": {"vid": "1797521453454209024",
+                        "fw_product_id": "18809643",
+                        "fw_variant_id": "WPPmLB",
+                        "cj_pid": "1797521453303214080"},
+}
 CJ_QPS_SECONDS = 1.1   # QPS CJ 1 req/s, confirme par erreur reelle 1600200
 MIN_IMAGE_BYTES = 4096
 
@@ -470,8 +497,131 @@ def fw_normalize_order(raw) -> dict:
             "source": "freewebstore"}
 
 
+async def fw_variant_records(catalogue: list | None = None) -> list:
+    """v5.3 : variantes Freewebstore en LECTURE SEULE.
+
+    Pour CHAQUE produit Freewebstore : productId, productSKU et
+    variantId. Structure REELLE confirmee par GET /product et
+    GET /product/{id} (02/11/2026) : le detail produit porte
+    core.id, core.sku et variants[] avec 'uvid' (= le variantId
+    present dans les commandes) et 'sku' (= le SKU variante CJ
+    saisi a la creation). Aucune ecriture."""
+    if catalogue is None:
+        catalogue = await fw_list_all_products()
+    records = []
+    for p in catalogue or []:
+        if not isinstance(p, dict) or not p.get("id"):
+            continue
+        detail = await fw_get_product(str(p["id"]))
+        for v in detail.get("variants") or []:
+            if isinstance(v, dict) and v.get("uvid") and v.get("sku"):
+                records.append({
+                    "fw_product_id": str(p["id"]),
+                    "fw_product_sku": p.get("sku") or "",
+                    "fw_variant_id": v["uvid"],
+                    "variant_sku": v["sku"],
+                })
+    return records
+
+
+async def build_vid_table(variant_records: list,
+                           cj_search_fn=None, cj_variants_fn=None) -> dict:
+    """v5.3 : table SKU -> vid CJ, correspondances EXACTES UNIQUEMENT.
+
+    Pour chaque SKU variante Freewebstore :
+    1. recherche du produit CJ candidat par le SKU variante lui-meme
+       (methode CONFIRMEE en lecture seule le 02/11/2026 : la recherche
+       CJ par SKU de variante retourne le produit porteur ; la
+       recherche par SKU de produit retourne 0) ;
+    2. consultation des variantes du produit CJ (vid, variantSku) ;
+    3. association UNIQUEMENT si le SKU correspond EXACTEMENT
+       (egalite stricte de chaine) et de facon UNIVOQUE (un seul vid).
+    AUCUNE approximation tolernee : casse differente, SKU tronque,
+    vid multiple ou produit candidat multiple -> pas d'association :
+    la ligne reste sans_vid et une alerte manuelle est emise
+    (listes 'absents' et 'ambigus'). Aucune ecriture CJ ni FW.
+
+    Retour : {"table": {sku: {vid, fw_product_id, fw_variant_id,
+    cj_pid}}, "absents": [...], "ambigus": [...],
+    "nb_variantes_fw": N}. Contient uniquement des identifiants
+    metier - AUCUNE donnee personnelle."""
+    search = cj_search_fn or cj_search
+    variants = cj_variants_fn or cj_variants
+    table: dict = {}
+    absents: list = []
+    ambigus: list = []
+    deja_traite: set = set()
+    variants_cache: dict = {}
+    for rec in variant_records or []:
+        sku = rec.get("variant_sku") or ""
+        if not sku or sku in deja_traite:
+            continue
+        deja_traite.add(sku)
+        try:
+            sres = await search(sku)
+        except Exception as exc:
+            absents.append({"variant_sku": sku,
+                            "fw_variant_id": rec.get("fw_variant_id"),
+                            "motif": f"recherche CJ indisponible: {exc}"})
+            continue
+        products = []
+        try:
+            for block in sres["data"]["content"]:
+                for p in block.get("productList") or []:
+                    if isinstance(p, dict) and p.get("id"):
+                        products.append(str(p["id"]))
+        except (TypeError, KeyError, AttributeError):
+            absents.append({"variant_sku": sku,
+                            "fw_variant_id": rec.get("fw_variant_id"),
+                            "motif": "structure recherche CJ inattendue"})
+            continue
+        if not products:
+            absents.append({"variant_sku": sku,
+                            "fw_variant_id": rec.get("fw_variant_id"),
+                            "motif": "aucun produit CJ candidat"})
+            continue
+        matches = []          # [(pid, vid)] pour correspondance exacte
+        for pid in sorted(set(products)):
+            if pid not in variants_cache:
+                try:
+                    vres = await variants(pid)
+                    data = vres.get("data")
+                    variants_cache[pid] = (data if isinstance(data, list)
+                                           else None)
+                except Exception:
+                    variants_cache[pid] = None
+            vlist = variants_cache[pid]
+            if not vlist:
+                continue
+            hits = [v.get("vid") for v in vlist
+                    if isinstance(v, dict)
+                    and v.get("variantSku") == sku          # EXACT
+                    and v.get("vid")]
+            for vid in hits:
+                matches.append((pid, vid))
+        vids = sorted({vid for _, vid in matches})
+        if len(vids) == 1:
+            pid = next(p for p, v in matches if v == vids[0])
+            table[sku] = {"vid": vids[0],
+                          "fw_product_id": rec.get("fw_product_id"),
+                          "fw_variant_id": rec.get("fw_variant_id"),
+                          "cj_pid": pid}
+        elif not matches:
+            absents.append({"variant_sku": sku,
+                            "fw_variant_id": rec.get("fw_variant_id"),
+                            "motif": "aucune variante CJ a SKU exact "
+                                     "(aucune approximation toleree)"})
+        else:
+            ambigus.append({"variant_sku": sku,
+                            "fw_variant_id": rec.get("fw_variant_id"),
+                            "candidats_vid": vids,
+                            "motif": "SKU correspond a plusieurs vids CJ"})
+    return {"table": table, "absents": absents, "ambigus": ambigus,
+            "nb_variantes_fw": len(variant_records or [])}
+
+
 @workflows.activity(start_to_close_timeout=timedelta(minutes=5), retry_policy_max_attempts=2)
-async def process_order(order: dict) -> dict:
+async def process_order(order: dict, vid_table: dict | None = None) -> dict:
     """v5.1 : analyse de commande en LECTURE SEULE STRICTE.
 
     Pour chaque ligne de commande :
@@ -550,8 +700,18 @@ async def process_order(order: dict) -> dict:
             all_lines_checked = False
             continue
         vid = it.get("vid") or it.get("cj_vid")
+        sku = it.get("sku") or ""
+        vid_resolu_table = False
+        # v5.3 : resolution du vid par la table SKU->vid (EXACT uniquement)
+        if not vid and isinstance(vid_table, dict):
+            entry = (vid_table.get("table") or {}).get(sku)
+            if isinstance(entry, dict) and entry.get("vid"):
+                vid = entry["vid"]
+                vid_resolu_table = True
         qty_raw = it.get("quantity", it.get("qty", 1))
         line = {"vid": vid, "quantite": qty_raw}
+        if vid_resolu_table:
+            line["vid_source"] = "table_sku_vid"
         try:
             qty = validate_quantity(qty_raw)
         except RuntimeError as exc:
@@ -571,11 +731,22 @@ async def process_order(order: dict) -> dict:
             all_lines_checked = False
             continue
         if not vid:
+            # v5.3 : sans_vid CONSERVE si absent ou ambigu (jamais
+            # d'association approximative) + alerte manuelle.
             line["statut"] = "sans_vid"
-            line["sku"] = it.get("sku") or ""
-            line["alerte"] = (f"ligne sans vid CJ (sku {it.get('sku') or 'inconnu'}) : "
-                              "correspondance SKU->vid requise, "
-                              "verification manuelle")
+            line["sku"] = sku
+            motif = ("correspondance SKU->vid requise, "
+                     "verification manuelle")
+            if isinstance(vid_table, dict):
+                sku_ambigus = {a.get("variant_sku")
+                               for a in vid_table.get("ambigus") or []
+                               if isinstance(a, dict)}
+                if sku in sku_ambigus:
+                    motif = ("correspondance SKU->vid AMBIGUE : "
+                             "aucune association approximative, "
+                             "verification manuelle OBLIGATOIRE")
+            line["alerte"] = (f"ligne sans vid CJ (sku {sku or 'inconnu'}) : "
+                              + motif)
             report["alertes"].append(f"ligne {idx + 1}: {line['alerte']}")
             report["lignes"].append(line)
             all_lines_checked = False
@@ -1017,6 +1188,34 @@ class ShoplinousDailyWorkflow:
                 except Exception as exc:
                     report["errors"].append(f"produit {pid}: {exc}")
 
+        # v5.3 : table SKU->vid, correspondances EXACTES uniquement.
+        # Reconstruite a chaque execution depuis les donnees vivantes
+        # (LECTURE SEULE FW + CJ) ; l'amorce VID_TABLE_SEED sert de
+        # filet de securite si la reconstruction echoue. Les entrees
+        # reconstruites prevaleulent sur l'amorce.
+        try:
+            fw_records = await fw_variant_records(catalogue)
+            vid_table = await build_vid_table(fw_records)
+            for seed_sku, seed_entry in VID_TABLE_SEED.items():
+                if seed_sku not in vid_table["table"]:
+                    vid_table["table"][seed_sku] = dict(seed_entry)
+        except Exception as exc:
+            vid_table = {"table": {k: dict(v)
+                                   for k, v in VID_TABLE_SEED.items()},
+                         "absents": [], "ambigus": [],
+                         "nb_variantes_fw": 0}
+            report["errors"].append(
+                f"vid_table: reconstruction impossible ({exc}) : "
+                "amorce verifiee utilisee")
+        report["vid_table"] = {
+            "entrees": sorted(vid_table["table"]),
+            "absents": vid_table["absents"],
+            "ambigus": vid_table["ambigus"],
+            "nb_variantes_fw": vid_table.get("nb_variantes_fw", 0)}
+        report["alerts"].extend(
+            {"vid_table": a.get("variant_sku"), "alerte": a.get("motif")}
+            for a in vid_table["absents"] + vid_table["ambigus"])
+
         # Surveillance commandes : lecture seule, AUCUN paiement fournisseur.
         # v5.2 : GET /orders pagine (limit/offset, en-tete x-api-key),
         # adaptateur securise fw_normalize_order (AUCUNE donnee personnelle
@@ -1035,7 +1234,8 @@ class ShoplinousDailyWorkflow:
                     report["errors"].append("commande mal formee ignoree")
                     continue
                 try:
-                    oreport = await process_order(fw_normalize_order(o))
+                    oreport = await process_order(
+                        fw_normalize_order(o), vid_table=vid_table)
                 except Exception as exc:
                     report["errors"].append(
                         f"process_order {o.get('id')}: {exc}")
