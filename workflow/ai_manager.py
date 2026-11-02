@@ -39,9 +39,9 @@ import httpx
 
 logger = logging.getLogger("shoplinous.ai_manager")
 
-FOURNISSEURS_PAR_DEFAUT = ("mistral", "gemini", "groq")
+FOURNISSEURS_PAR_DEFAUT = ("mistral", "gemini", "groq", "qwen", "gpt_oss")
 MODELES_LIBRES_PAR_DEFAUT = {
-    "mistral": "mistral-small-latest",
+    "mistral": "mistral-small-3.2-24b",
     "gemini": "gemini-flash-latest",
     "groq": "llama-3.3-70b-versatile",
     "qwen": "qwen3.8-27b",
@@ -238,6 +238,19 @@ async def appeler_ia(messages, fournisseurs=None, modele=None,
                 continue
             r.raise_for_status()
             corps = r.json()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if 400 <= status < 500:
+                _compter(fournisseur, "erreurs")
+                _journaliser("erreur_non_reessayable", fournisseur,
+                             "HTTP " + str(status) + " : arret sans bascule")
+                raise ValueError("FreeLLMAPI a refuse la requete (HTTP "
+                                 + str(status) + ") ; verifier la configuration") from None
+            _compter(fournisseur, "bascules")
+            _journaliser("erreur", fournisseur,
+                         "HTTP " + str(status) + " : bascule")
+            erreurs.append((fournisseur, str(status)))
+            continue
         except (httpx.HTTPError, ValueError) as exc:
             _compter(fournisseur, "bascules")
             _journaliser("erreur", fournisseur,
