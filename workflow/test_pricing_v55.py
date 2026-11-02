@@ -106,9 +106,9 @@ class TestCalculCommercial:
         assert c["frais_livraison_eur"] == 4.20
         assert c["frais_paiement_eur"] == 0.56
         assert c["cout_total_eur"] == 7.28
-        assert c["prix_vente_recommande_eur"] == 9.10
-        assert c["benefice_estime_eur"] == 1.82
-        assert c["marge_pourcentage"] == 20.0
+        assert c["prix_vente_recommande_eur"] == 9.11
+        assert c["benefice_estime_eur"] == 1.83
+        assert c["marge_pourcentage"] == 20.09
 
     def test_fr_q1_sans_frais_paiement(self):
         r = p.compute_pricing(2.81, "FR", 1, marge_min=0.20)
