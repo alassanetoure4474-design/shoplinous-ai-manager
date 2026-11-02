@@ -19,6 +19,7 @@ class AdaptateurPaiement:
     """Interface commune. connected = contrat marchand REEL actif."""
     nom = "base"
     methode = None
+    moyens_supportes = ()
     pays_supportes = ()
     devises_reglement = ()
     frais_indicatifs = None
