@@ -17,6 +17,8 @@ explicite. allow_publish=False par defaut (mode veille : lecture seule).
   est indisponible, un texte neutre est utilise. Les prix, stocks, marges,
   frais, delais verifies et commandes restent calcules par le code Python.
 - workflow/worker.py : lanceur du worker Mistral Workflows.
+- workflow/test_fournisseurs.py : verification des modeles IA declares
+  contre l'instance reelle (lecture seule, aucun secret affiche).
 
 ## 2. Variables d'environnement requises
 
@@ -37,7 +39,14 @@ AVANT LE PREMIER APPEL REEL : verifier les identifiants de modeles
 exposes par VOTRE instance FreeLLMAPI (GET {FREE_LLM_API_BASE}/v1/models)
 et ajuster AI_MODEL_MISTRAL / AI_MODEL_GEMINI / AI_MODEL_GROQ /
 AI_MODEL_QWEN / AI_MODEL_GPT_OSS en consequence. Les valeurs par defaut
-du code n ont jamais ete validees contre une instance reelle.
+du code n ont jamais ete validees contre une instance reelle. Script
+fourni (lecture seule, la cle n est JAMAIS affichee ni journalisee) :
+
+    cd workflow && python test_fournisseurs.py
+
+Codes de sortie : 0 = les 5 modeles declares existent sur l'instance ;
+1 = au moins un modele est absent (corriger AI_MODEL_*) ;
+2 = instance injoignable ou configuration absente (aucun appel reseau).
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
 SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
@@ -67,6 +76,8 @@ docker run --env-file .env shoplinous.
 - CI verte sur le dernier commit (.github/workflows/python-tests.yml),
   y compris le job build-docker (construction reelle de l'image +
   demarrage du conteneur + imports du worker).
+- AVANT le premier appel IA reel : python test_fournisseurs.py doit
+  sortir 0 (les 5 modeles declares existent sur l'instance FreeLLMAPI).
 - Au demarrage : le worker doit s'enregistrer sans EvaluationSuspended.
 - Chaque run : report["errors"] vide, report["fret_v56"] avec 2 variantes
   a 255 tarifs / 51 pays chacune, report["mode"] == "veille".
