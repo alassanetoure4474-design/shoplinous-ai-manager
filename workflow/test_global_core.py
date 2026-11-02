@@ -6,11 +6,11 @@ exchange_rate_manager, pricing_manager. Aucun reseau.
 import pytest
 
 import global as g
-import market_manager as mm
-import country_manager as cm
-import currency_manager as cu
-import exchange_rate_manager as fx
-import pricing_manager as pm
+from global import market_manager as mm
+from global import country_manager as cm
+from global import currency_manager as cu
+from global import exchange_rate_manager as fx
+from global import pricing_manager as pm
 
 
 class TestInventaireModules:
@@ -106,7 +106,7 @@ class TestExchangeRateManager:
         assert len(appels) == 1  # cache utilise
         assert mgr.historique[-1]["paire"] == ("USD", "XOF")
 
-    def test_indisponibilite_neve_rien(self):
+    def test_indisponibilite_ninvente_rien(self):
         mgr = fx.ExchangeRateManager(self.FournisseurFixe(0, en_panne=True))
         with pytest.raises(fx.ErreurTauxIndisponible):
             mgr.taux("USD", "XOF")
