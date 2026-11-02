@@ -162,6 +162,14 @@ class TestGestionnairePaiements:
                 return {"reference": "MTX-GP1",
                         "checkout_url": "https://geniuspay.ci/checkout/MTX-GP1"}
 
+            def creer_checkout_wave(self, **kwargs):
+                assert kwargs["montant"] == 12000
+                assert kwargs["commande"] == "CMD-WAVE"
+                assert kwargs["devise"] == "XOF"
+                assert kwargs["client"]["country"] == "CI"
+                return {"reference": "MTX-WAVE",
+                        "checkout_url": "https://geniuspay.ci/pay/MTX-WAVE"}
+
         reg = prv.RegistrePrestataires(geniuspay_client=FakeClient())
         mgr = pay.GestionnairePaiements(reg)
         disponibles = mgr.moyens_disponibles("CI", ["Wave"], "XOF")
@@ -173,6 +181,55 @@ class TestGestionnairePaiements:
         assert new is True
         assert tx.reference_externe == "MTX-GP1"
         assert tx.url_paiement == "https://geniuspay.ci/checkout/MTX-GP1"
+
+    def test_geniuspay_wave_direct_est_propose_et_route_le_paiement(self):
+        class FakeClient:
+            api_configured = True
+            webhook_secret = "whsec_test"
+            payment_ready = True
+
+            def creer_checkout(self, **kwargs):
+                raise AssertionError("Le checkout generique ne doit pas etre utilise")
+
+            def creer_checkout_wave(self, **kwargs):
+                assert kwargs["commande"] == "CMD-WAVE"
+                return {"reference": "MTX-WAVE-ORDER",
+                        "checkout_url": "https://geniuspay.ci/pay/MTX-WAVE-ORDER"}
+
+        reg = prv.RegistrePrestataires(geniuspay_client=FakeClient())
+        mgr = pay.GestionnairePaiements(reg)
+        disponibles = mgr.moyens_disponibles("CI", ["Wave"], "XOF")
+        assert {"moyen": "wave", "prestataire": "geniuspay",
+                "devise": "XOF"} in disponibles
+
+        tx, nouvelle = mgr.creer_transaction(
+            "CMD-WAVE", 12000, "XOF", "CI", "wave", "cle-wave-1"
+        )
+        assert nouvelle is True
+        assert tx.prestataire == "geniuspay"
+        assert tx.reference_externe == "MTX-WAVE-ORDER"
+        assert tx.url_paiement == "https://geniuspay.ci/pay/MTX-WAVE-ORDER"
+
+    def test_geniuspay_wave_direct_non_propose_hors_ci_xof(self):
+        class FakeClient:
+            api_configured = True
+            webhook_secret = "whsec_test"
+            payment_ready = True
+
+            def creer_checkout_wave(self, **kwargs):
+                raise AssertionError("Wave ne doit pas etre propose")
+
+        mgr = pay.GestionnairePaiements(
+            prv.RegistrePrestataires(geniuspay_client=FakeClient())
+        )
+        assert not any(
+            item["moyen"] == "wave"
+            for item in mgr.moyens_disponibles("SN", ["Wave"], "XOF")
+        )
+        assert not any(
+            item["moyen"] == "wave"
+            for item in mgr.moyens_disponibles("CI", ["Wave"], "EUR")
+        )
 
     def test_geniuspay_webhook_utilise_validateur_specifique(self):
         class FakeClient:
