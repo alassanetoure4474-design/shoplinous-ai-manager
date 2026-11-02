@@ -1,4 +1,4 @@
-# SHOPLINOUS - Preparation au deploiement (branch workflow-v5-fix7)
+# SHOPLINOUS - Preparation au deploiement (branch workflow-v5-fix8-ai-gateway)
 
 Etat : PRET POUR DEPLOIEMENT APRES VALIDATION MANUELLE. Aucune fusion
 vers main, aucun deploiement, aucune publication sans autorisation
@@ -6,13 +6,16 @@ explicite. allow_publish=False par defaut (mode veille : lecture seule).
 
 ## 1. Composants
 
-- workflow/daily.py : workflow quotidien Mistral (evaluation produits,
+- workflow/daily.py : workflow quotidien (evaluation produits,
   table SKU->vid, analyse commandes en lecture seule, controle d'integrite
   v5.6).
 - workflow/freight_collector_v56.py : moteur de tarifs fret par variante
   (usd_15j, TTL 7 jours, aucune substitution silencieuse).
 - workflow/ai_manager.py : acces multi-IA via FreeLLMAPI (mistral, gemini,
   groq ; bascule automatique ; cache ; aucune cle dans le code).
+- Redaction des descriptions produit en francais via FreeLLMAPI ; si l'IA
+  est indisponible, un texte neutre est utilise. Les prix, stocks, marges,
+  frais, delais verifies et commandes restent calcules par le code Python.
 - workflow/worker.py : lanceur du worker Mistral Workflows.
 
 ## 2. Variables d'environnement requises
@@ -32,6 +35,11 @@ Facultatives (valeurs par defaut indiquees) :
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
 SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
+
+Les secrets GitHub Actions ne sont pas automatiquement transmis au worker
+heberge. Definir aussi FREE_LLM_API_BASE et FREE_LLM_API_KEY dans les
+variables d'environnement du service qui execute le worker, sans les
+inscrire dans le depot ni les journaux.
 
 ## 3. Installation
 
