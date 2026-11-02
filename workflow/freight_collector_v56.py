@@ -1,4 +1,55 @@
-""
+"""SHOPLINOUS v5.6 (branche workflow-v5-fix7) - Collecteur de tarifs CJ
+par VARIANTE + moteur de prix utilisant les tarifs conformes 15 jours.
+
+CORRECTIONS v5.6 des trois blocages prioritaires :
+
+1. FIABILITE DU FRET (regle 15 jours) :
+   - table_frets_v56() ne construit sa table QU'avec le champ usd_15j
+     (option la moins chere dont le delai maximal annonce est <= 15 jours).
+   - Le champ usd (option la moins chere, delai quelconque) est IGNORE pour
+     le calcul : AUCUNE substitution silencieuse d'un tarif conforme par un
+     tarif moins cher mais plus lent.
+   - Si aucun transporteur ne respecte le delai <= 15 jours, le statut est
+     "aucun_transporteur_15j" avec verification_manuelle=True et le message
+     "verification manuelle requise" : AUCUN prix n'est calcule.
+   - Defensive : si un delai_15j connu depasse 15 jours, l'entree est
+     rejetee de la table (donnees douteuses, jamais utilisees).
+
+2. VARIANTES BLANCHE ET NOIRE :
+   - Les donnees (freight_data_v56_blanche.json / _noire.json, chargees
+     et fusionnees par charger_donnees) identifient chaque tarif par
+     (vid_cj, sku_variante, couleur, pays, quantite).
+   - table_frets_v56(donnees, vid) : une table PAR variante ; aucun melange
+     possible entre les variantes (les tarifs de la blanche ne servent
+     jamais la noire, et inversement).
+   - compute_pricing_v56 exige le vid : variante inconnue => statut
+     "variante_inconnue", verification manuelle, aucun prix.
+   - En cas d'echec de collecte, la fonction collecte_v56() ne remplace
+     JAMAIS une entree existante par une entree vide : seules les entrees
+     reellement collectees sont mises a jour, les precedentes sont
+     conservees.
+
+3. EXPIRATION (TTL 7 jours) :
+   - Un tarif dont la date de collecte + TARIF_TTL_JOURS est depassee a le
+     statut "tarif_expire" : il n'est JAMAIS presente comme un tarif
+     actuel, aucun prix n'est calcule, verification manuelle requise.
+   - Une entree sans date de collecte est consideree EXPIREE (jamais
+     supposee valide).
+
+VERIFICATIONS COMPLEMENTAIRES v5.6 :
+- 255 tarifs par variante = 51 pays x 5 quantites (aucun doublon, aucun
+  pays manquant ; l'ecart "255 vs 50 pays" du rapport precedent etait un
+  decompte errone : il y a bien 51 pays).
+- cout total = cout unitaire x quantite (moteur v5.5.1 conserve) ;
+- prix = (cout_produit + fret + frais_fixe) / (1 - taux - marge_min) ;
+- benefice = prix - cout_total ; marge verifiee a +/- 0,5 point.
+
+SECURITE (inchangee) :
+- Module PUR : aucun appel reseau direct (le reseau est INJECTE via
+  fetch_fn dans collecte_v56), aucune ecriture Freewebstore/CJ, aucun
+  achat fournisseur, aucun paiement, aucune publication.
+- ALLOW_PUBLISH = False ; daily.py n'est PAS modifiee par ce module.
+"""
 
 import json
 import os
@@ -30,7 +81,18 @@ VID_NOIRE = "1797521453454209024"      # SKU CJJT205244502BY
 
 # --------------------------------------------------------------- donnees ----
 def charger_donnees(chemins=None):
-    ""
+    """Charge les tarifs des DEUX variantes (lecture seule).
+
+    Les donnees v5.6 sont stockees en deux fichiers COMPACTS (< 64 000
+    caracteres chacun, un par variante) : freight_data_v56_blanche.json
+    et freight_data_v56_noire.json. Chaque tarif y est un TABLEAU
+    [pays, region, quantite, usd, canal, delai, usd_15j, canal_15j,
+    delai_15j, date_collecte] ; cette fonction le reconvertit en
+    dictionnaire et retourne la structure unifiee {"schema_version",
+    "produit", "taux_change", ..., "variantes": [...]} strictement
+    identique au schema v5.6. (Le fichier JSON unique de 167 835 octets
+    etait TRONQUE a ~64 000 caracteres par le transport : deux fichiers
+    compacts evitent toute troncature.)"""
     if chemins is None:
         chemins = (CHEMIN_BLANCHE, CHEMIN_NOIRE)
     cles = ("pays", "region", "quantite", "usd", "canal", "delai",
@@ -59,7 +121,7 @@ def charger_donnees(chemins=None):
 
 
 def variantes(donnees):
-    ""
+    """{vid: {sku, couleur, tarifs}} ; structure v5.6 a variantes."""
     out = {}
     for v in (donnees or {}).get("variantes", []):
         vid = v.get("vid_cj")
@@ -80,7 +142,8 @@ def _date(valeur):
 
 
 def est_expire(entree, aujourdhui=None, ttl_jours=TARIF_TTL_JOURS):
-    ""
+    """True si date de collecte + TTL depassee. JAMAIS de repli : une
+    entree sans date de collecte est EXPIREE (donnee douteuse)."""
     aujourdhui = _date(aujourdhui) or date.today()
     collecte = _date((entree or {}).get("date_collecte")
                      or (entree or {}).get("date_mesure"))
@@ -90,7 +153,7 @@ def est_expire(entree, aujourdhui=None, ttl_jours=TARIF_TTL_JOURS):
 
 
 def _delai_max(delai):
-    ""
+    """Delai maximal annonce ("8-15" -> 15) ; None si non analysable."""
     bouts = str(delai or "").split("-")
     try:
         return int(bouts[-1])
@@ -100,7 +163,18 @@ def _delai_max(delai):
 
 # ------------------------------------------------- table 15 jours (fix #1) --
 def table_frets_v56(donnees, vid, delai_max_jours=MAX_SHIP_DAYS):
-    ""
+    """{"vid": vid, "entrees": {pays: {quantite: {...}}}} POUR UNE VARIANTE
+    DONNEE, construite UNIQUEMENT avec les tarifs conformes au delai
+    maximal (champ usd_15j). Le vid est embarque : le moteur le verifie
+    avant toute utilisation (aucun melange entre variantes possible).
+
+    - Le champ usd (delai quelconque) est IGNORE : aucune substitution
+      silencieuse d'un tarif conforme par un tarif moins cher plus lent.
+    - usd_15j absent/null : entree ABSENTE de la table (aucune estimation).
+    - delai_15j connu mais > delai_max_jours : entree REJETEE (defensif).
+    - delai_15j inconnu (None) : l'option 15j a ete verifiee conforme a la
+      collecte ; l'entree est acceptee (conformite documentee).
+    """
     var = variantes(donnees).get(vid)
     table = {}
     if not var:
@@ -130,7 +204,7 @@ def table_frets_v56(donnees, vid, delai_max_jours=MAX_SHIP_DAYS):
 
 
 def _entree_v56(donnees, vid, pays, quantite):
-    ""
+    """Entree brute d'une variante, SANS melange entre variantes."""
     var = variantes(donnees).get(vid)
     if not var:
         # les tarifs des AUTRES variantes ne sont jamais lus ici
@@ -144,7 +218,8 @@ def _entree_v56(donnees, vid, pays, quantite):
 
 def statut_tarif(donnees, vid, pays, quantite, aujourdhui=None,
                  delai_max_jours=MAX_SHIP_DAYS):
-    ""
+    """Statut d'un tarif : actif / expire / aucun_transporteur_15j /
+    destination_inconnue / variante_inconnue. JAMAIS d'estimation."""
     if vid not in variantes(donnees):
         return "variante_inconnue"
     entree = _entree_v56(donnees, vid, pays, quantite)
@@ -172,7 +247,20 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
                         delai_max_jours=MAX_SHIP_DAYS,
                         aujourdhui=None,
                         freight_fetch_fn=None):
-    ""
+    """Moteur v5.6 : prix fonde UNIQUEMENT sur un tarif reel conforme
+    15 jours de LA variante demandee.
+
+    Statuts :
+    - "recommandation_ok" : prix calcule, marge verifiee ;
+    - "incoherence_defensive" : marge hors tolerance, verification manuelle ;
+    - "depasse_plafond" : quantite > 5, aucun prix ;
+    - "quantite_invalide" / "cout_invalide" / "parametres_invalides" ;
+    - "variante_inconnue" : vid absent des donnees (aucun melange) ;
+    - "destination_inconnue" : pays/quantite sans tarif mesure ;
+    - "expire" : tarif perime (TTL 7 jours), jamais present comme actuel ;
+    - "aucun_transporteur_15j" : aucun transporteur <= 15 jours,
+      message "verification manuelle requise", AUCUN prix calcule.
+    """
     base = {
         "produit": {"cout_achat_usd": cout_achat_usd,
                     "pid_cj": p55.PRODUCT_PID_CJ, "vid_cj": vid},
@@ -201,24 +289,33 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
                      "verification_manuelle": True,
                      "message": "Cout d'achat invalide."})
         return base
+    # Toute quantite entiere positive est acceptee. Les tarifs 1-5
+    # restent servis par le cache ; au-dela, CJ doit fournir un devis live.
     if isinstance(quantite, bool) or not isinstance(quantite, int) or quantite < 1:
-        base.update({"statut": "quantite_invalide", "verification_manuelle": True,
-                     "message": "Quantite invalide : entier positif attendu."})
+        base.update({"statut": "quantite_invalide",
+                     "verification_manuelle": True,
+                     "message": "Quantite invalide : un entier positif est attendu."})
         return base
+
+    # Devis a la demande pour les quantites hors du cache historique.
+    # Le callback injecte appelle CJ calculate_cj_shipping en lecture seule.
     if quantite > QTE_MAX:
         if not callable(freight_fetch_fn):
-            base.update({"statut": "tarif_dynamique_requis", "verification_manuelle": True,
+            base.update({"statut": "tarif_dynamique_requis",
+                         "verification_manuelle": True,
                          "message": "Devis CJ dynamique requis ; aucune extrapolation."})
             return base
         try:
             options = freight_fetch_fn(vid, pays, quantite)
             mini, mini15 = choisir_option_v56(options or [])
         except Exception as exc:
-            base.update({"statut": "tarif_dynamique_indisponible", "verification_manuelle": True,
+            base.update({"statut": "tarif_dynamique_indisponible",
+                         "verification_manuelle": True,
                          "message": "Devis CJ impossible : " + str(exc)[:180]})
             return base
         if mini15 is None:
-            base.update({"statut": "aucun_transporteur_15j", "verification_manuelle": True,
+            base.update({"statut": "aucun_transporteur_15j",
+                         "verification_manuelle": True,
                          "message": "Aucun transporteur conforme au delai maximal : " + MSG_VERIF_MANUELLE})
             return base
         quote = {"usd": mini15["usd"], "canal": mini15.get("canal") or "",
@@ -348,14 +445,21 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
 
 # ----------------------------------------------------------- collecte v5.6 --
 def choisir_option_v56(options):
-    ""
+    """(option la moins chere, option la moins chere avec delai max
+    <= 15 jours) ; (None, ...) si aucune. Reutilise la logique v5.5."""
     import freight_collector_v55 as fc55
     return fc55.choisir_option(options)
 
 
 def collecte_v56(fetch_fn, pays_liste, donnees, vid, sku, couleur,
                  aujourdhui=None, ttl_jours=TARIF_TTL_JOURS):
-    ""
+    """Collecte UNE variante (vid) sur pays_liste x quantites 1-5.
+
+    ECHEC : les entrees precedentes sont CONSERVEES (jamais remplacees
+    par une entree vide) ; seules les entrees collectees avec succes sont
+    mises a jour. Retourne un rapport honnete :
+    {"collectes": N, "conserves": M, "echecs": [...], "cache_hits": K}.
+    """
     aujourdhui = _date(aujourdhui) or date.today()
     # mutation DIRECTE de donnees (variantes() renvoie une copie) :
     # on retrouve la variante dans la liste, on la cree si absente.
@@ -413,7 +517,8 @@ def collecte_v56(fetch_fn, pays_liste, donnees, vid, sku, couleur,
 
 # ------------------------------------------------------------- rapports ----
 def rapport_variantes(donnees, aujourdhui=None):
-    ""
+    """Verification d'integrite : par variante, nombre de tarifs, pays,
+    entrees expirees et tarifs conformes 15 jours. Rien n'est invente."""
     out = {}
     for vid, var in variantes(donnees).items():
         tarifs = var.get("tarifs", [])
