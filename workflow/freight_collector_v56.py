@@ -16,7 +16,8 @@ CORRECTIONS v5.6 des trois blocages prioritaires :
      rejetee de la table (donnees douteuses, jamais utilisees).
 
 2. VARIANTES BLANCHE ET NOIRE :
-   - Les donnees freight_data_v56.json identifient chaque tarif par
+   - Les donnees (freight_data_v56_blanche.json / _noire.json, chargees
+     et fusionnees par charger_donnees) identifient chaque tarif par
      (vid_cj, sku_variante, couleur, pays, quantite).
    - table_frets_v56(donnees, vid) : une table PAR variante ; aucun melange
      possible entre les variantes (les tarifs de la blanche ne servent
@@ -64,18 +65,59 @@ TARIF_TTL_JOURS = 7            # au-dela, le tarif est signale EXPIRE
 MAX_SHIP_DAYS = 15             # regle 3 : delai maximal annonce
 TAUX_USD_EUR = p55.EXCHANGE_RATE_USD_EUR
 MSG_VERIF_MANUELLE = "verification manuelle requise"
-CHEMIN_DONNEES = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "freight_data_v56.json")
+# Donnees COMPACTES en DEUX fichiers (un par variante, tarifs stockes en
+# tableaux) : un fichier JSON unique de 167 835 octets a ete TRONQUE a
+# ~64 000 caracteres par le transport du push (run CI #20 : JSONDecodeError
+# ligne 2398). Chaque fichier fait ici moins de 26 000 caracteres :
+# aucune troncature possible.
+CHEMIN_BLANCHE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "freight_data_v56_blanche.json")
+CHEMIN_NOIRE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "freight_data_v56_noire.json")
 
 VID_BLANCHE = "1797521453382905856"   # SKU CJJT205244501AZ
 VID_NOIRE = "1797521453454209024"      # SKU CJJT205244502BY
 
 
 # --------------------------------------------------------------- donnees ----
-def charger_donnees(chemin=CHEMIN_DONNEES):
-    """Charge freight_data_v56.json (lecture seule)."""
-    with open(chemin, "r", encoding="utf-8") as f:
-        return json.load(f)
+def charger_donnees(chemins=None):
+    """Charge les tarifs des DEUX variantes (lecture seule).
+
+    Les donnees v5.6 sont stockees en deux fichiers COMPACTS (< 64 000
+    caracteres chacun, un par variante) : freight_data_v56_blanche.json
+    et freight_data_v56_noire.json. Chaque tarif y est un TABLEAU
+    [pays, region, quantite, usd, canal, delai, usd_15j, canal_15j,
+    delai_15j, date_collecte] ; cette fonction le reconvertit en
+    dictionnaire et retourne la structure unifiee {"schema_version",
+    "produit", "taux_change", ..., "variantes": [...]} strictement
+    identique au schema v5.6. (Le fichier JSON unique de 167 835 octets
+    etait TRONQUE a ~64 000 caracteres par le transport : deux fichiers
+    compacts evitent toute troncature.)"""
+    if chemins is None:
+        chemins = (CHEMIN_BLANCHE, CHEMIN_NOIRE)
+    cles = ("pays", "region", "quantite", "usd", "canal", "delai",
+            "usd_15j", "canal_15j", "delai_15j", "date_collecte")
+    variantes, commun = [], {}
+    for chemin in chemins:
+        with open(chemin, "r", encoding="utf-8") as f:
+            partie = json.load(f)
+        var = partie.get("variante") if isinstance(partie, dict) else None
+        if not isinstance(var, dict) \
+                or not isinstance(var.get("tarifs"), list):
+            raise RuntimeError(
+                "fichier de tarifs mal forme : variante absente dans "
+                + str(chemin))
+        tarifs = []
+        for t in var["tarifs"]:
+            if not isinstance(t, list) or len(t) != len(cles):
+                raise RuntimeError("tarif mal forme dans " + str(chemin))
+            tarifs.append({c: v for c, v in zip(cles, t)})
+        var["tarifs"] = tarifs
+        variantes.append(var)
+        commun = {k: v for k, v in partie.items() if k != "variante"}
+    donnees = dict(commun)
+    donnees["variantes"] = variantes
+    return donnees
 
 
 def variantes(donnees):
@@ -393,7 +435,7 @@ def collecte_v56(fetch_fn, pays_liste, donnees, vid, sku, couleur,
     for t in var.get("tarifs", []):
         if isinstance(t, dict) and "pays" in t and "quantite" in t:
             par_cle[(t["pays"], t["quantite"])] = t
-    collectes, conserves, echecs, cache = 0, 0, []
+    collectes, conserves, echecs, cache = 0, 0, [], 0
     for pays in pays_liste:
         for q in range(QTE_MIN, QTE_MAX + 1):
             try:
