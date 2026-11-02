@@ -168,6 +168,8 @@ class RegistrePrestataires:
     def etat(self):
         return {p.nom: {
             "connecte": p.est_actif(),
+            "api_configuree": bool(getattr(p, "api_configure", False)),
+            "webhook_configure": bool(getattr(p, "webhook_configure", False)),
             "pays": list(p.pays_supportes),
             "devises": list(p.devises_reglement),
             "kyc": list(p.conditions_kyc)} for p in self._prestataires}
