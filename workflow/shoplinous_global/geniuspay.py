@@ -351,6 +351,16 @@ class GeniusPayClient:
         header_env = str(environment_header or "").lower()
         if payload_env != self.environment or header_env != self.environment:
             raise GeniusPaySecurityError("Environnement webhook inattendu")
+        payload_timestamp = payload.get("timestamp")
+        if payload_timestamp is not None:
+            try:
+                if int(payload_timestamp) != ts:
+                    raise GeniusPaySecurityError(
+                        "Timestamp du payload different de l'en-tete"
+                    )
+            except (TypeError, ValueError):
+                raise GeniusPaySecurityError("Timestamp payload invalide") from None
+
         event = str(payload.get("event", ""))
         if not event or event != str(event_header or ""):
             raise GeniusPaySecurityError("Evenement webhook incoherent")
