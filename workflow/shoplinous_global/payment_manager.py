@@ -121,8 +121,26 @@ class GestionnairePaiements:
 
     def creer_transaction(self, commande, montant, devise, pays, moyen,
                           cle_idempotence):
+        if not isinstance(cle_idempotence, str) or not cle_idempotence.strip():
+            raise ValueError("Cle d'idempotence obligatoire")
         if cle_idempotence in self._par_idempotence:
-            return self._par_idempotence[cle_idempotence], False
+            existante = self._par_idempotence[cle_idempotence]
+            try:
+                meme_montant = Decimal(str(existante.montant)) == Decimal(str(montant))
+            except (InvalidOperation, TypeError, ValueError):
+                meme_montant = False
+            meme_requete = (
+                str(existante.commande) == str(commande)
+                and meme_montant
+                and str(existante.devise).upper() == str(devise).upper()
+                and str(existante.pays).upper() == str(pays).upper()
+                and _normaliser_moyen(existante.moyen) == _normaliser_moyen(moyen)
+            )
+            if not meme_requete:
+                raise ValueError(
+                    "Cle d'idempotence deja associee a une autre demande de paiement"
+                )
+            return existante, False
         prestataires = self.registre.pour_pays(pays, devise)
         moyen_demande = _normaliser_moyen(moyen)
         compatibles = [
