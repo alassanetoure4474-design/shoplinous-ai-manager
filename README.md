@@ -51,3 +51,13 @@ arriere). CI pytest + build Docker :
 `.github/workflows/python-tests.yml` (doit etre VERTE avant tout
 deploiement). Migration Supabase :
 `.github/workflows/supabase-migrate.yml` (manuelle, workflow_dispatch).
+
+
+## Vérifier GeniusPay avec GitHub Actions (sans paiement réel)
+
+1. Dans GitHub : **Settings → Secrets and variables → Actions → New repository secret**.
+2. Créer uniquement les secrets `GENIUSPAY_API_KEY` et `GENIUSPAY_API_SECRET`, avec les valeurs Sandbox.
+3. Après fusion de la PR vers `main`, ouvrir **Actions → GeniusPay - vérification Sandbox → Run workflow**.
+4. Le workflow utilise les secrets uniquement sur `main`, appelle `GET /account` et `GET /pawapay/providers`, puis affiche le statut du compte et les pays/opérateurs retournés. Il ne crée aucun paiement et n'affiche aucune clé.
+
+Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les référencent ; ils ne deviennent pas les variables du worker Mistral ou d'un autre hébergeur. Voir la documentation GitHub : https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets
