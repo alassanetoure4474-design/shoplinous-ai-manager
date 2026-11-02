@@ -116,10 +116,7 @@ class GestionnaireCommandes:
         identifiant = self._transaction_par_commande.get(numero)
         if not identifiant or self.paiements is None:
             return None
-        return next(
-            (tx for tx in self.paiements._transactions if tx.id == identifiant),
-            None,
-        )
+        return self.paiements.obtenir_transaction(identifiant)
 
     def confirmer_paiement_webhook(
         self, numero, contenu, signature, headers=None
