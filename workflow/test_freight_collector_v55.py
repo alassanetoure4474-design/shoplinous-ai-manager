@@ -88,9 +88,14 @@ class TestDonneesReelles:
 class TestRegle3:
     def test_29_pays_conformes_malte_exclu(self, donnees):
         rapport = fc.rapport_couverture(donnees, aujourdhui="2026-11-02")
-        assert len(rapport["europe_30_regle3_conformes"]) == 29
-        assert rapport["europe_30_regle3_non_conformes"] == ["MT"]
-        assert "MT" not in rapport["europe_30_regle3_conformes"]
+        # Regle 3 a la quantite de reference 1 (validation du 01/11/2026) :
+        # 29 pays conformes, Malte exclu (option <= 15 j a 8.55 USD > 6 EUR).
+        assert len(rapport["europe_30_regle3_conformes_q1"]) == 29
+        assert rapport["europe_30_regle3_non_conformes_q1"] == ["MT"]
+        assert "MT" not in rapport["europe_30_regle3_conformes_q1"]
+        # HONNETETE : sur les quantites 1 a 5, seuls GB et PL restent
+        # <= 6 EUR (fret croissant avec la quantite, donnees reelles).
+        assert rapport["europe_30_regle3_conformes_q1_a_5"] == ["GB", "PL"]
 
     def test_malte_option_15j_trop_chere(self, donnees):
         index = fc._index_tarifs(donnees)
@@ -100,8 +105,17 @@ class TestRegle3:
 
     def test_france_conforme(self, donnees):
         index = fc._index_tarifs(donnees)
-        for q in range(1, 6):
-            assert fc.est_conforme_regle3(index[("FR", q)])
+        # FR : conforme a la quantite de reference 1 (4.69 USD = 4.20 EUR
+        # <= 6 EUR) et jusqu'a q3 (6.62 USD = 5.93 EUR).
+        for q in (1, 2, 3):
+            assert fc.est_conforme_regle3(index[("FR", q)]), q
+        # HONNETETE : a partir de q4 le fret reel depasse la regle 3
+        # (7.58 USD = 6.79 EUR ; 8.54 USD = 7.64 EUR) : alerte a prevoir
+        # cote checkout (bandes de quantite), aucune donnee masquee.
+        assert index[("FR", 4)]["usd_15j"] == 7.58
+        assert index[("FR", 5)]["usd_15j"] == 8.54
+        assert not fc.est_conforme_regle3(index[("FR", 4)])
+        assert not fc.est_conforme_regle3(index[("FR", 5)])
 
 
 # ------------------------------------------------ couverture -------------
@@ -210,8 +224,10 @@ class TestCollecte:
                 raise RuntimeError("panne reseau")
             return self._options_bidon()
 
+        # Une seule quantite : les 2 premiers appels echouent, le 3e
+        # reussit -> exactement 3 appels reseau (reprise sur erreur).
         res = fc.collecte(fetch, ["PL"], donnees, aujourdhui="2026-11-02",
-                          tentatives=3)
+                          quantites=[1], tentatives=3)
         assert res["appels_reseau"] == 3
         assert res["echecs"] == []
         index = fc._index_tarifs(res["donnees"])
