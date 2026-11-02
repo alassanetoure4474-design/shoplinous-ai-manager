@@ -5,7 +5,7 @@ marches africains, Europe, Amerique du Nord, Amerique latine, Asie,
 Oceanie. Chaque marche liste ses pays configures ; un pays appartient
 a exactement un marche.
 """
-from shoplinous_global from shoplinous_global import country_manager
+from shoplinous_global import country_manager
 
 MARCHES = {
     "afrique_ouest": {"libelle": "Afrique de l'Ouest",
