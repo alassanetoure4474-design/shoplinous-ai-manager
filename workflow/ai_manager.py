@@ -44,6 +44,8 @@ MODELES_LIBRES_PAR_DEFAUT = {
     "mistral": "mistral-small-latest",
     "gemini": "gemini-flash-latest",
     "groq": "llama-3.3-70b-versatile",
+    "qwen": "qwen3.8-27b",
+    "gpt_oss": "gpt-oss-120b",
 }
 DELAI_DEFAUT = 30.0
 CACHE_TTL_DEFAUT = 3600
@@ -68,15 +70,22 @@ def _fournisseurs():
 
 def _modeles():
     return {
-        "mistral": os.environ.get("AI_MODEL_MISTRAL",
-                                  MODELES_LIBRES_PAR_DEFAUT["mistral"]),
-        "gemini": os.environ.get("AI_MODEL_GEMINI",
-                                 MODELES_LIBRES_PAR_DEFAUT["gemini"]),
-        "groq": os.environ.get("AI_MODEL_GROQ",
-                               MODELES_LIBRES_PAR_DEFAUT["groq"]),
+        "mistral": os.environ.get(
+            "AI_MODEL_MISTRAL",
+            MODELES_LIBRES_PAR_DEFAUT["mistral"]),
+        "gemini": os.environ.get(
+            "AI_MODEL_GEMINI",
+            MODELES_LIBRES_PAR_DEFAUT["gemini"]),
+        "groq": os.environ.get(
+            "AI_MODEL_GROQ",
+            MODELES_LIBRES_PAR_DEFAUT["groq"]),
+        "qwen": os.environ.get(
+            "AI_MODEL_QWEN",
+            MODELES_LIBRES_PAR_DEFAUT["qwen"]),
+        "gpt_oss": os.environ.get(
+            "AI_MODEL_GPT_OSS",
+            MODELES_LIBRES_PAR_DEFAUT["gpt_oss"]),
     }
-
-
 def _cle_api():
     return os.environ.get("FREE_LLM_API_KEY", "")
 
