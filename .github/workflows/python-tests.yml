@@ -1,12 +1,14 @@
-# Tests pytest SHOPLINOUS - branches fix1 a fix8.
+# Tests pytest + build Docker SHOPLINOUS.
 # Aucun secret, aucune cle API : les tests utilisent des mocks httpx.
+# La suite COMPLETE est decouverte automatiquement : tout nouveau
+# fichier test_*.py est execute sans modification de ce fichier.
 name: Tests pytest workflow
 
 on:
   push:
-    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
+    branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity]
   pull_request:
-    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
+    branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity]
 
 jobs:
   pytest:
@@ -32,13 +34,10 @@ jobs:
       - name: Installer les dependances tests (requirements-dev.txt)
         run: pip install -r requirements-dev.txt
 
-      - name: Installer mistralai-workflows (namespace mistralai)
-        run: pip install mistralai-workflows
-
-      - name: Executer toute la suite pytest (verbose)
+      - name: Executer la suite pytest COMPLETE (decouverte automatique)
         run: |
           set +e
-          python -m pytest -v test_daily.py test_audit_v54.py test_pricing_v55.py test_freight_collector_v55.py test_freight_collector_v56.py test_ai_manager.py test_ai_product_copy.py test_fournisseurs.py 2>&1 | tee pytest_output.txt
+          python -m pytest -v 2>&1 | tee pytest_output.txt
           exit_code=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
           exit "${exit_code}"
