@@ -208,6 +208,41 @@ class TestCjFreightQuantity:
             run(daily.cj_freight("vid123", "FR", quantity=0))
 
 
+# --------------------------- calcul commercial live : CJ dynamique -------
+class TestLivePricingV56:
+    @pytest.mark.parametrize("quantity", [6, 50])
+    def test_calcul_prix_appelle_cj_avec_quantite_exacte(self, monkeypatch, quantity):
+        import freight_collector_v56 as freight
+
+        seen = {}
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            if request.url.path.endswith("/logistic/freight/calculate"):
+                seen.update(json.loads(request.content))
+                return httpx.Response(200, json={"code": 200, "data": [
+                    {"logisticName": "CJPacket", "logisticPrice": 12.5,
+                     "logisticAging": "5-12"}]})
+            raise AssertionError("endpoint inattendu : " + request.url.path)
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
+        result = run(daily.compute_product_price_v56_live(
+            2.81, freight.VID_BLANCHE, "FR", quantity
+        ))
+        assert seen["vid"] == freight.VID_BLANCHE
+        assert seen["countryCode"] == "FR"
+        assert seen["quantity"] == quantity
+        assert result["statut"] == "recommandation_ok"
+        assert result["quantite"] == quantity
+        assert result["fret"]["usd"] == 12.5
+
+
 # ------------------------------------------ process_order : lecture seule ----
 class TestProcessOrderReadOnly:
     def test_ne_passe_jamais_de_post_cj(self, monkeypatch):
