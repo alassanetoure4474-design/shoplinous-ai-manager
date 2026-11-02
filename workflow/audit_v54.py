@@ -281,11 +281,9 @@ def audit_cj_variant(entry: dict, cj_variants_payload: dict,
 
 def audit_freight_by_quantity(quantity: int, options: list,
                               rate: float) -> dict:
-    """v5.4 : audit du fret CJ pour une quantite donnee (1 a 5).
-    Pur, hors ligne. Conserve les options conformes (<= 6 EUR et delai
-    max <= 15 j) et signale si AUCUNE n'est conforme.
-    NOTE HONNETE : le seuil de 6 EUR s'applique au fret UNITAIRE ; les
-    valeurs multi-unites sont MESUREES, jamais inventees."""
+    """Audit hors ligne du fret fourni pour toute quantite positive.
+    Conserve les options conformes (<= 6 EUR et delai max <= 15 j).
+    Un tarif absent reste absent : aucune extrapolation n'est inventee."""
     qty = validate_quantity(quantity)
     parsed: list = []
     for o in options or []:
@@ -355,7 +353,7 @@ def simulate_order(scenario: dict, vid_table: dict,
     """v5.4 : SIMULATION OFFLINE explicite (donnees fictives, JAMAIS une
     commande reelle). Reproduit la logique de decision de process_order
     SANS AUCUN appel reseau : resolution vid par la table (exact
-    uniquement), plafond 5 unites, stock insuffisant (regle 1), couverture
+    uniquement), quantite positive sans plafond local, stock insuffisant (regle 1), couverture
     du tarif facture vs fret reel FOURNI (mesure, jamais invente).
     Sortie etiquetee simulation=True."""
     order = (scenario or {}).get("order") or {}
@@ -383,16 +381,8 @@ def simulate_order(scenario: dict, vid_table: dict,
     try:
         qty = validate_quantity(qty_raw)
     except RuntimeError:
-        if (isinstance(qty_raw, int) and not isinstance(qty_raw, bool)
-                and qty_raw > MAX_ORDER_QTY):
-            out["statut"] = "depasse_plafond"
-            out["motif"] = (f"quantite {qty_raw} > plafond {MAX_ORDER_QTY} : "
-                            "fret CJ non mesure au-dela de 5 unites, "
-                            "verification manuelle OBLIGATOIRE, AUCUN appel "
-                            "CJ (meme en simulation)")
-        else:
-            out["statut"] = "quantite_invalide"
-            out["motif"] = f"quantite invalide: {qty_raw!r}"
+        out["statut"] = "quantite_invalide"
+        out["motif"] = f"quantite invalide: {qty_raw!r}"
         out["action_manuelle"] = "verification manuelle"
         return out
     if "stock_simule" in scenario:
