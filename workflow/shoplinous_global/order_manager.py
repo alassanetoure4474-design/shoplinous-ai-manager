@@ -68,6 +68,7 @@ class GestionnaireCommandes:
     def __init__(self, gestionnaire_paiements=None):
         self._par_numero = {}
         self._par_reference_client = {}
+        self._transaction_par_commande = {}
         self.paiements = gestionnaire_paiements
 
     def creer(self, numero, pays, devise, reference_client=None):
@@ -85,14 +86,58 @@ class GestionnaireCommandes:
     def obtenir(self, numero):
         return self._par_numero[numero]
 
-    def confirmer_paiement_webhook(self, numero, contenu, signature):
-        """Passe la commande en payee UNIQUEMENT via le webhook signe
-        du Payment Manager."""
+    def initier_paiement(self, numero, montant, moyen, cle_idempotence):
+        """Cree le checkout associe a une commande et retourne sa transaction.
+
+        La cle d'idempotence doit etre stable pour un meme clic client afin
+        d'eviter de creer plusieurs paiements pour la meme commande.
+        """
         if self.paiements is None:
             raise RuntimeError("Payment Manager requis")
         commande = self.obtenir(numero)
+        if commande.statut != "attente_paiement":
+            raise TransitionInvalide(
+                "paiement impossible pour une commande au statut "
+                + commande.statut
+            )
+        transaction, nouvelle = self.paiements.creer_transaction(
+            commande=numero,
+            montant=montant,
+            devise=commande.devise,
+            pays=commande.pays,
+            moyen=moyen,
+            cle_idempotence=cle_idempotence,
+        )
+        self._transaction_par_commande[numero] = transaction.id
+        return transaction, nouvelle
+
+    def paiement_associe(self, numero):
+        """Retourne la transaction locale associee, sans confirmer son statut."""
+        identifiant = self._transaction_par_commande.get(numero)
+        if not identifiant or self.paiements is None:
+            return None
+        return next(
+            (tx for tx in self.paiements._transactions if tx.id == identifiant),
+            None,
+        )
+
+    def confirmer_paiement_webhook(
+        self, numero, contenu, signature, headers=None
+    ):
+        """Passe la commande en payee uniquement apres validation du webhook."""
+        if self.paiements is None:
+            raise RuntimeError("Payment Manager requis")
+        commande = self.obtenir(numero)
+        if commande.statut == "payee":
+            return True
+        if commande.statut != "attente_paiement":
+            return False
+        transaction_id = self._transaction_par_commande.get(numero)
+        if not transaction_id:
+            return False
         ok = self.paiements.confirmer_webhook(
-            numero, contenu, signature)
+            transaction_id, contenu, signature, headers=headers
+        )
         if ok:
             commande.statut = "payee"
             commande.journal.append(("payee", time.time()))
