@@ -12,7 +12,7 @@ explicite. allow_publish=False par defaut (mode veille : lecture seule).
 - workflow/freight_collector_v56.py : moteur de tarifs fret par variante
   (usd_15j, TTL 7 jours, aucune substitution silencieuse).
 - workflow/ai_manager.py : acces multi-IA via FreeLLMAPI (mistral, gemini,
-  groq ; bascule automatique ; cache ; aucune cle dans le code).
+  groq, qwen et gpt_oss ; cinq fournisseurs actifs par defaut ; bascule automatique ; cache).
 - Redaction des descriptions produit en francais via FreeLLMAPI ; si l'IA
   est indisponible, un texte neutre est utilise. Les prix, stocks, marges,
   frais, delais verifies et commandes restent calcules par le code Python.
@@ -29,8 +29,8 @@ Obligatoires (le run est SUSPENDU proprement si absentes) :
 Facultatives (valeurs par defaut indiquees) :
 - PAYMENT_FEE_RATE (0.029), PAYMENT_FEE_FIXED_EUR (0.30)
 - CJ_API_BASE, FREEWEBSTORE_API_BASE
-- AI_PROVIDER_ORDER (mistral,gemini,groq)
-- AI_MODEL_MISTRAL / AI_MODEL_GEMINI / AI_MODEL_GROQ (modeles libres)
+- AI_PROVIDER_ORDER (mistral,gemini,groq,qwen,gpt_oss)
+- AI_MODEL_MISTRAL / AI_MODEL_GEMINI / AI_MODEL_GROQ / AI_MODEL_QWEN / AI_MODEL_GPT_OSS (modeles autorises)
 - AI_TIMEOUT_SECONDS (30), AI_CACHE_TTL_SECONDS (3600)
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
