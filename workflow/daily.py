@@ -96,6 +96,12 @@ from pydantic import BaseModel, ConfigDict
 import httpx
 import mistralai.workflows as workflows
 
+# v5.6 (finalisation, 02/11/2026) : moteur de tarifs fret par variante,
+# integre en LECTURE SEULE (controle de coherence uniquement). Les
+# calculs du workflow restent fondes sur les frets CJ vivants : aucun
+# double calcul, aucun appel reseau supplementaire, aucune ecriture.
+import freight_collector_v56 as fc56
+
 # ---------------------------------------------------------------- regles ----
 MIN_STOCK_CN = 1000
 MAX_COST_EUR = 8.0
@@ -941,6 +947,23 @@ def estimated_net_profit(price: float, checkout_shipping_eur: float | None,
                  - other_costs_eur, 2)
 
 
+def rapport_fret_v56(donnees=None, aujourdhui=None):
+    """v5.6 : integrite du jeu de tarifs fret (LECTURE SEULE) : 2
+    variantes x (51 pays x 5 quantites). Aucun reseau, aucune ecriture :
+    signale tarifs expires (TTL 7 j) et conformites 15 j. Rien n'invente."""
+    if donnees is None:
+        donnees = fc56.charger_donnees()
+    return fc56.rapport_variantes(donnees, aujourdhui=aujourdhui)
+
+
+def controle_vid_seed_v56():
+    """Coherence amorce VID_TABLE_SEED <-> donnees v5.6 : SKU dont le vid
+    est absent du jeu v5.6 (liste vide = coherent)."""
+    vids_v56 = set(fc56.variantes(fc56.charger_donnees()))
+    return [sku for sku, e in VID_TABLE_SEED.items()
+            if e.get("vid") not in vids_v56]
+
+
 # ------------------------------------------------------------- workflow ----
 class DailyParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -1246,5 +1269,27 @@ class ShoplinousDailyWorkflow:
                         {"order": oreport.get("order_id"), "alerte": a})
         except Exception as exc:
             report["errors"].append(f"orders: {exc}")
+
+        # v5.6 : integrite du jeu de tarifs fret (LECTURE SEULE).
+        try:
+            fret_v56 = rapport_fret_v56()
+            for vid, info in fret_v56.items():
+                if info.get("nb_expires"):
+                    report["alerts"].append(
+                        {"fret_v56": vid, "alerte":
+                         str(info["nb_expires"]) + " tarifs fret expires "
+                         "(TTL 7 jours) : recollecte requise"})
+                if info.get("nb_tarifs") != 255 or info.get("nb_pays") != 51:
+                    report["alerts"].append(
+                        {"fret_v56": vid, "alerte":
+                         "jeu de tarifs incomplet (attendu 255 / 51 pays)"})
+            report["fret_v56"] = fret_v56
+            incoherents = controle_vid_seed_v56()
+            if incoherents:
+                report["alerts"].append(
+                    {"vid_seed": incoherents, "alerte":
+                     "amorce VID_TABLE_SEED incoherente avec v5.6"})
+        except Exception as exc:
+            report["errors"].append(f"fret_v56: {exc}")
 
         return report
