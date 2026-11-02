@@ -569,8 +569,10 @@ class TestSecurite:
     def test_29_pays(self):
         assert len(daily.DEST_COUNTRIES) == 29
 
-    def test_plafond_quantite_5(self):
-        assert daily.MAX_ORDER_QTY == 5
+    def test_limite_5_concerne_uniquement_le_cache_historique(self):
+        assert daily.MAX_CACHED_FREIGHT_QTY == 5
+        assert daily.MAX_ORDER_QTY == 5  # alias historique, non applique au devis CJ
+        assert daily.validate_quantity(6) == 6
 
     def test_aucune_cle_en_dur(self):
         import inspect
@@ -767,15 +769,22 @@ class TestProcessOrderV51:
         rep = run(daily.process_order(order))
         assert rep["lignes"][0]["statut"] == "sans_vid"
 
-    def test_multi_lignes_avec_ligne_ko_comparaison_annulee(self, monkeypatch):
-        """Une ligne > 5 unites : le total fret est incomplet, la
-        comparaison au niveau commande doit etre ANNULEE (securite)."""
+    def test_multi_lignes_avec_devis_cj_refuse_comparaison_annulee(self, monkeypatch):
+        """Si CJ refuse le devis d'une ligne, le total fret incomplet est annule."""
         self._mock(monkeypatch)
+        original = daily.cj_freight
+
+        async def refuse_large_quote(vid, country, quantity=1):
+            if quantity == 9:
+                raise RuntimeError("CJ limite cette quantite")
+            return await original(vid, country, quantity=quantity)
+
+        monkeypatch.setattr(daily, "cj_freight", refuse_large_quote)
         order = {"id": "O15", "country": "FR", "shipping_charged": 20.00,
                  "items": [{"vid": "v1", "quantity": 1},
                            {"vid": "v2", "quantity": 9}]}
         rep = run(daily.process_order(order))
-        assert rep["lignes"][1]["statut"] == "depasse_plafond"
+        assert rep["lignes"][1]["statut"] == "fret_indisponible"
         assert any("ANNULEE" in a for a in rep["alertes"])
         assert rep["statut"] == "lignes_non_verifiees"
 
