@@ -33,6 +33,12 @@ Facultatives (valeurs par defaut indiquees) :
 - AI_MODEL_MISTRAL / AI_MODEL_GEMINI / AI_MODEL_GROQ / AI_MODEL_QWEN / AI_MODEL_GPT_OSS (modeles autorises)
 - AI_TIMEOUT_SECONDS (30), AI_CACHE_TTL_SECONDS (3600)
 
+AVANT LE PREMIER APPEL REEL : verifier les identifiants de modeles
+exposes par VOTRE instance FreeLLMAPI (GET {FREE_LLM_API_BASE}/v1/models)
+et ajuster AI_MODEL_MISTRAL / AI_MODEL_GEMINI / AI_MODEL_GROQ /
+AI_MODEL_QWEN / AI_MODEL_GPT_OSS en consequence. Les valeurs par defaut
+du code n ont jamais ete validees contre une instance reelle.
+
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
 SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
 
@@ -58,7 +64,9 @@ docker run --env-file .env shoplinous.
 
 ## 5. Controles de sante
 
-- CI verte sur le dernier commit (.github/workflows/python-tests.yml).
+- CI verte sur le dernier commit (.github/workflows/python-tests.yml),
+  y compris le job build-docker (construction reelle de l'image +
+  demarrage du conteneur + imports du worker).
 - Au demarrage : le worker doit s'enregistrer sans EvaluationSuspended.
 - Chaque run : report["errors"] vide, report["fret_v56"] avec 2 variantes
   a 255 tarifs / 51 pays chacune, report["mode"] == "veille".

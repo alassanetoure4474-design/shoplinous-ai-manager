@@ -8,7 +8,7 @@ on:
   push:
     branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
   pull_request:
-    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7]
+    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
 
 jobs:
   pytest:
@@ -54,3 +54,15 @@ jobs:
           tail -n 25 pytest_output.txt | while IFS= read -r line; do
             echo "::error::${line}"
           done
+
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v5
+
+      - name: Construire l'image Docker
+        run: docker build -f workflow/Dockerfile -t shoplinous-worker:test .
+
+      - name: Demarrer le conteneur et verifier les imports du worker
+        run: docker run --rm --entrypoint python shoplinous-worker:test -c "import mistralai.workflows; import daily; print('WORKER_IMPORTS_OK')"

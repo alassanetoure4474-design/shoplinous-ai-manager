@@ -1387,3 +1387,57 @@ class TestVidTableV53:
             assert interdit not in src_build, interdit
         p = daily.DailyParams()
         assert p.allow_publish is False
+
+
+# ------------------------------------------------------ reporting IA (lecture seule) ----
+class TestReportingIA:
+    def test_metriques_agregees_sans_identifiants_ni_texte_libre(self):
+        report = {
+            "mode": "veille",
+            "valides_en_veille": [{"sku": "SKU-SECRET", "name": "Produit prive"}],
+            "published": [],
+            "rejected": [{"id": "CJ-PRIVATE", "reason": "detail prive"}],
+            "alerts": [{"order": "ORDER-PRIVATE", "alerte": "adresse privee"}],
+            "errors": ["message prive"],
+            "orders_found": 2,
+            "orders_analyzed": [
+                {"order_id": "ORDER-PRIVATE", "alertes": ["client prive"]},
+                {"order_id": "ORDER-2", "alertes": []},
+            ],
+            "fret_v56": {
+                "vid-prive": {"nb_expires": 3, "sku": "SKU-SECRET"}
+            },
+        }
+        metrics = daily.metriques_rapport_ia(report)
+        encoded = json.dumps(metrics, ensure_ascii=False)
+        for secret in ("SKU-SECRET", "Produit prive", "CJ-PRIVATE",
+                       "ORDER-PRIVATE", "adresse privee", "message prive",
+                       "vid-prive"):
+            assert secret not in encoded
+        assert metrics["produits_valides"] == 1
+        assert metrics["commandes_avec_alertes"] == 1
+        assert metrics["tarifs_fret_expires"] == 3
+
+    def test_resume_ia_utilise_freellmapi_et_reste_informatif(self, monkeypatch):
+        observed = {}
+
+        async def fake_appeler_ia(messages):
+            observed["messages"] = messages
+            return {"fournisseur": "mistral", "contenu": "Deux alertes a verifier."}
+
+        monkeypatch.setattr(daily.ai_manager, "appeler_ia", fake_appeler_ia)
+        metrics = {"mode": "veille", "alertes": 2, "erreurs": 0}
+        result = run(daily.ai_summarize_daily_report(metrics))
+        assert result["statut"] == "ok"
+        assert result["fournisseur"] == "mistral"
+        assert result["informatif_uniquement"] is True
+        assert result["resume"] == "Deux alertes a verifier."
+        assert "SKU" not in observed["messages"][1]["content"]
+
+    def test_indisponibilite_ia_ne_bloque_pas_le_rapport(self, monkeypatch):
+        async def unavailable(messages):
+            raise RuntimeError("detail fournisseur prive")
+
+        monkeypatch.setattr(daily.ai_manager, "appeler_ia", unavailable)
+        result = run(daily.ai_summarize_daily_report({"mode": "veille"}))
+        assert result == {"statut": "indisponible", "raison": "RuntimeError"}
