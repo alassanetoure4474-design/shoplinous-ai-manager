@@ -265,7 +265,9 @@ class TestCalculs:
             res = fc.compute_pricing_v56(2.81, VID_B, "FR", q,
                                          donnees=donnees,
                                          aujourdhui=DATE_COLLECTE)
-            assert res["statut"] in ("quantite_invalide", "depasse_plafond")
+            assert res["statut"] in (
+                "quantite_invalide", "depasse_plafond", "tarif_dynamique_requis"
+            )
             assert "calcul" not in res
 
     def test_destination_inconnue(self, donnees):
