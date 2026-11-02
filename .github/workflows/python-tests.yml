@@ -10,9 +10,6 @@ on:
   pull_request:
     branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7]
 
-permissions:
-  contents: write
-
 jobs:
   pytest:
     runs-on: ubuntu-latest
@@ -39,24 +36,6 @@ jobs:
 
       - name: Installer mistralai-workflows (namespace mistralai)
         run: pip install mistralai-workflows
-
-      - name: Diagnostic complet (ecrit dans diag_ci.txt)
-        run: |
-          { echo '=== sys.path ==='; python -c "import sys; print(sys.path)"
-            echo '=== ls ==='; ls -la
-            echo '=== import direct ai_manager ==='; python -c "import ai_manager; print('OK', ai_manager.__file__)"
-            echo '=== collect-only test_ai_manager (tb=long) ==='; python -m pytest --collect-only --tb=long test_ai_manager.py
-            echo '=== collect-only verbeux ==='; python -m pytest --collect-only test_ai_manager.py -q ; } > diag_ci.txt 2>&1 || true
-          head -c 4000 diag_ci.txt >> "$GITHUB_STEP_SUMMARY" || true
-
-      - name: Publier diag_ci.txt sur la branche [skip ci]
-        if: always()
-        run: |
-          git config user.name "ci-diagnostic"
-          git config user.email "ci-diagnostic@users.noreply.github.com"
-          git add diag_ci.txt || true
-          git commit -m "diag CI collection test_ai_manager [skip ci]" || true
-          git push origin HEAD:workflow-v5-fix7 || true
 
       - name: Executer pytest (verbose)
         run: |

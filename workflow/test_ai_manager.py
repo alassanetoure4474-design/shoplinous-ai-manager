@@ -207,7 +207,7 @@ class TestSecurite:
 
     def test_aucune_cle_en_dur(self):
         source = inspect.getsource(ai)
-        for secret in ("sk-", "Bearer eyJ", "FREE_LLM_API_KEY="",
+        for secret in ("sk-", "Bearer eyJ", "FREE_LLM_API_KEY=,
                         "FREE_LLM_API_KEY='"):
             assert secret not in source
 
