@@ -6,6 +6,7 @@ Printful, fournisseurs africains/ivoiriens, personnalises) sont
 registres NON CONNECTES : aucun appel n est simule.
 """
 
+
 class AdaptateurFournisseur:
     nom = "base"
     connected = False
@@ -87,7 +88,7 @@ class RegistreFournisseurs:
     def pour_pays(self, code_pays):
         """Fournisseurs ACCESSIBLES pour un pays : connectes, ou
         declares dans la configuration du pays."""
-        from shoplinous_global from shoplinous_global import country_manager
+        from shoplinous_global import country_manager
         conf = country_manager.pays(code_pays)
         return [n for n in self._fournisseurs
                 if n in conf["fournisseurs"] or
