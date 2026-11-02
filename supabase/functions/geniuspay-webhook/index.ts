@@ -149,6 +149,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
   ) {
     return jsonResponse(400, { error: "webhook_headers_payload_mismatch" });
   }
+  if (payloadEnvironment !== "sandbox") {
+    return jsonResponse(403, { error: "live_webhooks_disabled" });
+  }
 
   const providedSignature = signatureHeader.trim().replace(/^sha256=/i, "").toLowerCase();
   let canonicalPayload = "";
@@ -231,8 +234,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
     );
 
     if (error) {
-      // Do not log provider payloads, signatures, secrets, or database details.
-      return jsonResponse(409, { error: "webhook_rejected_or_unmatched" });
+      // Validation mismatches are permanent. Unknown references remain retryable
+      // because GeniusPay may deliver the webhook before checkout finalization.
+      const permanentCodes = new Set(["22023", "23505", "23514"]);
+      if (error.code && permanentCodes.has(error.code)) {
+        return jsonResponse(400, { error: "webhook_rejected_or_unmatched" });
+      }
+      return jsonResponse(503, { error: "webhook_persistence_unavailable" });
     }
     return jsonResponse(200, {
       received: true,
