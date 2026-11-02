@@ -253,7 +253,8 @@ def compute_pricing_v56(cout_achat_usd, vid, pays, quantite,
     Statuts :
     - "recommandation_ok" : prix calcule, marge verifiee ;
     - "incoherence_defensive" : marge hors tolerance, verification manuelle ;
-    - "depasse_plafond" : quantite > 5, aucun prix ;
+    - "tarif_dynamique_requis" : quantite > 5 sans callback CJ, aucun prix ;
+    - "tarif_dynamique_indisponible" : echec du devis CJ, aucun prix ;
     - "quantite_invalide" / "cout_invalide" / "parametres_invalides" ;
     - "variante_inconnue" : vid absent des donnees (aucun melange) ;
     - "destination_inconnue" : pays/quantite sans tarif mesure ;
