@@ -15,6 +15,8 @@ de la boutique Freewebstore avec assistance IA.
 - `workflow/freight_collector_v56.py` : moteur de tarifs fret par variante
   (usd_15j, TTL 7 jours, aucune substitution silencieuse, aucun melange
   entre variantes ; devis CJ en direct au-dela de 5 unites).
+- `workflow/shoplinous_global/geniuspay.py` : client serveur GeniusPay (Sandbox par defaut, checkout heberge, decouverte mobile money, verification HMAC des webhooks) ; aucun secret dans le depot.
+- `workflow/test_geniuspay_connection.py` : controle API GeniusPay en lecture seule (compte + pays et operateurs disponibles), sans creer de transaction.
 - `workflow/ai_manager.py` : acces multi-IA via FreeLLMAPI (cinq
   fournisseurs actifs par defaut : mistral, gemini, groq, qwen, gpt_oss ;
   bascule automatique sur 429/5xx/timeout ; cache ; modeles payants
@@ -49,3 +51,13 @@ arriere). CI pytest + build Docker :
 `.github/workflows/python-tests.yml` (doit etre VERTE avant tout
 deploiement). Migration Supabase :
 `.github/workflows/supabase-migrate.yml` (manuelle, workflow_dispatch).
+
+
+## Vérifier GeniusPay avec GitHub Actions (sans paiement réel)
+
+1. Dans GitHub : **Settings → Secrets and variables → Actions → New repository secret**.
+2. Créer uniquement les secrets `GENIUSPAY_API_KEY` et `GENIUSPAY_API_SECRET`, avec les valeurs Sandbox.
+3. Après fusion de la PR vers `main`, ouvrir **Actions → GeniusPay - vérification Sandbox → Run workflow**.
+4. Le workflow utilise les secrets uniquement sur `main`, appelle `GET /account` et `GET /pawapay/providers`, puis affiche le statut du compte et les pays/opérateurs retournés. Il ne crée aucun paiement et n'affiche aucune clé.
+
+Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les référencent ; ils ne deviennent pas les variables du worker Mistral ou d'un autre hébergeur. Voir la documentation GitHub : https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets

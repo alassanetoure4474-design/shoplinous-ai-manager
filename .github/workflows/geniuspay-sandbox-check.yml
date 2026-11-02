@@ -1,0 +1,48 @@
+name: GeniusPay - verification Sandbox
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-geniuspay:
+    # Important: secrets are only used with code from main, never a PR branch.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GENIUSPAY_API_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
+      GENIUSPAY_API_SECRET: ${{ secrets.GENIUSPAY_API_SECRET }}
+      GENIUSPAY_ENVIRONMENT: sandbox
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Installer Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Installer la dependance HTTP
+        run: python -m pip install --disable-pip-version-check "httpx>=0.27,<1"
+
+      - name: Verifier les secrets sans les afficher
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$GENIUSPAY_API_KEY" || -z "$GENIUSPAY_API_SECRET" ]]; then
+            echo "::error::Ajoutez GENIUSPAY_API_KEY et GENIUSPAY_API_SECRET dans Settings > Secrets and variables > Actions."
+            exit 2
+          fi
+          if [[ "$GENIUSPAY_API_KEY" != pk_sandbox_* || "$GENIUSPAY_API_SECRET" != sk_sandbox_* ]]; then
+            echo "::error::Les cles configurees ne sont pas des cles Sandbox."
+            exit 2
+          fi
+          echo "Cles Sandbox presentes (valeurs masquees)."
+
+      - name: Tester le compte marchand et les pays Mobile Money (lecture seule)
+        run: python workflow/test_geniuspay_connection.py

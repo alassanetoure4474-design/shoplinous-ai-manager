@@ -27,6 +27,16 @@ Obligatoires (le run est SUSPENDU proprement si absentes) :
 - FREEWEBSTORE_API_KEY : cle API Freewebstore (en-tete x-api-key).
 - FREE_LLM_API_BASE : URL de la passerelle FreeLLMAPI.
 - FREE_LLM_API_KEY : cle de la passerelle (jamais dans le code).
+- GENIUSPAY_API_KEY / GENIUSPAY_API_SECRET : cles marchandes GeniusPay (serveur uniquement).
+- GENIUSPAY_ENVIRONMENT=sandbox (defaut ; ne jamais activer live pendant les tests).
+- GENIUSPAY_WEBHOOK_SECRET : secret retourne lors de la creation du webhook, a stocker apres deploiement de l'endpoint HTTPS.
+- GENIUSPAY_ALLOW_LIVE=false : verrou de production ; ne passer a true qu'apres tests et autorisation explicite.
+
+Controle de connexion (lecture seule, aucun paiement) :
+
+    cd workflow && python test_geniuspay_connection.py
+
+Le script verifie le statut du compte et liste les pays/opérateurs retournes par GeniusPay. Les cles ne sont jamais affichees.
 
 Facultatives (valeurs par defaut indiquees) :
 - PAYMENT_FEE_RATE (0.029), PAYMENT_FEE_FIXED_EUR (0.30)
@@ -50,6 +60,7 @@ Codes de sortie : 0 = les 5 modeles declares existent sur l'instance ;
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
 SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
+Pour GeniusPay, ajouter aussi GENIUSPAY_API_KEY, GENIUSPAY_API_SECRET et, apres creation du webhook HTTPS, GENIUSPAY_WEBHOOK_SECRET dans les secrets du service qui execute les paiements.
 
 Les secrets GitHub Actions ne sont pas automatiquement transmis au worker
 heberge. Definir aussi FREE_LLM_API_BASE et FREE_LLM_API_KEY dans les
@@ -84,7 +95,18 @@ docker run --env-file .env shoplinous.
 - AiManager : ai.quotas() montre bascules/erreurs par fournisseur ; aucune
   cle dans les logs.
 
-## 6. Retour arriere
+## 6. Paiements GeniusPay (Sandbox uniquement au demarrage)
+
+- Le client GeniusPay utilise `https://geniuspay.ci/api/v1/merchant`.
+- Premier controle : `GET /account` (lecture seule) et `GET /pawapay/providers` (decouverte des moyens et pays).
+- Le checkout heberge est cree par `POST /payments` sans `payment_method` : GeniusPay choisit les canaux disponibles. La reference de commande est transmise dans `metadata.order_id`.
+- Aucun paiement n'est autorise par le module tant que les deux cles API et le secret webhook ne sont pas configures.
+- Le webhook doit etre expose sur une URL HTTPS publique, verifier HMAC-SHA256 + timestamp (fenetre 300 s), puis lier reference, commande, montant, devise et environnement. Une redirection navigateur ne confirme jamais un paiement.
+- La documentation GeniusPay indique que le secret webhook n'est fourni qu'a la creation du webhook : le sauvegarder immediatement dans `GENIUSPAY_WEBHOOK_SECRET`.
+- Ne pas enregistrer le webhook tant qu'un endpoint HTTPS reel n'est pas deploye. Le worker Mistral seul n'expose pas automatiquement une route HTTP de webhook.
+- Ne jamais mettre les cles dans GitHub, dans le code, dans les captures ou dans les journaux. Les saisir uniquement dans les secrets de l'hebergeur qui executera le client et le receveur webhook.
+
+## 7. Retour arriere
 
 - Worker : arret du processus/conteneur (docker stop shoplinous).
 - Code : git revert <sha> sur la branche de travail ; aucune migration
@@ -92,7 +114,7 @@ docker run --env-file .env shoplinous.
 - Le mode veille ne modifie RIEN cote Freewebstore/CJ : un run arrete
   n'a aucun effet a annuler.
 
-## 7. Regles de securite permanentes
+## 8. Regles de securite permanentes
 
 - Aucun achat fournisseur automatique, aucun paiement, aucune creation
   ni modification de commande CJ.
@@ -103,7 +125,7 @@ docker run --env-file .env shoplinous.
 - Les calculs financiers, stocks et commandes restent en Python
   deterministe ; l'IA (ai_manager) ne fait que du textuel.
 
-## 8. Deploiement gere Mistral Workflows (option retenue)
+## 9. Deploiement gere Mistral Workflows (option retenue)
 
 Le worker est publie en DEPLOIEMENT GERE (Managed deployment, public
 preview) : Mistral Cloud clone le depot GitHub, construit l'image a
