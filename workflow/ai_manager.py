@@ -213,15 +213,18 @@ async def appeler_ia(messages, fournisseurs=None, modele=None,
                     json={"model": modele_f, "messages": messages})
             if r.status_code == 429:
                 _compter(fournisseur, "bascules")
+                # le corps de la reponse est journalise VIA le filtre de
+                # redaction (_sans_secret) : la cle n'y apparaît JAMAIS
                 _journaliser("quota_depasse", fournisseur,
                              "HTTP 429 : bascule vers le fournisseur "
-                             "suivant")
+                             "suivant ; corps: " + (r.text or ""))
                 erreurs.append((fournisseur, "429"))
                 continue
             if r.status_code >= 500:
                 _compter(fournisseur, "bascules")
                 _journaliser("indisponible", fournisseur,
-                             "HTTP " + str(r.status_code) + " : bascule")
+                             "HTTP " + str(r.status_code) + " : bascule ; "
+                             "corps: " + (r.text or ""))
                 erreurs.append((fournisseur, str(r.status_code)))
                 continue
             r.raise_for_status()
