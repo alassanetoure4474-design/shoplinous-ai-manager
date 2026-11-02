@@ -4,6 +4,8 @@ import pytest
 
 from shoplinous_global import shipping_manager as sh
 from shoplinous_global import order_manager as om
+from shoplinous_global import payment_manager as pay
+from shoplinous_global import payment_providers as prv
 from shoplinous_global import tracking_manager as tr
 from shoplinous_global import ai_decision_engine as ai
 from shoplinous_global import notification_manager as nt
@@ -65,6 +67,69 @@ class TestOrderManager:
         g, c = self._cmd()
         with pytest.raises(om.TransitionInvalide, match="webhook"):
             c.transition("payee")
+
+    def test_commande_wave_associe_la_transaction_et_attend_le_webhook(self):
+        class FakeClient:
+            api_configured = True
+            webhook_secret = "whsec_test"
+            payment_ready = True
+
+            def creer_checkout_wave(self, **kwargs):
+                assert kwargs["commande"] == "CMD-WAVE"
+                return {
+                    "reference": "MTX-WAVE-ORDER",
+                    "checkout_url": "https://geniuspay.ci/pay/MTX-WAVE-ORDER",
+                }
+
+            def webhook_paiement_reussi(self, **kwargs):
+                assert kwargs["reference"] == "MTX-WAVE-ORDER"
+                assert kwargs["commande"] == "CMD-WAVE"
+                assert kwargs["montant"] == 3500
+                assert kwargs["devise"] == "XOF"
+                return {"event": "payment.success"}
+
+        paiements = pay.GestionnairePaiements(
+            prv.RegistrePrestataires(geniuspay_client=FakeClient())
+        )
+        g = om.GestionnaireCommandes(paiements)
+        commande, _ = g.creer("CMD-WAVE", "CI", "XOF")
+
+        tx, nouvelle = g.initier_paiement(
+            "CMD-WAVE", 3500, "wave", "idem-cmd-wave"
+        )
+        assert nouvelle is True
+        assert tx.prestataire == "geniuspay"
+        assert tx.url_paiement.endswith("MTX-WAVE-ORDER")
+        assert g.paiement_associe("CMD-WAVE") is tx
+        assert commande.statut == "attente_paiement"
+
+        # Le retour navigateur n'est jamais une preuve de paiement.
+        assert paiements.confirmer_redirection(tx.id) is False
+        assert commande.statut == "attente_paiement"
+
+        headers = {
+            "X-Webhook-Timestamp": "1780000000",
+            "X-Webhook-Event": "payment.success",
+            "X-Webhook-Environment": "sandbox",
+        }
+        assert g.confirmer_paiement_webhook(
+            "CMD-WAVE", "{}", "signature", headers=headers
+        ) is True
+        assert tx.statut == "reussie"
+        assert commande.statut == "payee"
+        assert g.confirmer_paiement_webhook(
+            "CMD-WAVE", "{}", "signature", headers=headers
+        ) is True
+        assert [entry[0] for entry in commande.journal].count("payee") == 1
+
+    def test_commande_sans_transaction_ne_peut_pas_etre_payee(self):
+        paiements = pay.GestionnairePaiements(prv.RegistrePrestataires())
+        g = om.GestionnaireCommandes(paiements)
+        commande, _ = g.creer("CMD-NO-PAYMENT", "CI", "XOF")
+        assert g.confirmer_paiement_webhook(
+            "CMD-NO-PAYMENT", "{}", "signature"
+        ) is False
+        assert commande.statut == "attente_paiement"
 
     def test_transmission_fournisseur_exige_autorisation(self):
         g, c = self._cmd()

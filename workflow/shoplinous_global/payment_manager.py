@@ -98,11 +98,19 @@ class GestionnairePaiements:
         proposables = []
         for p in self.registre.pour_pays(code_pays, devise):
             if p.nom == "geniuspay":
-                # Le checkout heberge presente dynamiquement les canaux
-                # disponibles chez GeniusPay pour le client.
+                # Checkout heberge : le client choisit parmi les canaux
+                # que GeniusPay affiche pour ce compte marchand.
                 proposables.append({
                     "moyen": "geniuspay_checkout",
                     "prestataire": p.nom, "devise": devise})
+                # Option Wave Direct explicite, uniquement en CI/XOF,
+                # et seulement si l'adaptateur sait creer ce checkout.
+                if (code_pays == "CI" and devise == "XOF"
+                        and demandes.intersection({"wave", "wave_direct"})
+                        and callable(getattr(p.client, "creer_checkout_wave", None))):
+                    proposables.append({
+                        "moyen": "wave",
+                        "prestataire": p.nom, "devise": devise})
                 continue
             for moyen in sorted(_moyens_configures(p)):
                 if _normaliser_moyen(moyen) in demandes:
@@ -113,8 +121,26 @@ class GestionnairePaiements:
 
     def creer_transaction(self, commande, montant, devise, pays, moyen,
                           cle_idempotence):
+        if not isinstance(cle_idempotence, str) or not cle_idempotence.strip():
+            raise ValueError("Cle d'idempotence obligatoire")
         if cle_idempotence in self._par_idempotence:
-            return self._par_idempotence[cle_idempotence], False
+            existante = self._par_idempotence[cle_idempotence]
+            try:
+                meme_montant = Decimal(str(existante.montant)) == Decimal(str(montant))
+            except (InvalidOperation, TypeError, ValueError):
+                meme_montant = False
+            meme_requete = (
+                str(existante.commande) == str(commande)
+                and meme_montant
+                and str(existante.devise).upper() == str(devise).upper()
+                and str(existante.pays).upper() == str(pays).upper()
+                and _normaliser_moyen(existante.moyen) == _normaliser_moyen(moyen)
+            )
+            if not meme_requete:
+                raise ValueError(
+                    "Cle d'idempotence deja associee a une autre demande de paiement"
+                )
+            return existante, False
         prestataires = self.registre.pour_pays(pays, devise)
         moyen_demande = _normaliser_moyen(moyen)
         compatibles = [
@@ -142,6 +168,13 @@ class GestionnairePaiements:
         self._transactions.append(tx)
         self._par_idempotence[cle_idempotence] = tx
         return tx, True
+
+    def obtenir_transaction(self, transaction_id):
+        """Retourne une transaction suivie sans modifier son statut."""
+        return next(
+            (tx for tx in self._transactions if tx.id == transaction_id),
+            None,
+        )
 
     def confirmer_redirection(self, transaction_id):
         """Une redirection navigateur ne prouve RIEN. Toujours refuse."""

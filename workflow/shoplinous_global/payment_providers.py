@@ -89,7 +89,7 @@ class GeniusPay(AdaptateurPaiement):
     """Checkout heberge GeniusPay. Actif uniquement avec API + secret webhook."""
     nom = "geniuspay"
     methode = "geniuspay_checkout"
-    moyens_supportes = ("geniuspay_checkout",)
+    moyens_supportes = ("geniuspay_checkout", "wave", "wave_direct")
     # La devise reste un filtre strict : ne jamais proposer une devise que
     # l'endpoint checkout standard ne documente pas.
     pays_supportes = (
@@ -113,11 +113,22 @@ class GeniusPay(AdaptateurPaiement):
         if not self.connected:
             raise RuntimeError(
                 "GeniusPay inactif : cles API et secret webhook requis")
+        description = "Commande SHOPLINOUS " + str(transaction.commande)
+        if str(transaction.moyen).strip().lower() in ("wave", "wave_direct"):
+            if transaction.pays != "CI" or transaction.devise != "XOF":
+                raise RuntimeError("Wave Direct SHOPLINOUS est reserve a CI/XOF")
+            return self.client.creer_checkout_wave(
+                montant=transaction.montant,
+                commande=transaction.commande,
+                devise=transaction.devise,
+                description=description,
+                client={"country": transaction.pays},
+            )
         return self.client.creer_checkout(
             montant=transaction.montant,
             commande=transaction.commande,
             devise=transaction.devise,
-            description="Commande SHOPLINOUS " + str(transaction.commande),
+            description=description,
             client={"country": transaction.pays},
         )
 

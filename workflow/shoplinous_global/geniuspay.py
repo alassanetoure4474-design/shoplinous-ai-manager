@@ -204,8 +204,13 @@ class GeniusPayClient:
         client: dict | None = None,
         success_url: str | None = None,
         error_url: str | None = None,
+        methode_paiement: str | None = None,
     ) -> dict:
-        """Cree un checkout heberge, mais seulement avec webhook secret configure."""
+        """Cree un checkout GeniusPay, eventuellement force sur Wave Direct.
+
+        Le routage Wave est strictement limite a CI/XOF et n'est accepte
+        que si la reponse API confirme explicitement la passerelle Wave.
+        """
         if not self.payment_ready:
             raise GeniusPayConfigurationError(
                 "Paiements bloques : cles API et secret webhook sont requis"
@@ -227,6 +232,12 @@ class GeniusPayClient:
                 "Devise non autorisee par le checkout standard GeniusPay : "
                 + ", ".join(sorted(DEVISES_API))
             )
+        methode = str(methode_paiement or "").strip().lower() or None
+        if methode not in (None, "wave"):
+            raise ValueError("Methode de paiement directe non prise en charge")
+        pays_client = str((client or {}).get("country", "")).strip().upper()
+        if methode == "wave" and (code_devise != "XOF" or pays_client != "CI"):
+            raise ValueError("Wave Direct GeniusPay est reserve a CI/XOF")
         if commande is None or not str(commande).strip():
             raise ValueError("Reference de commande obligatoire")
         if success_url and not _url_https_valide(success_url):
@@ -248,6 +259,11 @@ class GeniusPayClient:
         }
         if customer:
             payload["customer"] = customer
+        if methode:
+            # La selection explicite evite de renvoyer le client vers le
+            # checkout multi-canaux lorsqu'il a choisi Wave Direct.
+            payload["payment_method"] = methode
+            payload["gateway"] = methode
         if success_url:
             payload["success_url"] = success_url
         if error_url:
@@ -263,13 +279,46 @@ class GeniusPayClient:
         if not _url_https_valide(checkout_url):
             raise GeniusPayError("URL de checkout GeniusPay absente ou invalide")
         host = urlparse(checkout_url).hostname
-        if host not in ("geniuspay.ci", "www.geniuspay.ci"):
+        domaines_autorises = (
+            ("wave.com", "www.wave.com")
+            if methode == "wave"
+            else ("geniuspay.ci", "www.geniuspay.ci")
+        )
+        if host not in domaines_autorises:
             raise GeniusPayError("Domaine de checkout inattendu : redirection refusee")
         if str(data.get("status", "")).lower() not in ("pending", "processing"):
             raise GeniusPayError("Statut initial inattendu pour le checkout")
         response_env = str(data.get("environment", self.environment)).lower()
         if response_env != self.environment:
             raise GeniusPayError("L'environnement du checkout ne correspond pas")
+
+        if methode == "wave":
+            routes = {
+                str(data.get(field, "")).strip().lower()
+                for field in ("gateway", "payment_method", "payment_provider", "provider")
+                if data.get(field) is not None
+            }
+            if "wave" not in routes or routes - {"wave"}:
+                raise GeniusPayError(
+                    "GeniusPay n'a pas confirme le routage Wave Direct"
+                )
+            try:
+                montant_retourne = Decimal(str(data.get("amount", amount)))
+            except (InvalidOperation, TypeError, ValueError):
+                raise GeniusPaySecurityError(
+                    "Montant du checkout Wave invalide"
+                ) from None
+            if not montant_retourne.is_finite() or montant_retourne != amount:
+                raise GeniusPaySecurityError("Montant du checkout Wave incoherent")
+            if str(data.get("currency", code_devise)).upper() != code_devise:
+                raise GeniusPaySecurityError("Devise du checkout Wave incoherente")
+            metadata = data.get("metadata")
+            if (not isinstance(metadata, dict)
+                    or str(metadata.get("order_id", "")) != str(commande)):
+                raise GeniusPaySecurityError(
+                    "Reference de commande du checkout Wave incoherente"
+                )
+
         return {
             "reference": reference,
             "checkout_url": checkout_url,
@@ -279,6 +328,33 @@ class GeniusPayClient:
             "environnement": response_env,
             "metadata": data.get("metadata") or {"order_id": str(commande)},
         }
+
+    def creer_checkout_wave(
+        self,
+        montant,
+        commande,
+        devise: str = "XOF",
+        description: str | None = None,
+        client: dict | None = None,
+        success_url: str | None = None,
+        error_url: str | None = None,
+    ) -> dict:
+        """Cree un paiement Wave Direct pour une commande ivoirienne."""
+        infos_client = dict(client or {})
+        pays_fourni = str(infos_client.get("country", "CI")).strip().upper()
+        if pays_fourni != "CI":
+            raise ValueError("Wave Direct GeniusPay est reserve a CI/XOF")
+        infos_client["country"] = "CI"
+        return self.creer_checkout(
+            montant=montant,
+            commande=commande,
+            devise=devise,
+            description=description,
+            client=infos_client,
+            success_url=success_url,
+            error_url=error_url,
+            methode_paiement="wave",
+        )
 
     def obtenir_paiement(self, reference: str) -> dict:
         """GET /payments/{reference} : verification serveur du statut."""

@@ -141,6 +141,94 @@ def test_checkout_heberge_sandbox_et_reference_commande():
     assert result["checkout_url"].endswith("MTX-ABC123")
 
 
+def test_checkout_wave_direct_force_la_methode_et_verifie_la_reponse():
+    def handler(request):
+        assert request.method == "POST"
+        payload = json.loads(request.content)
+        assert payload["payment_method"] == "wave"
+        assert payload["gateway"] == "wave"
+        assert payload["currency"] == "XOF"
+        assert payload["customer"]["country"] == "CI"
+        assert payload["metadata"]["order_id"] == "CMD-WAVE-1"
+        return httpx.Response(201, json={
+            "success": True,
+            "data": {
+                "reference": "MTX-WAVE-1",
+                "status": "pending",
+                "payment_url": "https://wave.com/pay/MTX-WAVE-1",
+                "environment": "sandbox",
+                "gateway": "wave",
+                "amount": 2500,
+                "currency": "XOF",
+                "metadata": {"order_id": "CMD-WAVE-1"},
+            },
+        })
+
+    result = client(httpx.MockTransport(handler)).creer_checkout_wave(
+        2500, "CMD-WAVE-1"
+    )
+    assert result["reference"] == "MTX-WAVE-1"
+    assert result["montant"] == 2500
+    assert result["devise"] == "XOF"
+    assert result["environnement"] == "sandbox"
+
+
+def test_checkout_wave_direct_refuse_url_hors_domaine_wave():
+    def handler(request):
+        payload = json.loads(request.content)
+        return httpx.Response(201, json={
+            "success": True,
+            "data": {
+                "reference": "MTX-WAVE-PHISH",
+                "status": "pending",
+                "payment_url": "https://fake-wave.example/pay",
+                "environment": "sandbox",
+                "gateway": "wave",
+                "amount": 2500,
+                "currency": "XOF",
+                "metadata": {"order_id": "CMD-WAVE-PHISH"},
+            },
+        })
+
+    with pytest.raises(GeniusPayError, match="Domaine"):
+        client(httpx.MockTransport(handler)).creer_checkout_wave(
+            2500, "CMD-WAVE-PHISH"
+        )
+
+
+def test_checkout_wave_direct_refuse_si_geniuspay_ne_confirme_pas_wave():
+    def handler(request):
+        payload = json.loads(request.content)
+        assert payload["payment_method"] == "wave"
+        assert payload["gateway"] == "wave"
+        return httpx.Response(201, json={
+            "success": True,
+            "data": {
+                "reference": "MTX-NOT-WAVE",
+                "status": "pending",
+                "checkout_url": "https://wave.com/pay/MTX-NOT-WAVE",
+                "environment": "sandbox",
+                "gateway": "paystack",
+                "amount": 2500,
+                "currency": "XOF",
+                "metadata": {"order_id": "CMD-WAVE-2"},
+            },
+        })
+
+    with pytest.raises(GeniusPayError, match="routage Wave"):
+        client(httpx.MockTransport(handler)).creer_checkout_wave(
+            2500, "CMD-WAVE-2"
+        )
+
+
+def test_checkout_wave_direct_refuse_pays_ou_devise_incompatible():
+    with pytest.raises(ValueError, match="CI/XOF"):
+        client().creer_checkout(
+            2500, "CMD-WAVE-3", devise="EUR",
+            client={"country": "CI"}, methode_paiement="wave"
+        )
+
+
 def test_checkout_refuse_un_domaine_de_redirection_inattendu():
     def handler(request):
         return httpx.Response(201, json={
