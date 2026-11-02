@@ -10,9 +10,6 @@ exige une autorisation distincte (action = AUTORISATION_REQUISE).
 
 
 def recommander_fournisseur(options, marge_minimale=0):
-    """options : liste de dicts {fournisseur, cout_total, disponible,
-    delai_reel, fiabilite, destination_ok, marge}. Une option sans
-    donnee verifiee est EXCLUE, jamais completee."""
     eligibles = []
     for o in options or []:
         requis = ("fournisseur", "cout_total", "disponible",
@@ -44,7 +41,6 @@ def recommander_fournisseur(options, marge_minimale=0):
 
 def recommander_transport(devis, destination, quantite,
                           delai_max_jours):
-    """Delegue au Shipping Manager (donnees reelles uniquement)."""
     from shoplinous_global import shipping_manager
     meilleur = shipping_manager.meilleur_devis(
         devis, destination, quantite, delai_max_jours)
@@ -60,15 +56,19 @@ def recommander_transport(devis, destination, quantite,
 
 def justifier(recommandation):
     """Justification textuelle IA (facultative, jamais bloquante).
-    Reutilise ai_manager/FreeLLMAPI avec les cinq modeles et la
-    bascule existantes ; sans IA le resume deterministe suffit."""
+    Reutilise ai_manager/FreeLLMAPI (cinq modeles, bascule) via
+    l enveloppe SYNCHRONE appeler_ia_sync : appeler_ia est
+    asynchrone et ne doit jamais fuiter une coroutine. Sans IA le
+    resume deterministe suffit."""
     try:
         import ai_manager
         texte = str(recommandation)[:400]
-        resume = ai_manager.appeler_ia(
+        resume = ai_manager.appeler_ia_sync(
             "resume en une phrase, francais, sans prix : " + texte)
-        if resume:
-            return resume
+        if isinstance(resume, dict) and resume.get("contenu"):
+            return str(resume["contenu"])[:500]
+        if isinstance(resume, str) and resume:
+            return resume[:500]
     except Exception:
         pass
     return "recommandation basee sur donnees verifiees uniquement"

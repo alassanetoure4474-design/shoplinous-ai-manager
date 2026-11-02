@@ -6,9 +6,9 @@ name: Tests pytest workflow
 
 on:
   push:
-    branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity]
+    branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity, global-v6-platform]
   pull_request:
-    branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity]
+    branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity, global-v6-platform]
 
 jobs:
   pytest:
@@ -37,7 +37,6 @@ jobs:
       - name: Diagnostic imports modules v6
         run: |
           cat > diag.py <<'EOF'
-import traceback
 mods = ["shoplinous_global", "shoplinous_global.market_manager",
         "shoplinous_global.country_manager",
         "shoplinous_global.currency_manager",
@@ -66,9 +65,10 @@ for m in mods:
         print("DIAG KO " + m + " :: " + repr(e)[:300])
 EOF
           python diag.py 2>&1 | while IFS= read -r line; do
-            echo "::error::${line}"
+            case "$line" in
+              "DIAG KO"*) echo "::error::${line}" ;;
+            esac
           done
-
       - name: Executer la suite pytest COMPLETE (decouverte automatique)
         run: |
           set +e
@@ -89,6 +89,7 @@ EOF
 
   build-docker:
     runs-on: ubuntu-latest
+    needs: pytest
     steps:
       - name: Recuperer le code
         uses: actions/checkout@v5

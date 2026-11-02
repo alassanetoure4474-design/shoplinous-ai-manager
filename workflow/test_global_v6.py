@@ -158,10 +158,13 @@ class TestNotification:
         r = g.envoyer("email", "a@b.cd", "bonjour")
         assert r["statut"] == "canal_non_connecte"
 
-    def test_envoi_journal_redige_les_secrets(self):
+    def test_envoi_journal_redige_les_secrets_env(self, monkeypatch):
+        monkeypatch.setenv("FREE_LLM_API_KEY", "SECRET-XYZ")
         g = nt.GestionnaireNotifications()
-        r = g.envoyer("journal", "ops", "cle=SECRET-XYZ")
+        r = g.envoyer("journal", "ops",
+                      "configuration cle=SECRET-XYZ verifiee")
         assert "SECRET-XYZ" not in r["contenu"]
+        assert "[REDACTE]" in r["contenu"]
 
 
 class TestSecurityAudit:
@@ -212,4 +215,4 @@ class TestMonitoring:
         c = m.connections_reelles()
         assert c["fournisseurs"]["cj"]["connecte"] is True
         assert all(v["connecte"] is False
-                   for v in c["paiement"].values())
+                  for v in c["paiement"].values())
