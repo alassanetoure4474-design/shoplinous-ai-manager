@@ -54,3 +54,15 @@ jobs:
           tail -n 25 pytest_output.txt | while IFS= read -r line; do
             echo "::error::${line}"
           done
+
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v5
+
+      - name: Construire l'image Docker
+        run: docker build -f workflow/Dockerfile -t shoplinous-worker:test .
+
+      - name: Verifier les imports du worker dans le conteneur
+        run: docker run --rm --entrypoint python shoplinous-worker:test -c "import mistralai.workflows; import daily; print('WORKER_IMPORTS_OK')"
