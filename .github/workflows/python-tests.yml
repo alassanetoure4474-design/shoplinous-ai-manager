@@ -34,41 +34,6 @@ jobs:
       - name: Installer les dependances tests (requirements-dev.txt)
         run: pip install -r requirements-dev.txt
 
-      - name: Diagnostic imports modules v6
-        run: |
-          cat > diag.py <<'EOF'
-mods = ["shoplinous_global", "shoplinous_global.market_manager",
-        "shoplinous_global.country_manager",
-        "shoplinous_global.currency_manager",
-        "shoplinous_global.exchange_rate_manager",
-        "shoplinous_global.pricing_manager",
-        "shoplinous_global.payment_manager",
-        "shoplinous_global.payment_providers",
-        "shoplinous_global.supplier_manager",
-        "shoplinous_global.supplier_adapters",
-        "shoplinous_global.product_catalog",
-        "shoplinous_global.inventory",
-        "shoplinous_global.shipping_manager",
-        "shoplinous_global.order_manager",
-        "shoplinous_global.tracking_manager",
-        "shoplinous_global.ai_decision_engine",
-        "shoplinous_global.notification_manager",
-        "shoplinous_global.security_audit",
-        "shoplinous_global.monitoring",
-        "test_global_core", "test_global_payment_suppliers",
-        "test_global_v6"]
-for m in mods:
-    try:
-        __import__(m)
-        print("DIAG OK " + m)
-    except Exception as e:
-        print("DIAG KO " + m + " :: " + repr(e)[:300])
-EOF
-          python diag.py 2>&1 | while IFS= read -r line; do
-            case "$line" in
-              "DIAG KO"*) echo "::error::${line}" ;;
-            esac
-          done
       - name: Executer la suite pytest COMPLETE (decouverte automatique)
         run: |
           set +e
