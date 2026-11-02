@@ -918,16 +918,31 @@ class TestFwCompatV52:
         assert norm["id"] == "crwmdzh"
 
     def test_normalize_copie_aucune_donnee_personnelle(self):
-        """SECURITE : la sortie normalisee ne doit contenir NI nom, NI
-        email, NI telephone, NI adresse, NI IP - meme en json brut."""
+        """SECURITE : la sortie normalisee ne doit contenir QUE des champs
+        metier (liste blanche EXACTE, verifiee recursivement sur toutes
+        les cles) et aucune valeur personnelle des fixtures."""
+        AUTORISES = {"id", "country", "shipping_charged", "items", "source",
+                     "vid", "sku", "product_id", "quantity", "prix_ligne_eur"}
         for fixture in (FW_PANIER_REEL_FR, FW_PANIER_REEL_CI):
             norm = daily.fw_normalize_order(fixture)
+            cles = set()
+
+            def collecte(obj):
+                if isinstance(obj, dict):
+                    cles.update(obj.keys())
+                    for v in obj.values():
+                        collecte(v)
+                elif isinstance(obj, list):
+                    for v in obj:
+                        collecte(v)
+            collecte(norm)
+            hors_liste = cles - AUTORISES
+            assert not hors_liste, "cles hors liste blanche : " + repr(hors_liste)
             blob = json.dumps(norm).lower()
-            for champ in ("forename", "surname", "email", "telephone",
-                          "address1", "postcode", "ip", "session", "city"):
-                assert champ not in blob, "donnee personnelle copiee : " + champ
             assert "anonyme" not in blob
             assert "0000000000" not in blob
+            assert "adresse" not in blob
+            assert "ville" not in blob
 
     def test_normalize_mauvaise_entree(self):
         norm = daily.fw_normalize_order("n'importe quoi")
