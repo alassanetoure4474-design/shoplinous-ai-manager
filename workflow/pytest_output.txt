@@ -1,0 +1,422 @@
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pytest_asyncio/plugin.py:300: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.2.0, pluggy-1.7.0 -- /opt/hostedtoolcache/Python/3.12.15/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/shoplinous-ai-manager/shoplinous-ai-manager/workflow
+plugins: anyio-4.16.0, asyncio-1.4.1.post1
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 267 items
+
+test_daily.py::TestCnStockOf::test_structure_reelle_storage_num_prioritaire PASSED [  0%]
+test_daily.py::TestCnStockOf::test_fallback_total_inventory PASSED       [  0%]
+test_daily.py::TestCnStockOf::test_fallback_stock_inventory PASSED       [  1%]
+test_daily.py::TestCnStockOf::test_pays_non_cn_ignore PASSED             [  1%]
+test_daily.py::TestCnStockOf::test_valeurs_invalides_ignorees PASSED     [  1%]
+test_daily.py::TestCnStockOf::test_regle_9_stock_affiche PASSED          [  2%]
+test_daily.py::TestValidateQuantity::test_quantites_1_a_5_acceptees[1] PASSED [  2%]
+test_daily.py::TestValidateQuantity::test_quantites_1_a_5_acceptees[2] PASSED [  2%]
+test_daily.py::TestValidateQuantity::test_quantites_1_a_5_acceptees[3] PASSED [  3%]
+test_daily.py::TestValidateQuantity::test_quantites_1_a_5_acceptees[4] PASSED [  3%]
+test_daily.py::TestValidateQuantity::test_quantites_1_a_5_acceptees[5] PASSED [  4%]
+test_daily.py::TestValidateQuantity::test_quantites_hors_plafond_refusees[0] PASSED [  4%]
+test_daily.py::TestValidateQuantity::test_quantites_hors_plafond_refusees[-1] PASSED [  4%]
+test_daily.py::TestValidateQuantity::test_quantites_hors_plafond_refusees[6] PASSED [  5%]
+test_daily.py::TestValidateQuantity::test_quantites_hors_plafond_refusees[10] PASSED [  5%]
+test_daily.py::TestValidateQuantity::test_quantites_hors_plafond_refusees[100] PASSED [  5%]
+test_daily.py::TestValidateQuantity::test_types_invalides_refuses[True] PASSED [  6%]
+test_daily.py::TestValidateQuantity::test_types_invalides_refuses[False] PASSED [  6%]
+test_daily.py::TestValidateQuantity::test_types_invalides_refuses[3] PASSED [  7%]
+test_daily.py::TestValidateQuantity::test_types_invalides_refuses[2.5] PASSED [  7%]
+test_daily.py::TestValidateQuantity::test_types_invalides_refuses[None] PASSED [  7%]
+test_daily.py::TestFreightCoverageAlert::test_couvert_retourne_none PASSED [  8%]
+test_daily.py::TestFreightCoverageAlert::test_sous_tarif_alerte PASSED   [  8%]
+test_daily.py::TestFreightCoverageAlert::test_dans_tolerance_retourne_none PASSED [  8%]
+test_daily.py::TestFreightCoverageAlert::test_tarif_inconnu_alerte_manuelle PASSED [  9%]
+test_daily.py::TestFreightCoverageAlert::test_fret_inconnu_alerte_manuelle PASSED [  9%]
+test_daily.py::TestCjFreightQuantity::test_payload_contient_la_quantite PASSED [ 10%]
+test_daily.py::TestCjFreightQuantity::test_quantite_invalide_refusee_avant_appel PASSED [ 10%]
+test_daily.py::TestProcessOrderReadOnly::test_ne_passe_jamais_de_post_cj PASSED [ 10%]
+test_daily.py::TestProcessOrderReadOnly::test_alerte_si_tarif_non_couvert PASSED [ 11%]
+test_daily.py::TestProcessOrderReadOnly::test_pays_hors_marche_signale PASSED [ 11%]
+test_daily.py::TestUsdEurRate::test_taux_nan_refuse PASSED               [ 11%]
+test_daily.py::TestUsdEurRate::test_taux_negatif_refuse PASSED           [ 12%]
+test_daily.py::TestUsdEurRate::test_taux_nul_refuse PASSED               [ 12%]
+test_daily.py::TestUsdEurRate::test_taux_valide PASSED                   [ 13%]
+test_daily.py::TestUsdEurRate::test_timeout_leve PASSED                  [ 13%]
+test_daily.py::TestCheckImage::test_jpeg_valide PASSED                   [ 13%]
+test_daily.py::TestCheckImage::test_mime_menteur_refuse PASSED           [ 14%]
+test_daily.py::TestCheckImage::test_erreur_http_refusee PASSED           [ 14%]
+test_daily.py::TestCheckImage::test_image_trop_petite_refusee PASSED     [ 14%]
+test_daily.py::TestCheckImage::test_webp_valide PASSED                   [ 15%]
+test_daily.py::TestCheckImage::test_mime_non_autorise_refuse PASSED      [ 15%]
+test_daily.py::TestCjCheck::test_code_erreur_leve PASSED                 [ 16%]
+test_daily.py::TestCjCheck::test_data_absent_leve PASSED                 [ 16%]
+test_daily.py::TestCjCheck::test_reponse_valide PASSED                   [ 16%]
+test_daily.py::TestCjCheck::test_reponse_non_dict_leve PASSED            [ 17%]
+test_daily.py::TestLogiquePure::test_prix_arrondi_x90 PASSED             [ 17%]
+test_daily.py::TestLogiquePure::test_marge_stricte_toutes_combinaisons PASSED [ 17%]
+test_daily.py::TestLogiquePure::test_similar_name PASSED                 [ 18%]
+test_daily.py::TestLogiquePure::test_conforming_freight_options PASSED   [ 18%]
+test_daily.py::TestLogiquePure::test_merge_destinations_intersection_stricte PASSED [ 19%]
+test_daily.py::TestLogiquePure::test_parse_cj_images_chaine_json PASSED  [ 19%]
+test_daily.py::TestLogiquePure::test_benefice_net_livraison_est_recette PASSED [ 19%]
+test_daily.py::TestLogiquePure::test_benefice_net_scenario_pessimiste PASSED [ 20%]
+test_daily.py::TestPagination::test_toutes_les_pages_lues PASSED         [ 20%]
+test_daily.py::TestPagination::test_produit_malforme_leve PASSED         [ 20%]
+test_daily.py::TestConfirmationCreation::test_creation_sans_id_signalee PASSED [ 21%]
+test_daily.py::TestConfirmationCreation::test_verification_post_creation PASSED [ 21%]
+test_daily.py::TestSecurite::test_allow_publish_false_par_defaut PASSED  [ 22%]
+test_daily.py::TestSecurite::test_allow_publish_false_applique PASSED    [ 22%]
+test_daily.py::TestSecurite::test_parametres_inconnus_refuses PASSED     [ 22%]
+test_daily.py::TestSecurite::test_malte_exclue PASSED                    [ 23%]
+test_daily.py::TestSecurite::test_29_pays PASSED                         [ 23%]
+test_daily.py::TestSecurite::test_plafond_quantite_5 PASSED              [ 23%]
+test_daily.py::TestSecurite::test_aucune_cle_en_dur PASSED               [ 24%]
+test_daily.py::TestProcessOrderV51::test_une_ligne_valide PASSED         [ 24%]
+test_daily.py::TestProcessOrderV51::test_multi_lignes_tarif_par_ligne PASSED [ 25%]
+test_daily.py::TestProcessOrderV51::test_multi_lignes_repartition_totale PASSED [ 25%]
+test_daily.py::TestProcessOrderV51::test_tarif_insuffisant_alerte PASSED [ 25%]
+test_daily.py::TestProcessOrderV51::test_tarif_totalement_inconnu PASSED [ 26%]
+test_daily.py::TestProcessOrderV51::test_quantite_invalide_aucun_appel_cj PASSED [ 26%]
+test_daily.py::TestProcessOrderV51::test_quantite_superieure_a_5_explicite PASSED [ 26%]
+test_daily.py::TestProcessOrderV51::test_pays_inconnu_aucun_appel PASSED [ 27%]
+test_daily.py::TestProcessOrderV51::test_malte_hors_marche PASSED        [ 27%]
+test_daily.py::TestProcessOrderV51::test_fret_indisponible PASSED        [ 28%]
+test_daily.py::TestProcessOrderV51::test_aucune_option_de_fret PASSED    [ 28%]
+test_daily.py::TestProcessOrderV51::test_taux_indisponible PASSED        [ 28%]
+test_daily.py::TestProcessOrderV51::test_commande_sans_lignes PASSED     [ 29%]
+test_daily.py::TestProcessOrderV51::test_ligne_sans_vid PASSED           [ 29%]
+test_daily.py::TestProcessOrderV51::test_multi_lignes_avec_ligne_ko_comparaison_annulee PASSED [ 29%]
+test_daily.py::TestProcessOrderV51::test_protection_aucune_creation_commande_fournisseur PASSED [ 30%]
+test_daily.py::TestProcessOrderV51::test_workflow_appelle_process_order_pour_chaque_commande PASSED [ 30%]
+test_daily.py::TestFwCompatV52::test_enveloppe_reelle_orders_orders_imbrique PASSED [ 31%]
+test_daily.py::TestFwCompatV52::test_fw_orders_pagination_deux_pages PASSED [ 31%]
+test_daily.py::TestFwCompatV52::test_fw_orders_uri_orders_pas_order PASSED [ 31%]
+test_daily.py::TestFwCompatV52::test_entete_x_api_key_pas_bearer PASSED  [ 32%]
+test_daily.py::TestFwCompatV52::test_normalize_exemple_reel_fr PASSED    [ 32%]
+test_daily.py::TestFwCompatV52::test_normalize_exemple_reel_ci PASSED    [ 32%]
+test_daily.py::TestFwCompatV52::test_normalize_copie_aucune_donnee_personnelle PASSED [ 33%]
+test_daily.py::TestFwCompatV52::test_normalize_mauvaise_entree PASSED    [ 33%]
+test_daily.py::TestFwCompatV52::test_process_order_sur_commande_normalisee_fr PASSED [ 34%]
+test_daily.py::TestFwCompatV52::test_process_order_sur_commande_normalisee_ci PASSED [ 34%]
+test_daily.py::TestFwCompatV52::test_workflow_normalise_avant_process PASSED [ 34%]
+test_daily.py::TestFwCompatV52::test_protection_aucune_ecriture_boutique PASSED [ 35%]
+test_daily.py::TestVidTableV53::test_fw_variant_records_extrait_uvid_et_sku PASSED [ 35%]
+test_daily.py::TestVidTableV53::test_build_table_correspondances_exactes_reelles PASSED [ 35%]
+test_daily.py::TestVidTableV53::test_build_table_absent_sans_produit_candidat PASSED [ 36%]
+test_daily.py::TestVidTableV53::test_build_table_aucune_approximation_sku PASSED [ 36%]
+test_daily.py::TestVidTableV53::test_build_table_ambigu_deux_candidats PASSED [ 37%]
+test_daily.py::TestVidTableV53::test_build_table_ambigu_meme_pid_deux_vids PASSED [ 37%]
+test_daily.py::TestVidTableV53::test_build_table_aucune_donnee_personnelle PASSED [ 37%]
+test_daily.py::TestVidTableV53::test_seed_amorce_verifiee_reelle PASSED  [ 38%]
+test_daily.py::TestVidTableV53::test_process_order_resout_vid_via_table PASSED [ 38%]
+test_daily.py::TestVidTableV53::test_process_order_vid_table_tarif_couvert PASSED [ 38%]
+test_daily.py::TestVidTableV53::test_process_order_sku_ambigu_reste_sans_vid PASSED [ 39%]
+test_daily.py::TestVidTableV53::test_process_order_sku_absent_reste_sans_vid PASSED [ 39%]
+test_daily.py::TestVidTableV53::test_process_order_sans_table_comportement_v52 PASSED [ 40%]
+test_daily.py::TestVidTableV53::test_protection_vid_table_lecture_seule PASSED [ 40%]
+test_audit_v54.py::TestAuditCatalogue::test_catalogue_reel_12_produits PASSED [ 40%]
+test_audit_v54.py::TestAuditCatalogue::test_catalogue_detecte_sku_manquant PASSED [ 41%]
+test_audit_v54.py::TestAuditCatalogue::test_catalogue_detecte_prix_incoherent PASSED [ 41%]
+test_audit_v54.py::TestAuditCatalogue::test_catalogue_produit_mal_forme PASSED [ 41%]
+test_audit_v54.py::TestAuditCatalogue::test_catalogue_demo_publie_detectable PASSED [ 42%]
+test_audit_v54.py::TestAuditVidMatches::test_couverture_exacte_reelle PASSED [ 42%]
+test_audit_v54.py::TestAuditVidMatches::test_absents_et_ambigus_signales PASSED [ 43%]
+test_audit_v54.py::TestAuditCjVariant::test_variantes_reelles_conformes PASSED [ 43%]
+test_audit_v54.py::TestAuditCjVariant::test_stock_insuffisant_non_conforme PASSED [ 43%]
+test_audit_v54.py::TestAuditCjVariant::test_achat_trop_cher_non_conforme PASSED [ 44%]
+test_audit_v54.py::TestAuditCjVariant::test_sku_non_exact_signalé PASSED [ 44%]
+test_audit_v54.py::TestAuditCjVariant::test_vid_introuvable PASSED       [ 44%]
+test_audit_v54.py::TestAuditFreight::test_fret_mesure_quantites_1_a_5 PASSED [ 45%]
+test_audit_v54.py::TestAuditFreight::test_options_conformes_unite_seule PASSED [ 45%]
+test_audit_v54.py::TestAuditFreight::test_alerte_multi_unites_hors_seuil PASSED [ 46%]
+test_audit_v54.py::TestAuditFreight::test_options_invalides_ignorees PASSED [ 46%]
+test_audit_v54.py::TestAuditFreight::test_quantite_hors_plafond_refusee PASSED [ 46%]
+test_audit_v54.py::TestSimulations::test_six_scenarios_tous_fictifs PASSED [ 47%]
+test_audit_v54.py::TestSimulations::test_sim_valide PASSED               [ 47%]
+test_audit_v54.py::TestSimulations::test_sim_sku_absent PASSED           [ 47%]
+test_audit_v54.py::TestSimulations::test_sim_sku_ambigu PASSED           [ 48%]
+test_audit_v54.py::TestSimulations::test_sim_stock_insuffisant PASSED    [ 48%]
+test_audit_v54.py::TestSimulations::test_sim_livraison_non_couverte PASSED [ 49%]
+test_audit_v54.py::TestSimulations::test_sim_quantite_superieure_a_5 PASSED [ 49%]
+test_audit_v54.py::TestSimulations::test_sim_fret_non_fourni_jamais_invente PASSED [ 49%]
+test_audit_v54.py::TestBuildAuditReport::test_rapport_reel_verdict_non_pret PASSED [ 50%]
+test_audit_v54.py::TestBuildAuditReport::test_rapport_reel_produit_compatible PASSED [ 50%]
+test_audit_v54.py::TestBuildAuditReport::test_rapport_reel_simulations_toutes_conformes PASSED [ 50%]
+test_audit_v54.py::TestBuildAuditReport::test_rapport_reel_actions_manuelles PASSED [ 51%]
+test_audit_v54.py::TestBuildAuditReport::test_rapport_verdict_pret_sans_bloquant PASSED [ 51%]
+test_audit_v54.py::TestBuildAuditReport::test_logique_defectueuse_bloquante PASSED [ 52%]
+test_audit_v54.py::TestBuildAuditReport::test_sim_fret_manquant_action_manuelle_non_bloquante PASSED [ 52%]
+test_audit_v54.py::TestBuildAuditReport::test_demo_publie_bloquant PASSED [ 52%]
+test_audit_v54.py::TestSecuriteV54::test_aucune_donnee_personnelle_dans_l_audit PASSED [ 53%]
+test_audit_v54.py::TestSecuriteV54::test_simulations_jamais_presentees_comme_reelles PASSED [ 53%]
+test_audit_v54.py::TestSecuriteV54::test_audit_ne_modifie_rien PASSED    [ 53%]
+test_audit_v54.py::TestSecuriteV54::test_allow_publish_false_inchange PASSED [ 54%]
+test_audit_v54.py::TestSecuriteV54::test_regles_partagees_coherentes PASSED [ 54%]
+test_audit_v54.py::TestSecuriteV54::test_donnees_reelles_completes PASSED [ 55%]
+test_pricing_v55.py::TestQuantites::test_q1_a_5_ok PASSED                [ 55%]
+test_pricing_v55.py::TestQuantites::test_q6_depasse_plafond PASSED       [ 55%]
+test_pricing_v55.py::TestQuantites::test_q10_depasse_plafond PASSED      [ 56%]
+test_pricing_v55.py::TestQuantites::test_q0_invalide PASSED              [ 56%]
+test_pricing_v55.py::TestQuantites::test_q_negative_invalide PASSED      [ 56%]
+test_pricing_v55.py::TestQuantites::test_q_float_invalide PASSED         [ 57%]
+test_pricing_v55.py::TestQuantites::test_q_bool_invalide PASSED          [ 57%]
+test_pricing_v55.py::TestDestinations::test_7_destinations_mesurees PASSED [ 58%]
+test_pricing_v55.py::TestDestinations::test_regions PASSED               [ 58%]
+test_pricing_v55.py::TestDestinations::test_destination_inconnue PASSED  [ 58%]
+test_pricing_v55.py::TestDestinations::test_destination_minuscule PASSED [ 59%]
+test_pricing_v55.py::TestDestinations::test_quantite_manquante_table_partielle PASSED [ 59%]
+test_pricing_v55.py::TestDestinations::test_cn_tarif_plat PASSED         [ 59%]
+test_pricing_v55.py::TestCalculCommercial::test_fr_q1_avec_frais_paiement PASSED [ 60%]
+test_pricing_v55.py::TestCalculCommercial::test_fr_q1_sans_frais_paiement PASSED [ 60%]
+test_pricing_v55.py::TestCalculCommercial::test_gb_q1_sans_frais PASSED  [ 61%]
+test_pricing_v55.py::TestCalculCommercial::test_marge_respectee_toutes_destinations PASSED [ 61%]
+test_pricing_v55.py::TestCalculCommercial::test_fret_croissant_par_quantite PASSED [ 61%]
+test_pricing_v55.py::TestCalculCommercial::test_prix_integre_le_fret PASSED [ 62%]
+test_pricing_v55.py::TestCalculCommercial::test_livraison_gratuite_integree PASSED [ 62%]
+test_pricing_v55.py::TestCalculCommercial::test_exchange_rate_constant PASSED [ 62%]
+test_pricing_v55.py::TestCalculCommercial::test_table_rapport_complete PASSED [ 63%]
+test_pricing_v55.py::TestErreurs::test_cout_invalide PASSED              [ 63%]
+test_pricing_v55.py::TestErreurs::test_marge_nulle_ou_negative PASSED    [ 64%]
+test_pricing_v55.py::TestErreurs::test_marge_plus_frais_trop_eleves PASSED [ 64%]
+test_pricing_v55.py::TestErreurs::test_taux_frais_negatif PASSED         [ 64%]
+test_pricing_v55.py::TestErreurs::test_fixe_frais_negatif PASSED         [ 65%]
+test_pricing_v55.py::TestErreurs::test_exchange_rate_invalide PASSED     [ 65%]
+test_pricing_v55.py::TestErreurs::test_pays_non_chaine PASSED            [ 65%]
+test_pricing_v55.py::TestSecuriteV55::test_allow_publish_false PASSED    [ 66%]
+test_pricing_v55.py::TestSecuriteV55::test_module_sans_reseau PASSED     [ 66%]
+test_pricing_v55.py::TestSecuriteV55::test_aucun_prix_hors_donnees_mesurees PASSED [ 67%]
+test_pricing_v55.py::TestSecuriteV55::test_frets_tous_dates_mesurees PASSED [ 67%]
+test_freight_collector_v55.py::TestDonneesReelles::test_255_tarifs_51_pays PASSED [ 67%]
+test_freight_collector_v55.py::TestDonneesReelles::test_30_pays_europe_regle_actuelle PASSED [ 68%]
+test_freight_collector_v55.py::TestDonneesReelles::test_chaque_pays_5_quantites PASSED [ 68%]
+test_freight_collector_v55.py::TestDonneesReelles::test_21_destinations_mondiales PASSED [ 68%]
+test_freight_collector_v55.py::TestDonneesReelles::test_champs_complets_et_dates PASSED [ 69%]
+test_freight_collector_v55.py::TestDonneesReelles::test_produit_et_variante_stocks PASSED [ 69%]
+test_freight_collector_v55.py::TestDonneesReelles::test_regles_daily_toutes_couvertes PASSED [ 70%]
+test_freight_collector_v55.py::TestRegle3::test_29_pays_conformes_malte_exclu PASSED [ 70%]
+test_freight_collector_v55.py::TestRegle3::test_malte_option_15j_trop_chere PASSED [ 70%]
+test_freight_collector_v55.py::TestRegle3::test_france_conforme PASSED   [ 71%]
+test_freight_collector_v55.py::TestCouverture::test_rapport_complet PASSED [ 71%]
+test_freight_collector_v55.py::TestExpiration::test_frais_avant_ttl PASSED [ 71%]
+test_freight_collector_v55.py::TestExpiration::test_expire_apres_ttl_7_jours PASSED [ 72%]
+test_freight_collector_v55.py::TestExpiration::test_entree_sans_date_expiree PASSED [ 72%]
+test_freight_collector_v55.py::TestCollecte::test_cache_aucun_appel_si_frais PASSED [ 73%]
+test_freight_collector_v55.py::TestCollecte::test_actualisation_si_expire PASSED [ 73%]
+test_freight_collector_v55.py::TestCollecte::test_pays_absent_collecte PASSED [ 73%]
+test_freight_collector_v55.py::TestCollecte::test_echec_definitif_jamais_estime PASSED [ 74%]
+test_freight_collector_v55.py::TestCollecte::test_aucune_option_est_en_echec PASSED [ 74%]
+test_freight_collector_v55.py::TestCollecte::test_reprise_sur_erreur_deux_fois_puis_succes PASSED [ 74%]
+test_freight_collector_v55.py::TestCollecte::test_limitation_debit_sleep_avant_chaque_appel PASSED [ 75%]
+test_freight_collector_v55.py::TestChoisirOption::test_minimum_et_minimum_15j PASSED [ 75%]
+test_freight_collector_v55.py::TestChoisirOption::test_aucune_option PASSED [ 76%]
+test_freight_collector_v55.py::TestChoisirOption::test_prix_invalide_ignore PASSED [ 76%]
+test_freight_collector_v55.py::TestMoteurV551::test_cout_multiplie_par_quantite_fr_q3 PASSED [ 76%]
+test_freight_collector_v55.py::TestMoteurV551::test_fr_q5 PASSED         [ 77%]
+test_freight_collector_v55.py::TestMoteurV551::test_fr_q3_avec_frais_paiement PASSED [ 77%]
+test_freight_collector_v55.py::TestMoteurV551::test_pays_non_dans_real_freight_via_table PASSED [ 77%]
+test_freight_collector_v55.py::TestMoteurV551::test_q1_identique_a_v5_5 PASSED [ 78%]
+test_freight_collector_v55.py::TestMoteurV551::test_erreurs PASSED       [ 78%]
+test_freight_collector_v55.py::TestMoteurV551::test_marge_respectee_51_pays PASSED [ 79%]
+test_freight_collector_v55.py::TestSecurite::test_allow_publish_false PASSED [ 79%]
+test_freight_collector_v55.py::TestSecurite::test_module_sans_reseau PASSED [ 79%]
+test_freight_collector_v55.py::TestSecurite::test_jamais_d_estimation_dans_les_donnees PASSED [ 80%]
+test_freight_collector_v56.py::TestDonneesV56::test_deux_variantes_identifiees PASSED [ 80%]
+test_freight_collector_v56.py::TestDonneesV56::test_255_tarifs_par_variante PASSED [ 80%]
+test_freight_collector_v56.py::TestDonneesV56::test_aucun_doublon_par_variante PASSED [ 81%]
+test_freight_collector_v56.py::TestDonneesV56::test_chaque_tarif_identifie_completement PASSED [ 81%]
+test_freight_collector_v56.py::TestDonneesV56::test_aucun_tarif_expire_aujourdhui PASSED [ 82%]
+test_freight_collector_v56.py::TestDonneesV56::test_les_deux_variantes_ont_les_memes_51_pays PASSED [ 82%]
+test_freight_collector_v56.py::TestFret15Jours::test_table_utilise_usd_15j_pas_usd PASSED [ 82%]
+test_freight_collector_v56.py::TestFret15Jours::test_aucune_substitution_silencieuse PASSED [ 83%]
+test_freight_collector_v56.py::TestFret15Jours::test_delai_du_tarif_choisi_toujours_conforme PASSED [ 83%]
+test_freight_collector_v56.py::TestFret15Jours::test_aucun_transporteur_15j_signalé_clairement PASSED [ 83%]
+test_freight_collector_v56.py::TestFret15Jours::test_delai_15j_incoherent_rejete_defensivement PASSED [ 84%]
+test_freight_collector_v56.py::TestIsolationVariantes::test_moteur_refuse_la_table_de_l_autre_variante PASSED [ 84%]
+test_freight_collector_v56.py::TestIsolationVariantes::test_variante_inconnue_aucun_prix PASSED [ 85%]
+test_freight_collector_v56.py::TestIsolationVariantes::test_tarifs_differents_par_variante_ne_se_melangent_pas PASSED [ 85%]
+test_freight_collector_v56.py::TestIsolationVariantes::test_statut_tarif_par_variante PASSED [ 85%]
+test_freight_collector_v56.py::TestExpiration::test_tarif_expire_jamais_actuel PASSED [ 86%]
+test_freight_collector_v56.py::TestExpiration::test_entree_sans_date_est_expiree PASSED [ 86%]
+test_freight_collector_v56.py::TestExpiration::test_ttl_tout_juste_valide PASSED [ 86%]
+test_freight_collector_v56.py::TestCalculs::test_cout_total_egale_unitaire_fois_quantite PASSED [ 87%]
+test_freight_collector_v56.py::TestCalculs::test_fret_conforme_15j_utilise PASSED [ 87%]
+test_freight_collector_v56.py::TestCalculs::test_formules_prix_marge_benefice PASSED [ 88%]
+test_freight_collector_v56.py::TestCalculs::test_quantites_invalides_et_plafond PASSED [ 88%]
+test_freight_collector_v56.py::TestCalculs::test_destination_inconnue PASSED [ 88%]
+test_freight_collector_v56.py::TestCalculs::test_cout_invalide_et_parametres_invalides PASSED [ 89%]
+test_freight_collector_v56.py::TestCollecteConserveEnEchec::test_echec_collecte_conserve_les_donnees_precedentes PASSED [ 89%]
+test_freight_collector_v56.py::TestCollecteConserveEnEchec::test_succes_collecte_remplace_pour_la_variante_demandee PASSED [ 89%]
+test_freight_collector_v56.py::TestCollecteConserveEnEchec::test_collecte_ne_touche_jamais_les_autres_variantes PASSED [ 90%]
+test_freight_collector_v56.py::TestSecurite::test_allow_publish_false PASSED [ 90%]
+test_freight_collector_v56.py::TestSecurite::test_module_sans_reseau_direct PASSED [ 91%]
+test_freight_collector_v56.py::TestSecurite::test_daily_integration_v56_lecture_seule PASSED [ 91%]
+test_freight_collector_v56.py::TestSecurite::test_schema_v56 PASSED      [ 91%]
+test_freight_collector_v56.py::TestTtlTableFournie::test_table_expiree_refusee_meme_si_fournie PASSED [ 92%]
+test_freight_collector_v56.py::TestTtlTableFournie::test_table_fraiche_acceptee PASSED [ 92%]
+test_freight_collector_v56.py::TestTtlTableFournie::test_table_sans_date_de_collecte_expiree PASSED [ 92%]
+test_freight_collector_v56.py::TestTtlTableFournie::test_table_perimee_n_infecte_pas_les_autres_entrees PASSED [ 93%]
+test_ai_manager.py::TestAppels::test_succes_fournisseur_par_defaut PASSED [ 93%]
+test_ai_manager.py::TestAppels::test_messages_invalides_refuses PASSED   [ 94%]
+test_ai_manager.py::TestAppels::test_cle_absente_aucun_appel PASSED      [ 94%]
+test_ai_manager.py::TestAppels::test_base_absente_aucun_appel PASSED     [ 94%]
+test_ai_manager.py::TestBasculeAutomatique::test_bascule_sur_429 PASSED  [ 95%]
+test_ai_manager.py::TestBasculeAutomatique::test_bascule_sur_5xx PASSED  [ 95%]
+test_ai_manager.py::TestBasculeAutomatique::test_bascule_sur_timeout PASSED [ 95%]
+test_ai_manager.py::TestBasculeAutomatique::test_bascule_sur_reponse_invalide PASSED [ 96%]
+test_ai_manager.py::TestBasculeAutomatique::test_tous_indisponibles PASSED [ 96%]
+test_ai_manager.py::TestBasculeAutomatique::test_ordre_via_env PASSED    [ 97%]
+test_ai_manager.py::TestBasculeAutomatique::test_fournisseur_inconnu_ignore PASSED [ 97%]
+test_ai_manager.py::TestCache::test_cache_evite_le_second_appel PASSED   [ 97%]
+test_ai_manager.py::TestCache::test_ignorer_cache_force_l_appel PASSED   [ 98%]
+test_ai_manager.py::TestSecurite::test_modele_payant_refuse PASSED       [ 98%]
+test_ai_manager.py::TestSecurite::test_cle_jamais_dans_le_journal FAILED [ 98%]
+test_ai_manager.py::TestSecurite::test_aucune_cle_en_dur PASSED          [ 99%]
+test_ai_manager.py::TestSecurite::test_separation_deterministe PASSED    [ 99%]
+test_ai_manager.py::TestSecurite::test_quotas_restants_lus PASSED        [100%]
+
+=================================== FAILURES ===================================
+_________________ TestSecurite.test_cle_jamais_dans_le_journal _________________
+
+self = <test_ai_manager.TestSecurite object at 0x7c7144771bb0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c7144ae2ed0>
+
+    def test_cle_jamais_dans_le_journal(self, monkeypatch):
+        def handler(request):
+            corps = json.loads(request.content)
+            if corps["model"].startswith("mistral"):
+                return httpx.Response(429,
+                                      json={"error": "quota cle-test-123"})
+            return httpx.Response(200, json=OK)
+        _patch(monkeypatch, handler, cle="cle-super-secrète-789")
+>       run(ai.appeler_ia(MESSAGES))
+
+test_ai_manager.py:209: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+test_ai_manager.py:36: in run
+    return asyncio.get_event_loop_policy().new_event_loop().run_until_complete(coro)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+messages = [{'role': 'user', 'content': 'Resume ce texte.'}]
+fournisseurs = None, modele = None, delai = 30.0, ignorer_cache = False
+
+    async def appeler_ia(messages, fournisseurs=None, modele=None,
+                         delai=None, ignorer_cache=False):
+        """Appel IA multi-fournisseurs avec bascule automatique.
+    
+        messages : liste [{"role": ..., "content": ...}].
+        fournisseurs : ordre a essayer (defaut AI_PROVIDER_ORDER, sinon
+        mistral, gemini, groq).
+        modele : modele IMPOSE ; il doit etre l'un des modeles libres
+        declares (AI_MODEL_*), sinon ValueError (modeles payants INTERDITS).
+        delai : timeout par fournisseur (defaut AI_TIMEOUT_SECONDS, 30 s).
+        ignorer_cache : contourne le cache en lecture.
+    
+        Retourne {"fournisseur", "modele", "contenu", "depuis_cache"}.
+        Leve AiIndisponible si tous les fournisseurs echouent, ValueError
+        si FREE_LLM_API_KEY ou FREE_LLM_API_BASE est absent, si les
+        messages sont invalides ou si un modele non autorise est demande.
+        """
+        if not isinstance(messages, list) or not messages:
+            raise ValueError("messages IA invalides")
+        cle = _cle_api()
+        base = _base_url()
+        if not cle or not base:
+            raise ValueError("FREE_LLM_API_KEY ou FREE_LLM_API_BASE absent : "
+                             "acces IA refuse (aucune valeur par defaut "
+                             "inventee, aucune cle en dur)")
+        modeles = _modeles()
+        if modele is not None and modele not in modeles.values():
+            raise ValueError("modele non autorise : seuls les modeles libres "
+                             "declares (AI_MODEL_*) sont permis ; tout modele "
+                             "payant est INTERDIT")
+        ordre = fournisseurs or _fournisseurs()
+        ordre = [f for f in ordre if f in MODELES_LIBRES_PAR_DEFAUT]
+        if not ordre:
+            raise ValueError("aucun fournisseur IA valide configure")
+        delai = delai or float(os.environ.get("AI_TIMEOUT_SECONDS",
+                                              DELAI_DEFAUT))
+        ttl_cache = int(os.environ.get("AI_CACHE_TTL_SECONDS", CACHE_TTL_DEFAUT))
+    
+        empreinte = None
+        if ttl_cache > 0:
+            modele_ref = modele or ",".join(modeles.get(f, "")
+                                            for f in ordre)
+            empreinte = _cle_cache(messages, modele_ref)
+            if not ignorer_cache:
+                frappe = _cache.get(empreinte)
+                if frappe and frappe["expire"] > time.time():
+                    _compter(frappe["fournisseur"], "cache_hits")
+                    _journaliser("cache", frappe["fournisseur"],
+                                 "reponse servie depuis le cache")
+                    return {**frappe["reponse"], "depuis_cache": True}
+    
+        erreurs = []
+        for fournisseur in ordre:
+            modele_f = modeles.get(fournisseur)
+            if not modele_f or (modele is not None and modele != modele_f):
+                continue
+            try:
+                async with httpx.AsyncClient(timeout=delai) as client:
+                    r = await client.post(
+                        base + "/chat/completions",
+                        headers={"Authorization": "Bearer " + cle,
+                                 "Content-Type": "application/json"},
+                        json={"model": modele_f, "messages": messages})
+                if r.status_code == 429:
+                    _compter(fournisseur, "bascules")
+                    _journaliser("quota_depasse", fournisseur,
+                                 "HTTP 429 : bascule vers le fournisseur "
+                                 "suivant")
+                    erreurs.append((fournisseur, "429"))
+                    continue
+                if r.status_code >= 500:
+                    _compter(fournisseur, "bascules")
+                    _journaliser("indisponible", fournisseur,
+                                 "HTTP " + str(r.status_code) + " : bascule")
+                    erreurs.append((fournisseur, str(r.status_code)))
+                    continue
+                r.raise_for_status()
+                corps = r.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                _compter(fournisseur, "bascules")
+                _journaliser("erreur", fournisseur,
+                             type(exc).__name__ + " : bascule")
+                erreurs.append((fournisseur, type(exc).__name__))
+                continue
+            contenu = _extraire_texte(corps)
+            if contenu is None:
+                _compter(fournisseur, "erreurs")
+                _journaliser("reponse_invalide", fournisseur,
+                             "structure de reponse inattendue : bascule")
+                erreurs.append((fournisseur, "reponse_invalide"))
+                continue
+            _compter(fournisseur, "requetes")
+            usage = corps.get("usage") if isinstance(corps, dict) else None
+            if isinstance(usage, dict) and isinstance(
+                    usage.get("remaining"), (int, float)):
+                _quotas[fournisseur]["restant"] = usage["remaining"]
+            _journaliser("succes", fournisseur, "reponse recue")
+            reponse = {"fournisseur": fournisseur, "modele": modele_f,
+                       "contenu": contenu, "depuis_cache": False}
+            if empreinte and ttl_cache > 0:
+                _cache[empreinte] = {"reponse": dict(reponse),
+                                     "expire": time.time() + ttl_cache,
+                                     "fournisseur": fournisseur}
+            return reponse
+        detail = ("; ".join(f + "=" + e for f, e in erreurs)
+                  if erreurs else "aucun fournisseur joignable")
+>       raise AiIndisponible("aucun fournisseur IA disponible : " + detail)
+E       ai_manager.AiIndisponible: aucun fournisseur IA disponible : mistral=UnicodeEncodeError; gemini=UnicodeEncodeError; groq=UnicodeEncodeError
+
+ai_manager.py:257: AiIndisponible
+=========================== short test summary info ============================
+FAILED test_ai_manager.py::TestSecurite::test_cle_jamais_dans_le_journal - ai_manager.AiIndisponible: aucun fournisseur IA disponible : mistral=UnicodeEncodeError; gemini=UnicodeEncodeError; groq=UnicodeEncodeError
+======================== 1 failed, 266 passed in 44.68s ========================
