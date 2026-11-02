@@ -101,6 +101,7 @@ import mistralai.workflows as workflows
 # calculs du workflow restent fondes sur les frets CJ vivants : aucun
 # double calcul, aucun appel reseau supplementaire, aucune ecriture.
 import freight_collector_v56 as fc56
+import ai_manager as ai
 
 # ---------------------------------------------------------------- regles ----
 MIN_STOCK_CN = 1000
@@ -153,6 +154,60 @@ BANNED_PATTERNS = re.compile(
     r"(?i)\b(battery|electric|electricity|lithium|bluetooth|speaker|camera|drone|"
     r"cosmetic|cream|serum|supplement|food|candy|cbd|vape|tattoo|knife|gun|ammo)\b"
 )
+
+
+@workflows.activity(start_to_close_timeout=timedelta(seconds=60), retry_policy_max_attempts=1)
+async def ai_summarize_daily_report(metrics: dict) -> dict:
+    """Resume IA facultatif du rapport quotidien. Recoit uniquement des compteurs
+    agreges, jamais de donnees client, SKU, commande, prix ou secrets.
+    Ce resultat est informatif : il ne pilote aucune operation commerciale."""
+    messages = [
+        {"role": "system", "content": (
+            "Tu es un assistant de reporting e-commerce. Redige un resume "
+            "tres bref en francais a partir des seuls compteurs fournis. "
+            "N'invente aucune cause ni aucun chiffre. Signale les alertes "
+            "et erreurs, et rappelle que ce resume est informatif. "
+            "Tu ne peux declencher aucune action, publication, commande, "
+            "modification de prix ou de stock."
+        )},
+        {"role": "user", "content": json.dumps(metrics, ensure_ascii=False,
+                                                sort_keys=True)}
+    ]
+    try:
+        result = await ai.appeler_ia(messages)
+        contenu = result.get("contenu") if isinstance(result, dict) else None
+        if not isinstance(contenu, str) or not contenu.strip():
+            return {"statut": "indisponible", "raison": "reponse_vide"}
+        return {"statut": "ok", "fournisseur": result.get("fournisseur"),
+                "resume": contenu.strip()[:1200], "informatif_uniquement": True}
+    except Exception as exc:
+        # Ne jamais propager le texte brut d'une erreur fournisseur dans le rapport.
+        return {"statut": "indisponible", "raison": type(exc).__name__}
+
+
+def metriques_rapport_ia(report: dict) -> dict:
+    """Construit une charge utile strictement agregée, sans texte libre ni identifiants."""
+    commandes = report.get("orders_analyzed") or []
+    fret = report.get("fret_v56") or {}
+    return {
+        "mode": report.get("mode") if report.get("mode") in ("veille", "publication") else "inconnu",
+        "produits_valides": len(report.get("valides_en_veille") or [])
+                            + len(report.get("published") or []),
+        "produits_rejetes": len(report.get("rejected") or []),
+        "alertes": len(report.get("alerts") or []),
+        "erreurs": len(report.get("errors") or []),
+        "commandes_trouvees": int(report.get("orders_found") or 0),
+        "commandes_analysees": len(commandes),
+        "commandes_avec_alertes": sum(
+            1 for item in commandes
+            if isinstance(item, dict) and bool(item.get("alertes"))
+        ),
+        "variantes_fret_controlees": len(fret),
+        "tarifs_fret_expires": sum(
+            int(info.get("nb_expires") or 0)
+            for info in fret.values() if isinstance(info, dict)
+        ),
+    }
 
 
 class EvaluationSuspended(RuntimeError):
@@ -1291,5 +1346,14 @@ class ShoplinousDailyWorkflow:
                      "amorce VID_TABLE_SEED incoherente avec v5.6"})
         except Exception as exc:
             report["errors"].append(f"fret_v56: {exc}")
+
+        # Resume IA facultatif, execute en activite separee. Les operations
+        # commerciales sont deja terminees et ne dependent jamais de ce texte.
+        try:
+            report["ai_summary"] = await ai_summarize_daily_report(
+                metriques_rapport_ia(report))
+        except Exception as exc:
+            report["ai_summary"] = {
+                "statut": "indisponible", "raison": type(exc).__name__}
 
         return report
