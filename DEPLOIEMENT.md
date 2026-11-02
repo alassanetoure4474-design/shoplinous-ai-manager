@@ -102,3 +102,48 @@ docker run --env-file .env shoplinous.
 - Les cles API vivent uniquement dans les secrets/environnement.
 - Les calculs financiers, stocks et commandes restent en Python
   deterministe ; l'IA (ai_manager) ne fait que du textuel.
+
+## 8. Deploiement gere Mistral Workflows (option retenue)
+
+Le worker est publie en DEPLOIEMENT GERE (Managed deployment, public
+preview) : Mistral Cloud clone le depot GitHub, construit l'image a
+partir du Dockerfile et execute le worker. Aucun serveur a gerer, aucune
+cle API Mistral dans le depot (jeton de service-account injecte par la
+plateforme).
+
+Pre-requis (doc officielle docs.mistral.ai / managed deployments) :
+- Compte Mistral avec pay-as-you-go active sur l organisation (le plan
+  gratuit ne peut PAS executer de deploiements geres ; Pro/Team seul ne
+  suffit pas non plus).
+- mistralai-workflows >= 3.10 dans l image ( requis pour lire le jeton
+  de service-account ; pin dans workflow/requirements.txt).
+- Dockerfile : CMD demarre le worker (deja conforme :
+  CMD ["python", "worker.py"]).
+- Chemins de build : Dockerfile imbrique -> indiquer workflow/Dockerfile ;
+  repertoire de build = racine du depot (le Dockerfile copie workflow/).
+- Region d execution : nl-north-1 (Pays-Bas).
+
+Etapes :
+1. Installer la Mistral GitHub App (github.com/apps/mistralai) sur CE
+   depot, puis connecter le credential dans Studio > GitHub App.
+2. Creer les secrets du workspace (Studio > Secrets Manager) :
+   CJ_API_KEY, FREEWEBSTORE_API_KEY, FREE_LLM_API_BASE,
+   FREE_LLM_API_KEY.
+3. Creer le deploiement (console Studio ou API
+   client.workflows.deployments.create_deployment) avec github_url du
+   depot, revision = branche a deployer, chemin Dockerfile
+   workflow/Dockerfile, build directory = racine, et lier les secrets :
+   GITHUB_TOKEN -> non requis ; CJ_API_KEY / FREEWEBSTORE_API_KEY /
+   FREE_LLM_API_BASE / FREE_LLM_API_KEY -> secret:workspace:...
+   Nom de deploiement UNIQUE (deux deploiements du meme nom se volent
+   les executions).
+4. Attendre le statut Active (le worker enregistre
+   ShoplinousDailyWorkflow) ; en cas d echec de build, reproduire avec
+   docker build -f workflow/Dockerfile .
+5. IMPORTANT : un changement de valeur de secret ne redemarre PAS le
+   worker ; redemarrer le deploiement pour prendre la nouvelle valeur.
+6. Premier appel IA reel : d abord valider les modeles via
+   python test_fournisseurs.py (code 0), puis lancer le workflow en
+   mode veille (allow_publish=False).
+
+Aucune fusion vers main ni deploiement sans autorisation explicite.
