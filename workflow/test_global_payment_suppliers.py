@@ -109,9 +109,10 @@ class TestGestionnairePaiements:
         reg = prv.RegistrePrestataires()
         reg.tous()[0].connected = True
         reg.tous()[0].methode = "wave"
-        with pytest.raises(RuntimeError, match="ne prend en charge"):
+        with pytest.raises(RuntimeError) as exc:
             pay.GestionnairePaiements(reg, {}).creer_transaction(
                 "C1", 100, "XOF", "CI", "paypal", "cle-wrong-method")
+        assert "aucun prestataire connecte" in str(exc.value)
 
     def test_webhook_signe_d_une_autre_transaction_refuse(self):
         import hashlib, hmac as h
