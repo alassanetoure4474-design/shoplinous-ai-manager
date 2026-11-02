@@ -6,7 +6,7 @@ name: Tests pytest workflow
 
 on:
   push:
-    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7]
+    branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway]
   pull_request:
     branches: [workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7]
 
@@ -40,7 +40,7 @@ jobs:
       - name: Executer pytest (verbose)
         run: |
           set +e
-          python -m pytest -v test_daily.py test_audit_v54.py test_pricing_v55.py test_freight_collector_v55.py test_freight_collector_v56.py test_ai_manager.py 2>&1 | tee pytest_output.txt
+          python -m pytest -v test_daily.py test_audit_v54.py test_pricing_v55.py test_freight_collector_v55.py test_freight_collector_v56.py test_ai_manager.py test_ai_product_copy.py 2>&1 | tee pytest_output.txt
           exit_code=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
           exit "${exit_code}"
