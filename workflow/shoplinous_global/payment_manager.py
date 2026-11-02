@@ -12,7 +12,10 @@ Regles absolues (verifiees par tests) :
 """
 import hashlib
 import hmac
+import json
+import re
 import time
+from decimal import Decimal, InvalidOperation
 
 
 class Transaction:
@@ -34,6 +37,52 @@ class Transaction:
         self.historique.append((statut, time.time()))
 
 
+def _normaliser_moyen(value):
+    """Normalise un moyen de paiement pour comparer les libelles."""
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+
+
+def _moyens_configures(prestataire):
+    """Ne retourne que les moyens explicitement declares par l'adaptateur."""
+    moyens = set(getattr(prestataire, "moyens_supportes", ()) or ())
+    methode = getattr(prestataire, "methode", None)
+    if methode:
+        moyens.add(methode)
+    return moyens
+
+
+def _payload_webhook_coherent(tx, contenu):
+    """Lie la notification signee a la transaction, son statut et son montant."""
+    try:
+        payload = json.loads(contenu)
+    except (TypeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+
+    reference = payload.get("transaction_id", payload.get("transaction"))
+    if str(reference or "") != str(tx.id):
+        return False
+
+    statut = payload.get("status", payload.get("statut"))
+    if str(statut or "").strip().lower() not in {
+            "ok", "success", "succeeded", "completed", "paid"}:
+        return False
+
+    montant = payload.get("amount", payload.get("montant"))
+    if montant is not None:
+        try:
+            if Decimal(str(montant)) != Decimal(str(tx.montant)):
+                return False
+        except (InvalidOperation, TypeError, ValueError):
+            return False
+
+    devise = payload.get("currency", payload.get("devise"))
+    if devise is not None and str(devise).upper() != str(tx.devise).upper():
+        return False
+    return True
+
+
 class GestionnairePaiements:
     def __init__(self, registre, secrets_webhook=None):
         self.registre = registre
@@ -42,13 +91,15 @@ class GestionnairePaiements:
         self._par_idempotence = {}
 
     def moyens_disponibles(self, code_pays, moyens_pays, devise):
-        """Liste HONNETE des moyens proposables : intersection des
-        moyens du pays et des prestataires reellement connectes."""
+        """Intersection pays/devise/moyens avec les adaptateurs connectes."""
+        demandes = {_normaliser_moyen(m) for m in (moyens_pays or [])}
         proposables = []
         for p in self.registre.pour_pays(code_pays, devise):
-            proposables.append({
-                "moyen": p.methode or p.nom, "prestataire": p.nom,
-                "devise": devise})
+            for moyen in sorted(_moyens_configures(p)):
+                if _normaliser_moyen(moyen) in demandes:
+                    proposables.append({
+                        "moyen": moyen, "prestataire": p.nom,
+                        "devise": devise})
         return proposables
 
     def creer_transaction(self, commande, montant, devise, pays, moyen,
@@ -56,15 +107,24 @@ class GestionnairePaiements:
         if cle_idempotence in self._par_idempotence:
             return self._par_idempotence[cle_idempotence], False
         prestataires = self.registre.pour_pays(pays, devise)
-        if not prestataires:
+        moyen_demande = _normaliser_moyen(moyen)
+        compatibles = [
+            p for p in prestataires
+            if moyen_demande and any(
+                _normaliser_moyen(m) == moyen_demande
+                for m in _moyens_configures(p))
+        ]
+        if not compatibles:
             raise RuntimeError(
-                "aucun prestataire connecte pour " + pays + "/"
-                + devise + " : transaction refusee plutot que simulee")
+                "aucun prestataire connecte ne prend en charge le moyen "
+                + repr(moyen) + " pour " + pays + "/" + devise
+                + " : transaction refusee")
+        prestataire = compatibles[0]
         identifiant = hashlib.sha256(
             (str(commande) + "|" + str(cle_idempotence)).encode()
         ).hexdigest()[:16]
         tx = Transaction(identifiant, commande, montant, devise, pays,
-                         moyen, prestataires[0].nom, cle_idempotence)
+                         moyen, prestataire.nom, cle_idempotence)
         tx._passer("en_attente")
         self._transactions.append(tx)
         self._par_idempotence[cle_idempotence] = tx
@@ -80,20 +140,22 @@ class GestionnairePaiements:
 
     def verifier_signature(self, prestataire, contenu, signature):
         secret = self._secrets.get(prestataire)
-        if not secret:
+        if not secret or not isinstance(contenu, str):
             return False
         attendu = hmac.new(secret.encode(), contenu.encode(),
                           hashlib.sha256).hexdigest()
         return hmac.compare_digest(attendu, str(signature))
 
     def confirmer_webhook(self, transaction_id, contenu, signature):
-        """Confirmation UNIQUE par webhook signe. Signature invalide
-        ou secret absent -> refus, transaction inchangee."""
+        """Confirme uniquement un webhook signe et lie au bon paiement."""
         for tx in self._transactions:
             if tx.id == transaction_id:
                 if not self.verifier_signature(tx.prestataire, contenu,
                                               signature):
                     tx._passer("signature_refusee")
+                    return False
+                if not _payload_webhook_coherent(tx, contenu):
+                    tx._passer("webhook_refuse")
                     return False
                 if tx.statut in ("reussie", "remboursee"):
                     return True
