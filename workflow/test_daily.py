@@ -748,7 +748,7 @@ class TestProcessOrderV51:
         chaque commande recue (bug v5 : simple comptage)."""
         import inspect
         src = inspect.getsource(daily.ShoplinousDailyWorkflow)
-        assert "await process_order(fw_normalize_order(o))" in src
+        assert "await process_order(\n                        fw_normalize_order(o), vid_table=vid_table)" in src
         assert "orders_analyzed" in src
 
 
@@ -1002,8 +1002,12 @@ class TestFwCompatV52:
         AVANT process_order (jamais de commande brute avec donnees perso)."""
         import inspect
         src = inspect.getsource(daily.ShoplinousDailyWorkflow)
-        assert "await process_order(fw_normalize_order(o))" in src
+        assert "vid_table=vid_table" in src
+        assert "fw_normalize_order(o), vid_table=vid_table)" in src.replace("\n", " ")
         assert "await process_order(o)" not in src
+        # v5.3 : la table est reconstruite en lecture seule a chaque run
+        assert "build_vid_table(fw_records)" in src
+        assert "VID_TABLE_SEED" in src
 
     def test_protection_aucune_ecriture_boutique(self, monkeypatch):
         """fw_orders + fw_normalize + process_order n'emettent AUCUN
@@ -1040,3 +1044,343 @@ class TestFwCompatV52:
         src_norm = inspect.getsource(daily.fw_normalize_order)
         for interdit in ("requests.post", "httpx.post"):
             assert interdit not in src_norm
+
+
+# ============ v5.3 : table SKU->vid (correspondance FW -> CJ) ============
+# Donnees REELLES observees en lecture seule le 02/11/2026 :
+# - GET /product (storeid 1107499) : 12 produits, dont 11 produits demo
+#   (sku yellow0001... non-CJ) et 1 produit SHOPLINOUS publie :
+#   id 18809643, sku SHP-CJT2052445, 2 variantes.
+# - GET /product/18809643 : variants[] avec 'uvid' (= variantId des
+#   commandes) : ZsKQFt/CJJT205244501AZ (Blanc), WPPmLB/CJJT205244502BY
+#   (Noir).
+# - Recherche CJ par SKU DE VARIANTE : "CJJT205244501AZ" et
+#   "CJJT205244502BY" -> produit UNIQUE pid 1797521453303214080
+#   (sku CJJT2052445).
+# - Variantes CJ : vid 1797521453382905856 (CJJT205244501AZ, White-40cm),
+#   vid 1797521453454209024 (CJJT205244502BY, Black-40cm).
+# NB : la recherche CJ par SKU de PRODUIT ("CJT2052445") retourne 0 :
+# la recherche par SKU de VARIANTE est la methode confirmee.
+FW_DETAIL_ATTRAPE_REEL = {
+    "productId": None,
+    "core": {"id": "18809643", "sku": "SHP-CJT2052445",
+             "name": "Attrape-reves Indien Boheme 40 cm",
+             "price": 24.9, "published": True, "brand": "SHOPLINOUS"},
+    "variants": [
+        {"uvid": "ZsKQFt", "key": "Couleur:Blanc",
+         "sku": "CJJT205244501AZ", "label": "Couleur:Blanc",
+         "stock": 100, "condition": "New", "sequence": 1},
+        {"uvid": "WPPmLB", "key": "Couleur:Noir",
+         "sku": "CJJT205244502BY", "label": "Couleur:Noir",
+         "stock": 100, "condition": "New", "sequence": 2},
+    ],
+}
+FW_CATALOGUE_REEL = [
+    {"id": "38968614", "sku": "yellow0001", "name": "Yellow Wrap Tunic Top",
+     "published": False},
+    {"id": "18809643", "sku": "SHP-CJT2052445",
+     "name": "Attrape-reves Indien Boheme 40 cm", "published": True},
+]
+CJ_SEARCH_REEL = {
+    "code": 200, "result": True, "message": "Success",
+    "data": {"content": [
+        {"productList": [
+            {"id": "1797521453303214080", "sku": "CJJT2052445",
+             "nameEn": "Indian Dreamcatcher Home Decoration Pendant",
+             "sellPrice": "2.81"},
+        ]},
+    ]},
+}
+CJ_VARIANTES_ATTRAPE_REEL = [
+    {"vid": "1797521453382905856", "pid": "1797521453303214080",
+     "variantSku": "CJJT205244501AZ", "variantKey": "White-40cm",
+     "variantSellPrice": "2.81", "variantWeight": 80},
+    {"vid": "1797521453454209024", "pid": "1797521453303214080",
+     "variantSku": "CJJT205244502BY", "variantKey": "Black-40cm",
+     "variantSellPrice": "2.81", "variantWeight": 80},
+]
+FW_RECORDS_ATTRAPE_REEL = [
+    {"fw_product_id": "18809643", "fw_product_sku": "SHP-CJT2052445",
+     "fw_variant_id": "ZsKQFt", "variant_sku": "CJJT205244501AZ"},
+    {"fw_product_id": "18809643", "fw_product_sku": "SHP-CJT2052445",
+     "fw_variant_id": "WPPmLB", "variant_sku": "CJJT205244502BY"},
+]
+
+
+def _async(v):
+    async def fn(*a, **kw):
+        return v
+    return fn
+
+
+class TestVidTableV53:
+    """v5.3 : correspondances EXACTES SKU + variante, cas ambigus et
+    absents, protection lecture seule, amorce verifiee."""
+
+    def test_fw_variant_records_extrait_uvid_et_sku(self, monkeypatch):
+        """Le variantId des commandes = champ 'uvid' du detail produit
+        (structure reelle du 02/11/2026)."""
+        monkeypatch.setattr(daily, "fw_get_product",
+                            _async(FW_DETAIL_ATTRAPE_REEL))
+        recs = run(daily.fw_variant_records(FW_CATALOGUE_REEL))
+        ids = {(r["fw_variant_id"], r["variant_sku"]) for r in recs}
+        assert ids == {("ZsKQFt", "CJJT205244501AZ"),
+                       ("WPPmLB", "CJJT205244502BY")}
+        assert all(r["fw_product_id"] == "18809643" for r in recs)
+
+    def test_build_table_correspondances_exactes_reelles(self):
+        """Cas REEL : les 2 SKU FW correspondent exactement aux 2 SKU CJ
+        -> 2 entrees avec les vrais vids."""
+        res = run(daily.build_vid_table(
+            [dict(r) for r in FW_RECORDS_ATTRAPE_REEL],
+            cj_search_fn=_async(CJ_SEARCH_REEL),
+            cj_variants_fn=_async({"code": 200, "result": True,
+                                   "data": CJ_VARIANTES_ATTRAPE_REEL})))
+        t = res["table"]
+        assert set(t) == {"CJJT205244501AZ", "CJJT205244502BY"}
+        assert t["CJJT205244501AZ"]["vid"] == "1797521453382905856"
+        assert t["CJJT205244502BY"]["vid"] == "1797521453454209024"
+        assert t["CJJT205244501AZ"]["fw_variant_id"] == "ZsKQFt"
+        assert t["CJJT205244502BY"]["fw_variant_id"] == "WPPmLB"
+        assert t["CJJT205244502BY"]["cj_pid"] == "1797521453303214080"
+        assert res["ambigus"] == [] and res["absents"] == []
+        assert res["nb_variantes_fw"] == 2
+
+    def test_build_table_absent_sans_produit_candidat(self):
+        """Produit demo (SKU non-CJ) : recherche vide -> absent,
+        sans_vid conserve, AUCUNE approximation."""
+        res = run(daily.build_vid_table(
+            [{"fw_product_id": "38968614", "fw_variant_id": "x",
+              "variant_sku": "yellow0001"}],
+            cj_search_fn=_async({"data": {"content": [
+                {"productList": []}]}}),
+            cj_variants_fn=_async({"data": []})))
+        assert res["table"] == {}
+        assert len(res["absents"]) == 1
+        assert res["absents"][0]["variant_sku"] == "yellow0001"
+        assert res["ambigus"] == []
+
+    def test_build_table_aucune_approximation_sku(self):
+        """SKU tronque ou casse differente : JAMAIS associe (exactitude
+        stricte)."""
+        for faux_sku in ("CJJT205244502B", "cjjt205244502by",
+                         " CJJT205244502BY"):
+            res = run(daily.build_vid_table(
+                [{"fw_product_id": "18809643", "fw_variant_id": "W",
+                  "variant_sku": faux_sku}],
+                cj_search_fn=_async(CJ_SEARCH_REEL),
+                cj_variants_fn=_async({"code": 200, "result": True,
+                                       "data": CJ_VARIANTES_ATTRAPE_REEL})))
+            assert res["table"] == {}, faux_sku
+            assert res["absents"], faux_sku
+
+    def test_build_table_ambigu_deux_candidats(self):
+        """Deux produits CJ candidats avec le meme SKU exact mais des
+        vids differents -> AMBIGU, pas d'association."""
+        search2 = {"code": 200, "result": True, "data": {"content": [
+            {"productList": [
+                {"id": "1797521453303214080", "sku": "CJJT2052445"},
+                {"id": "1111111111111111111", "sku": "CJJT9999999"},
+            ]}]}}
+        variants2 = {"code": 200, "result": True, "data": [
+            {"vid": "1797521453454209024", "variantSku": "CJJT205244502BY"},
+            {"vid": "2222222222222222222", "variantSku": "CJJT205244502BY"},
+        ]}
+        res = run(daily.build_vid_table(
+            [{"fw_product_id": "18809643", "fw_variant_id": "WPPmLB",
+              "variant_sku": "CJJT205244502BY"}],
+            cj_search_fn=_async(search2),
+            cj_variants_fn=_async(variants2)))
+        assert res["table"] == {}
+        assert len(res["ambigus"]) == 1
+        assert res["ambigus"][0]["variant_sku"] == "CJJT205244502BY"
+        assert len(res["ambigus"][0]["candidats_vid"]) == 2
+
+    def test_build_table_ambigu_meme_pid_deux_vids(self):
+        """Un seul produit CJ mais le meme variantSku avec 2 vids ->
+        AMBIGU (jamais de choix arbitraire)."""
+        variants2 = {"code": 200, "result": True, "data": [
+            {"vid": "1797521453454209024", "variantSku": "CJJT205244502BY"},
+            {"vid": "3333333333333333333", "variantSku": "CJJT205244502BY"},
+        ]}
+        res = run(daily.build_vid_table(
+            [{"fw_product_id": "18809643", "fw_variant_id": "WPPmLB",
+              "variant_sku": "CJJT205244502BY"}],
+            cj_search_fn=_async(CJ_SEARCH_REEL),
+            cj_variants_fn=_async(variants2)))
+        assert res["table"] == {}
+        assert len(res["ambigus"]) == 1
+
+    def test_build_table_aucune_donnee_personnelle(self):
+        """SECURITE : la table ne contient que des identifiants metier
+        (liste blanche EXACTE de cles, recursive)."""
+        res = run(daily.build_vid_table(
+            [{"fw_product_id": "18809643", "fw_product_sku": "SHP-CJT2052445",
+              "fw_variant_id": "WPPmLB", "variant_sku": "CJJT205244502BY"}],
+            cj_search_fn=_async(CJ_SEARCH_REEL),
+            cj_variants_fn=_async({"code": 200, "result": True,
+                                   "data": CJ_VARIANTES_ATTRAPE_REEL})))
+        AUTORISES = {"table", "absents", "ambigus", "nb_variantes_fw",
+                     "vid", "fw_product_id", "fw_product_sku",
+                     "fw_variant_id", "variant_sku", "cj_pid",
+                     "motif", "candidats_vid"}
+        cles = set()
+
+        def collecte(obj):
+            if isinstance(obj, dict):
+                cles.update(obj.keys())
+                for v in obj.values():
+                    collecte(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    collecte(v)
+        collecte(res)
+        hors = cles - AUTORISES
+        assert not hors, "cles hors liste blanche : " + repr(hors)
+        blob = json.dumps(res).lower()
+        for interdit in ("email", "telephone", "forename", "surname",
+                         "address1", "anonyme", "0000000000"):
+            assert interdit not in blob
+
+    def test_seed_amorce_verifiee_reelle(self):
+        """L'amorce contient EXACTEMENT les correspondances mesurees en
+        lecture seule le 02/11/2026."""
+        assert set(daily.VID_TABLE_SEED) == {"CJJT205244501AZ",
+                                            "CJJT205244502BY"}
+        assert daily.VID_TABLE_SEED["CJJT205244501AZ"]["vid"] == "1797521453382905856"
+        assert daily.VID_TABLE_SEED["CJJT205244502BY"]["vid"] == "1797521453454209024"
+        assert daily.VID_TABLE_SEED["CJJT205244502BY"]["fw_variant_id"] == "WPPmLB"
+        for e in daily.VID_TABLE_SEED.values():
+            assert set(e) == {"vid", "fw_product_id", "fw_variant_id", "cj_pid"}
+
+    def _process_mocks(self, monkeypatch):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            if request.url.path.endswith("/logistic/freight/calculate"):
+                return httpx.Response(200, json={
+                    "code": 200, "result": True, "data": [
+                        {"logisticName": "CJStandard", "logisticPrice": "4.69",
+                         "logisticAging": "4-10"}]})
+            raise AssertionError("endpoint inattendu : " + request.url.path)
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        monkeypatch.setenv("CJ_API_KEY", "test-key")
+
+    def test_process_order_resout_vid_via_table(self, monkeypatch):
+        """Pipeline REEL complet : panier FR (SKU Noir CJJT205244502BY)
+        -> vid resolu par la table -> fret CJ calcule -> ligne verifiee.
+        postage reel 0.00 EUR -> alerte marge non couverte (attendu)."""
+        self._process_mocks(monkeypatch)
+        vid_table = {"table": {"CJJT205244502BY": {
+            "vid": "1797521453454209024",
+            "fw_product_id": "18809643",
+            "fw_variant_id": "WPPmLB",
+            "cj_pid": "1797521453303214080"}}, "absents": [], "ambigus": []}
+        norm = daily.fw_normalize_order(FW_PANIER_REEL_FR)
+        rep = run(daily.process_order(norm, vid_table=vid_table))
+        ligne = rep["lignes"][0]
+        assert ligne["statut"] == "verifie"
+        assert ligne["vid"] == "1797521453454209024"
+        assert ligne["vid_source"] == "table_sku_vid"
+        assert ligne["fret_cj_eur"] == round(4.69 * 0.895, 2)
+        assert rep["statut"] != "lignes_non_verifiees"
+        # postage reel = 0.00 EUR : marge non couverte -> alerte
+        assert any("non couverte" in a for a in rep["alertes"])
+
+    def test_process_order_vid_table_tarif_couvert(self, monkeypatch):
+        """Avec un tarif de livraison facture couvrant le fret reel :
+        commande verifiee sans alerte."""
+        self._process_mocks(monkeypatch)
+        vid_table = {"table": {"CJJT205244502BY": {
+            "vid": "1797521453454209024",
+            "fw_product_id": "18809643",
+            "fw_variant_id": "WPPmLB",
+            "cj_pid": "1797521453303214080"}}, "absents": [], "ambigus": []}
+        order = {"id": "ORD-1", "country": "FR", "shipping_charged": 6.0,
+                 "items": [{"vid": None, "sku": "CJJT205244502BY",
+                            "quantity": 1}]}
+        rep = run(daily.process_order(order, vid_table=vid_table))
+        assert rep["lignes"][0]["statut"] == "verifie"
+        assert rep["statut"] == "verifie"
+        assert rep["alertes"] == []
+
+    def test_process_order_sku_ambigu_reste_sans_vid(self, monkeypatch):
+        """SKU ambigu dans la table : sans_vid CONSERVE + alerte AMBIGUE,
+        aucun appel CJ emis."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            raise AssertionError("aucun appel CJ attendu : " + request.url.path)
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        vid_table = {"table": {}, "absents": [], "ambigus": [
+            {"variant_sku": "CJJT205244502BY",
+             "candidats_vid": ["111", "222"],
+             "motif": "SKU correspond a plusieurs vids CJ"}]}
+        norm = daily.fw_normalize_order(FW_PANIER_REEL_FR)
+        rep = run(daily.process_order(norm, vid_table=vid_table))
+        ligne = rep["lignes"][0]
+        assert ligne["statut"] == "sans_vid"
+        assert ligne["vid"] is None
+        assert "AMBIGUE" in ligne["alerte"]
+        assert rep["statut"] == "lignes_non_verifiees"
+
+    def test_process_order_sku_absent_reste_sans_vid(self, monkeypatch):
+        """SKU absent de la table : comportement v5.2 conserve."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            raise AssertionError("aucun appel CJ attendu")
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        vid_table = {"table": {}, "absents": [], "ambigus": []}
+        norm = daily.fw_normalize_order(FW_PANIER_REEL_FR)
+        rep = run(daily.process_order(norm, vid_table=vid_table))
+        ligne = rep["lignes"][0]
+        assert ligne["statut"] == "sans_vid"
+        assert "correspondance SKU->vid requise" in ligne["alerte"]
+        assert rep["statut"] == "lignes_non_verifiees"
+
+    def test_process_order_sans_table_comportement_v52(self, monkeypatch):
+        """Sans vid_table : comportement v5.2 strictement inchange."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.frankfurter.app":
+                return httpx.Response(200, json={"rates": {"EUR": 0.895}})
+            raise AssertionError("aucun appel CJ attendu")
+
+        class Patched(httpx.AsyncClient):
+            def __init__(self, *a, **kw):
+                kw["transport"] = httpx.MockTransport(handler)
+                super().__init__(*a, **kw)
+
+        monkeypatch.setattr(httpx, "AsyncClient", Patched)
+        norm = daily.fw_normalize_order(FW_PANIER_REEL_FR)
+        rep = run(daily.process_order(norm))
+        assert rep["lignes"][0]["statut"] == "sans_vid"
+
+    def test_protection_vid_table_lecture_seule(self):
+        """build_vid_table : aucun endpoint d'ordre fournisseur ni
+        d'ecriture ; allow_publish par defaut False INCHANGE."""
+        import inspect
+        src_build = inspect.getsource(daily.build_vid_table)
+        for interdit in ("shopping/order", "purchase", "createOrder",
+                         "cancelOrder", "payOrder", "fw_create"):
+            assert interdit not in src_build, interdit
+        p = daily.DailyParams()
+        assert p.allow_publish is False
