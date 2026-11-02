@@ -1,4 +1,4 @@
-name: GeniusPay - verification Sandbox
+name: GeniusPay - verification Sandbox et Wave Direct
 
 on:
   workflow_dispatch:
@@ -44,5 +44,8 @@ jobs:
           fi
           echo "Cles Sandbox presentes (valeurs masquees)."
 
-      - name: Tester le compte marchand et les pays Mobile Money (lecture seule)
+      - name: Verifier le compte et les fournisseurs Mobile Money (lecture seule)
         run: python workflow/test_geniuspay_connection.py
+
+      - name: Tester Wave Direct CI (transaction Sandbox simulee de 200 XOF)
+        run: python workflow/test_geniuspay_wave_sandbox.py

@@ -16,7 +16,10 @@ de la boutique Freewebstore avec assistance IA.
   (usd_15j, TTL 7 jours, aucune substitution silencieuse, aucun melange
   entre variantes ; devis CJ en direct au-dela de 5 unites).
 - `workflow/shoplinous_global/geniuspay.py` : client serveur GeniusPay (Sandbox par defaut, checkout heberge, decouverte mobile money, verification HMAC des webhooks) ; aucun secret dans le depot.
-- `workflow/test_geniuspay_connection.py` : controle API GeniusPay en lecture seule (compte + pays et operateurs disponibles), sans creer de transaction.
+- `workflow/shoplinous_global/geniuspay_wave.py` : diagnostic Wave Direct reserve au Sandbox ; refuse le mode Live avant toute requete.
+- `workflow/test_geniuspay_connection.py` : controle en lecture seule du compte GeniusPay et des pays/opérateurs PawaPay ; ne cree aucune transaction.
+- `workflow/test_geniuspay_wave_sandbox.py` : test technique Wave Direct en Sandbox ; cree une transaction simulee de 200 XOF puis la relit par reference.
+- `workflow/test_geniuspay_wave.py` : tests automatises du routage Wave, du mode Sandbox et des controles de securite (sans appels reseau reels).
 - `workflow/ai_manager.py` : acces multi-IA via FreeLLMAPI (cinq
   fournisseurs actifs par defaut : mistral, gemini, groq, qwen, gpt_oss ;
   bascule automatique sur 429/5xx/timeout ; cache ; modeles payants
@@ -32,14 +35,14 @@ de la boutique Freewebstore avec assistance IA.
 
 ## Securite
 
-- Aucun achat fournisseur automatique, aucun paiement, aucune commande CJ.
+- Aucun achat fournisseur automatique, aucun paiement Live declenche par les diagnostics, aucune commande CJ.
 - Aucune modification de prix/stocks Freewebstore sans autorisation.
 - Les cles API vivent uniquement dans les variables d'environnement /
   secrets (CJ_API_KEY, FREEWEBSTORE_API_KEY, FREE_LLM_API_KEY,
   FREE_LLM_API_BASE). Aucune cle dans le depot ni les journaux
   (redaction [REDACTE] verifiee par les tests).
-- Les calculs financiers, stocks et commandes restent en Python
-  deterministe ; l'IA n'intervient que sur du textuel.
+- Les calculs financiers, stocks, marges et commandes restent calcules
+  par le code Python ; l'IA n'intervient que sur du textuel.
 - Aucune donnee personnelle client n'est copiee (adaptateur a liste
   blanche, verifie par les tests).
 
@@ -52,12 +55,12 @@ arriere). CI pytest + build Docker :
 deploiement). Migration Supabase :
 `.github/workflows/supabase-migrate.yml` (manuelle, workflow_dispatch).
 
+## Verifier GeniusPay avec GitHub Actions (Sandbox)
 
-## Vérifier GeniusPay avec GitHub Actions (sans paiement réel)
+1. Dans GitHub : **Settings → Secrets and variables → Actions**.
+2. Les secrets `GENIUSPAY_API_KEY` et `GENIUSPAY_API_SECRET` doivent contenir les cles Sandbox.
+3. Apres fusion de la PR vers `main`, ouvrir **Actions → GeniusPay - verification Sandbox et Wave Direct → Run workflow**.
+4. Le workflow verifie le compte et les fournisseurs PawaPay en lecture seule, puis cree une transaction technique Wave Direct de **200 XOF en Sandbox uniquement** et la relit par reference.
+5. GeniusPay indique que les transactions Sandbox sont simulees : ce test ne debite aucun compte reel. Il cree toutefois une transaction de test dans l'historique Sandbox. Le code refuse tout lancement en mode Live.
 
-1. Dans GitHub : **Settings → Secrets and variables → Actions → New repository secret**.
-2. Créer uniquement les secrets `GENIUSPAY_API_KEY` et `GENIUSPAY_API_SECRET`, avec les valeurs Sandbox.
-3. Après fusion de la PR vers `main`, ouvrir **Actions → GeniusPay - vérification Sandbox → Run workflow**.
-4. Le workflow utilise les secrets uniquement sur `main`, appelle `GET /account` et `GET /pawapay/providers`, puis affiche le statut du compte et les pays/opérateurs retournés. Il ne crée aucun paiement et n'affiche aucune clé.
-
-Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les référencent ; ils ne deviennent pas les variables du worker Mistral ou d'un autre hébergeur. Voir la documentation GitHub : https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets
+Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les referencent ; ils ne deviennent pas les variables du worker Mistral ou d'un autre hebergeur. Voir la documentation GitHub : https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets

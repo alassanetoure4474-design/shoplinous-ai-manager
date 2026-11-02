@@ -19,6 +19,7 @@ explicite. allow_publish=False par defaut (mode veille : lecture seule).
 - workflow/worker.py : lanceur du worker Mistral Workflows.
 - workflow/test_fournisseurs.py : verification des modeles IA declares
   contre l'instance reelle (lecture seule, aucun secret affiche).
+- workflow/shoplinous_global/geniuspay_wave.py : diagnostic du gateway Wave Direct en Sandbox uniquement.
 
 ## 2. Variables d'environnement requises
 
@@ -32,11 +33,26 @@ Obligatoires (le run est SUSPENDU proprement si absentes) :
 - GENIUSPAY_WEBHOOK_SECRET : secret retourne lors de la creation du webhook, a stocker apres deploiement de l'endpoint HTTPS.
 - GENIUSPAY_ALLOW_LIVE=false : verrou de production ; ne passer a true qu'apres tests et autorisation explicite.
 
-Controle de connexion (lecture seule, aucun paiement) :
+Controle du compte marchand (lecture seule, aucun paiement) :
 
     cd workflow && python test_geniuspay_connection.py
 
-Le script verifie le statut du compte et liste les pays/opérateurs retournes par GeniusPay. Les cles ne sont jamais affichees.
+Ce script verifie le statut du compte et liste les pays/opérateurs renvoyes
+par l'API PawaPay. Il ne teste pas les autres passerelles GeniusPay et ne
+cree aucune transaction.
+
+Diagnostic Wave Direct (Sandbox uniquement) :
+
+    cd workflow && python test_geniuspay_wave_sandbox.py
+
+Ce test envoie un POST /payments avec payment_method=wave, gateway=wave,
+amount=200, currency=XOF et customer.country=CI, puis relit la transaction
+avec GET /payments/{reference}. La documentation GeniusPay indique que
+les transactions Sandbox sont simulees et sans frais ; ce test cree donc
+une transaction technique dans l'historique Sandbox mais ne debite aucun
+compte reel. Le code refuse le mode Live avant toute requete reseau.
+Le journal affiche la reference, le statut et le gateway confirme ; aucune
+cle ni URL de paiement n'est affichee.
 
 Facultatives (valeurs par defaut indiquees) :
 - PAYMENT_FEE_RATE (0.029), PAYMENT_FEE_FIXED_EUR (0.30)
@@ -60,7 +76,9 @@ Codes de sortie : 0 = les 5 modeles declares existent sur l'instance ;
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
 SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
-Pour GeniusPay, ajouter aussi GENIUSPAY_API_KEY, GENIUSPAY_API_SECRET et, apres creation du webhook HTTPS, GENIUSPAY_WEBHOOK_SECRET dans les secrets du service qui execute les paiements.
+Pour GeniusPay, ajouter aussi GENIUSPAY_API_KEY et GENIUSPAY_API_SECRET
+dans Actions secrets, et GENIUSPAY_WEBHOOK_SECRET dans les secrets du
+service qui executera les paiements apres creation du webhook HTTPS.
 
 Les secrets GitHub Actions ne sont pas automatiquement transmis au worker
 heberge. Definir aussi FREE_LLM_API_BASE et FREE_LLM_API_KEY dans les
@@ -98,9 +116,11 @@ docker run --env-file .env shoplinous.
 ## 6. Paiements GeniusPay (Sandbox uniquement au demarrage)
 
 - Le client GeniusPay utilise `https://geniuspay.ci/api/v1/merchant`.
-- Premier controle : `GET /account` (lecture seule) et `GET /pawapay/providers` (decouverte des moyens et pays).
-- Le checkout heberge est cree par `POST /payments` sans `payment_method` : GeniusPay choisit les canaux disponibles. La reference de commande est transmise dans `metadata.order_id`.
-- Aucun paiement n'est autorise par le module tant que les deux cles API et le secret webhook ne sont pas configures.
+- Premier controle : `GET /account` (lecture seule) et `GET /pawapay/providers` (decouverte PawaPay des pays/opérateurs, pas de la passerelle Wave Direct).
+- Le checkout heberge standard est cree par `POST /payments` sans `payment_method` : GeniusPay affiche les canaux disponibles. La reference de commande est transmise dans `metadata.order_id`.
+- Le test specifique Wave Direct utilise `payment_method=wave` et `gateway=wave` pour la CI, en Sandbox et pour 200 XOF. Il relit ensuite la transaction par reference et exige que le gateway Wave, l'environnement, le montant, la devise et les metadata correspondent.
+- Ce test technique cree une transaction simulee dans l'historique Sandbox. Il n'effectue aucun debit reel. Le code refuse le mode Live avant tout appel reseau.
+- Les paiements clients restent bloques par le module tant que les deux cles API et le secret webhook ne sont pas configures.
 - Le webhook doit etre expose sur une URL HTTPS publique, verifier HMAC-SHA256 + timestamp (fenetre 300 s), puis lier reference, commande, montant, devise et environnement. Une redirection navigateur ne confirme jamais un paiement.
 - La documentation GeniusPay indique que le secret webhook n'est fourni qu'a la creation du webhook : le sauvegarder immediatement dans `GENIUSPAY_WEBHOOK_SECRET`.
 - Ne pas enregistrer le webhook tant qu'un endpoint HTTPS reel n'est pas deploye. Le worker Mistral seul n'expose pas automatiquement une route HTTP de webhook.
@@ -116,8 +136,8 @@ docker run --env-file .env shoplinous.
 
 ## 8. Regles de securite permanentes
 
-- Aucun achat fournisseur automatique, aucun paiement, aucune creation
-  ni modification de commande CJ.
+- Aucun achat fournisseur automatique, aucun paiement reel non autorise,
+  aucune creation ni modification de commande CJ.
 - Aucune modification de prix/stocks Freewebstore sans allow_publish=True
   explicite et checkout_shipping_eur fourni.
 - Aucune publication automatique ; allow_publish=False par defaut.
