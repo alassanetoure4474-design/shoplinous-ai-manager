@@ -158,6 +158,18 @@ class TestBasculeAutomatique:
             run(ai.appeler_ia(MESSAGES))
         assert len(ai.quotas()) == 3
 
+    @pytest.mark.parametrize("status", [400, 401, 403, 404])
+    def test_erreurs_4xx_hors_429_ne_declenchent_pas_de_bascule(
+            self, monkeypatch, status):
+        appels = _patch(
+            monkeypatch,
+            lambda r: httpx.Response(status, json={"error": "configuration"}))
+        with pytest.raises(ValueError, match="HTTP " + str(status)):
+            run(ai.appeler_ia(MESSAGES))
+        assert len(appels) == 1
+        assert ai.quotas()["mistral"]["erreurs"] == 1
+        assert ai.quotas()["mistral"]["bascules"] == 0
+
     def test_ordre_via_env(self, monkeypatch):
         _patch(monkeypatch, lambda r: httpx.Response(200, json=OK),
                cle="cle-2")
