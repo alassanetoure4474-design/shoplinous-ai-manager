@@ -14,14 +14,14 @@ integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 | 3 | currency_manager | XOF XAF EUR USD GBP CAD GHS NGN MAD KES ZAR ; arrondis par exposant ; coherence affiche/encaisse ; devise comptable configurable | Operationnel |
 | 4 | exchange_rate_manager | Taux horodates, cache TTL, indisponibilite = ECHEC (aucun taux invente), historique | Operationnel |
 | 5 | pricing_manager | Composition complete (fournisseur+transport+frais paiement+plateforme+taxe+marge min) ; donnee manquante = prix BLOQUE avec champ exact | Operationnel |
-| 6 | payment_manager | Transactions, idempotence par cle, webhook signe = SEULE preuve de paiement (redirection ignoree), rapprochement comptable | Operationnel (aucun prestataire actif) |
-| 7 | payment_providers | CinetPay, PayDunya, KoraPay, Stripe, PayPal : pays, devises de reglement, frais, delais, KYC documents ; connected=False tant que pas de contrat marchand | En attente de contrats marchands |
+| 6 | payment_manager | Transactions idempotentes, checkout GeniusPay Wave Direct CI/XOF, webhook signe = SEULE preuve de paiement (redirection ignoree), rapprochement comptable | Code operationnel ; activation reelle conditionnee aux cles API, secret webhook et endpoint HTTPS |
+| 7 | payment_providers | GeniusPay checkout heberge + Wave Direct CI/XOF ; CinetPay, PayDunya, KoraPay, Stripe, PayPal en attente de contrats | GeniusPay actif uniquement avec cles API et secret webhook ; autres non connectes |
 | 8 | supplier_manager | API + import CSV STRICT + saisie manuelle ; provenance tracable | Operationnel |
 | 9 | supplier_adapters | CJ = REEL (delegue aux outils daily.py) ; AliExpress, BigBuy, Spocket, Printful, fournisseurs africains/ivoiriens/personnalises = registres NON CONNECTES | CJ actif, autres en attente |
 | 10 | product_catalog | Catalogue multi-fournisseurs, anti-doublons ; publication = workflow existant sous autorisation | Operationnel |
 | 11 | inventory | Stocks agreges, non mesure = non garanti, alertes seuil | Operationnel |
 | 12 | shipping_manager | Comparaison devis REELS (destination/quantite exacte/poids/delai/restrictions) ; AUCUNE extrapolation | Operationnel |
-| 13 | order_manager | Machine a etats complete, anti-doublons, transmission fournisseur = autorisation EXPLICITE, journal | Operationnel |
+| 13 | order_manager | Machine a etats, association transaction/commande, webhook obligatoire pour payer, transmission fournisseur = autorisation EXPLICITE, journal | Operationnel en memoire ; persistance/deploiement HTTP a finaliser |
 | 14 | tracking_manager | Evenements de suivi, historique, aucune invention | Operationnel |
 | 15 | ai_decision_engine | Recommandations deterministes sur donnees verifiees ; IA (5 modeles) pour justification ; JAMAIS d achat automatique | Operationnel |
 | 16 | notification_manager | Canaux journal (actif) / email / sms / webhook (non connectes) ; redaction systematique | Operationnel |
@@ -49,8 +49,7 @@ integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 
 ## Pour connecter reellement (a faire cote client)
 
-1. Contrats marchands (CinetPay/PayDunya/KoraPay/Stripe/PayPal) puis
-   variables d environnement des secrets webhook par prestataire.
+1. Pour GeniusPay, configurer les cles API et le secret webhook dans le service serveur, deployer un endpoint HTTPS receveur puis valider le flux de bout en bout en Sandbox avant d'autoriser Live. Les autres prestataires exigent leurs contrats marchands et secrets webhook.
 2. Contrats fournisseurs additionnels (AliExpress, BigBuy, ...) puis
    adaptateurs a implementer sur la base AdaptateurFournisseur.
 3. Service de taux de change reel a brancher sur FournisseurTaux.
