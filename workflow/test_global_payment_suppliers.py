@@ -15,7 +15,7 @@ class TestPrestataires:
         reg = prv.RegistrePrestataires()
         assert reg.actifs() == []
         assert set(reg.etat()) == {"cinetpay", "paydunya", "korapay",
-                                   "stripe", "paypal"}
+                                   "stripe", "paypal", "geniuspay"}
         assert all(not v["connecte"] for v in reg.etat().values())
 
     def test_prestataire_non_connecte_ne_cree_rien(self):
@@ -142,6 +142,66 @@ class TestGestionnairePaiements:
                           hashlib.sha256).hexdigest()
         assert mgr.confirmer_webhook(tx.id, contenu, signature) is False
         assert tx.statut == "webhook_refuse"
+
+
+    def test_geniuspay_est_inactif_sans_cles_et_secret_webhook(self):
+        reg = prv.RegistrePrestataires()
+        etat = reg.etat()["geniuspay"]
+        assert etat["connecte"] is False
+
+    def test_geniuspay_checkout_retourne_reference_et_url(self):
+        class FakeClient:
+            api_configured = True
+            webhook_secret = "whsec_test"
+            payment_ready = True
+
+            def creer_checkout(self, **kwargs):
+                assert kwargs["montant"] == 12000
+                assert kwargs["commande"] == "CMD-GP"
+                assert kwargs["devise"] == "XOF"
+                return {"reference": "MTX-GP1",
+                        "checkout_url": "https://geniuspay.ci/checkout/MTX-GP1"}
+
+        reg = prv.RegistrePrestataires(geniuspay_client=FakeClient())
+        mgr = pay.GestionnairePaiements(reg)
+        disponibles = mgr.moyens_disponibles("CI", ["Wave"], "XOF")
+        assert {"moyen": "geniuspay_checkout",
+                "prestataire": "geniuspay", "devise": "XOF"} in disponibles
+        tx, new = mgr.creer_transaction(
+            "CMD-GP", 12000, "XOF", "CI",
+            "geniuspay_checkout", "cle-gp-1")
+        assert new is True
+        assert tx.reference_externe == "MTX-GP1"
+        assert tx.url_paiement == "https://geniuspay.ci/checkout/MTX-GP1"
+
+    def test_geniuspay_webhook_utilise_validateur_specifique(self):
+        class FakeClient:
+            api_configured = True
+            webhook_secret = "whsec_test"
+            payment_ready = True
+
+            def creer_checkout(self, **kwargs):
+                return {"reference": "MTX-GP2",
+                        "checkout_url": "https://geniuspay.ci/checkout/MTX-GP2"}
+
+            def webhook_paiement_reussi(self, **kwargs):
+                assert kwargs["reference"] == "MTX-GP2"
+                assert kwargs["commande"] == "CMD-GP2"
+                return {"event": "payment.success"}
+
+        reg = prv.RegistrePrestataires(geniuspay_client=FakeClient())
+        mgr = pay.GestionnairePaiements(reg)
+        tx, _ = mgr.creer_transaction(
+            "CMD-GP2", 10000, "XOF", "CI",
+            "geniuspay_checkout", "cle-gp-2")
+        headers = {
+            "X-Webhook-Timestamp": "1780000000",
+            "X-Webhook-Event": "payment.success",
+            "X-Webhook-Environment": "sandbox",
+        }
+        assert mgr.confirmer_webhook(
+            tx.id, "{}", "signature", headers=headers) is True
+        assert tx.statut == "reussie"
 
     def test_rapprochement_comptable(self):
         reg = prv.RegistrePrestataires()
