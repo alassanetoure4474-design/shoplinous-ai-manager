@@ -422,6 +422,40 @@ async def cj_freight(vid: str, country: str, quantity: int = 1) -> dict:
         return data
 
 
+@workflows.activity(start_to_close_timeout=timedelta(minutes=3), retry_policy_max_attempts=1)
+async def compute_product_price_v56_live(
+        cost_usd: float, vid: str, country: str, quantity: int,
+        margin_min: float = 0.20,
+        payment_fee_rate: float = 0.0,
+        payment_fee_fixed_eur: float = 0.0) -> dict:
+    """Prix v5.6 : cache 1-5 ; devis CJ reel pour toute quantite > 5.
+
+    Le callback reseau reste dans cette activite : le moteur v5.6 demeure
+    pur/testable. Aucun prix n'est retourne si CJ refuse le devis ou si
+    aucun transporteur conforme au delai maximal n'est disponible.
+    """
+    import freight_collector_v56 as freight
+
+    qty = validate_quantity(quantity)
+    rate = await usd_eur_rate()
+    data = freight.charger_donnees()
+    live_options = None
+    if qty > freight.QTE_MAX:
+        quote_payload = await cj_freight(vid, country, quantity=qty)
+        live_options = quote_payload.get("data")
+        if not isinstance(live_options, list):
+            raise RuntimeError("CJ fret: options de transport invalides")
+
+    fetch_fn = (lambda _vid, _country, _qty: live_options) if live_options is not None else None
+    return freight.compute_pricing_v56(
+        cost_usd, vid, country, qty, donnees=data,
+        exchange_rate=rate, marge_min=margin_min,
+        frais_paiement_taux=payment_fee_rate,
+        frais_paiement_fixe_eur=payment_fee_fixed_eur,
+        freight_fetch_fn=fetch_fn,
+    )
+
+
 @workflows.activity(start_to_close_timeout=timedelta(seconds=45), retry_policy_max_attempts=2)
 async def check_image(url: str) -> dict:
     """Verifie REELLEMENT une image : GET (jamais HEAD seul), lecture du
