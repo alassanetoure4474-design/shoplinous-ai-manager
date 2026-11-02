@@ -12,6 +12,7 @@ from .geniuspay import (
     GeniusPayClient,
     GeniusPayConfigurationError,
     GeniusPayError,
+    GeniusPaySecurityError,
 )
 
 
@@ -123,6 +124,3 @@ class GeniusPayWaveSandboxTester(GeniusPayClient):
             "statut": status,
         }
 
-
-# Import local uniquement pour signaler une reponse d'environnement non sure.
-from .geniuspay import GeniusPaySecurityError
