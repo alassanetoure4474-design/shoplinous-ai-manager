@@ -156,7 +156,7 @@ class TestBasculeAutomatique:
         _patch(monkeypatch, lambda r: httpx.Response(429, json={}))
         with pytest.raises(ai.AiIndisponible):
             run(ai.appeler_ia(MESSAGES))
-        assert len(ai.quotas()) == 3
+        assert len(ai.quotas()) == 5
 
     def test_ordre_via_env(self, monkeypatch):
         _patch(monkeypatch, lambda r: httpx.Response(200, json=OK),
@@ -164,6 +164,21 @@ class TestBasculeAutomatique:
         monkeypatch.setenv("AI_PROVIDER_ORDER", "groq,mistral")
         res = run(ai.appeler_ia(MESSAGES))
         assert res["fournisseur"] == "groq"
+
+    def test_cinq_fournisseurs_actifs_par_defaut(self, monkeypatch):
+        _patch(monkeypatch, lambda r: httpx.Response(429, json={}))
+        assert ai._fournisseurs() == ["mistral", "gemini", "groq", "qwen", "gpt_oss"]
+        with pytest.raises(ai.AiIndisponible):
+            run(ai.appeler_ia(MESSAGES))
+        assert len(ai.quotas()) == 5
+
+    @pytest.mark.parametrize("status", [400, 401, 403, 404])
+    def test_erreur_client_4xx_ne_declenche_pas_de_bascule(self, monkeypatch, status):
+        appels = _patch(monkeypatch, lambda r: httpx.Response(status, json={"error": "client"}))
+        with pytest.raises(ValueError, match="HTTP " + str(status)):
+            run(ai.appeler_ia(MESSAGES))
+        assert len(appels) == 1
+        assert list(ai.quotas()) == ["mistral"]
 
     def test_fournisseur_inconnu_ignore(self, monkeypatch):
         _patch(monkeypatch, lambda r: httpx.Response(200, json=OK))
