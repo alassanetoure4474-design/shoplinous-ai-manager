@@ -98,11 +98,19 @@ class GestionnairePaiements:
         proposables = []
         for p in self.registre.pour_pays(code_pays, devise):
             if p.nom == "geniuspay":
-                # Le checkout heberge presente dynamiquement les canaux
-                # disponibles chez GeniusPay pour le client.
+                # Checkout heberge : le client choisit parmi les canaux
+                # que GeniusPay affiche pour ce compte marchand.
                 proposables.append({
                     "moyen": "geniuspay_checkout",
                     "prestataire": p.nom, "devise": devise})
+                # Option Wave Direct explicite, uniquement en CI/XOF,
+                # et seulement si l'adaptateur sait creer ce checkout.
+                if (code_pays == "CI" and devise == "XOF"
+                        and demandes.intersection({"wave", "wave_direct"})
+                        and callable(getattr(p.client, "creer_checkout_wave", None))):
+                    proposables.append({
+                        "moyen": "wave",
+                        "prestataire": p.nom, "devise": devise})
                 continue
             for moyen in sorted(_moyens_configures(p)):
                 if _normaliser_moyen(moyen) in demandes:
