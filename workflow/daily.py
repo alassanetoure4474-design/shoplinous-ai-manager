@@ -19,6 +19,13 @@ D. v5.1 : process_order est APPELEE par le workflow pour CHAQUE commande
    Commandes > 5 unites : statut depasse_plafond, AUCUN appel CJ,
    verification manuelle obligatoire. AUCUNE creation, modification,
    paiement ni annulation de commande fournisseur, par construction.
+E. v5.2 : compatibilite REELLE Freewebstore confirmee (GET /orders et
+   GET /orders/abandoned, 01/11/2026) : en-tete x-api-key (doc
+   officielle), URI /orders, pagination limit/offset, adaptateur
+   fw_normalize_order (id, delivery_address.country_iso_2, postage,
+   order_details[].quantity/productSKU). AUCUNE donnee personnelle
+   copiee. Le vid CJ n'est pas transporte par Freewebstore : lignes en
+   verification manuelle (sans_vid + SKU) jusqu'a correspondance.
 
 Regles de reference (base de connaissances SHOPLINOUS, 01/11/2026) :
 1. Stock China Warehouse >= 1000 pour CHAQUE variante conservee
@@ -96,6 +103,7 @@ PAYMENT_FEE_FIXED_EUR = float(os.environ.get("PAYMENT_FEE_FIXED_EUR", "0.30"))
 CJ_BASE = os.environ.get("CJ_API_BASE", "https://developers.cjdropshipping.com/api2.0/v1")
 FW_BASE = os.environ.get("FREEWEBSTORE_API_BASE", "https://api.freewebstore.com")
 FW_PER_PAGE = 100
+FW_ORDERS_PAGE = 50    # v5.2 : pagination GET /orders (limit/offset)
 CJ_QPS_SECONDS = 1.1   # QPS CJ 1 req/s, confirme par erreur reelle 1600200
 MIN_IMAGE_BYTES = 4096
 
@@ -150,7 +158,10 @@ def _fw_headers():
     if not key:
         raise EvaluationSuspended(
             "FREEWEBSTORE_API_KEY manquant : evaluation suspendue (secret absent).")
-    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    # v5.2 : en-tete x-api-key CONFIRME par la doc officielle Freewebstore
+    # (https://api.freewebstore.com - Authorization). L'en-tete Bearer
+    # n'est PAS la methode documentee.
+    return {"x-api-key": key, "Content-Type": "application/json"}
 
 
 def cj_check(data: dict, what: str) -> dict:
@@ -368,10 +379,90 @@ async def fw_get_product(pid: str) -> dict:
 
 @workflows.activity(start_to_close_timeout=timedelta(minutes=2), retry_policy_max_attempts=3)
 async def fw_orders() -> dict:
+    """v5.2 : commandes Freewebstore - LECTURE SEULE, pagination verifiee.
+    URI REELLE confirmee : GET /orders (doc officielle + reponse reelle
+    {"orders": {"found": N, "orders": [...]}}). Boucle limit/offset
+    jusqu'a recuperation de toutes les commandes (criteres d'arret :
+    'found' atteint OU page plus courte que la taille demandee).
+    Aucune ecriture."""
+    collected, offset, found = [], 0, None
     async with httpx.AsyncClient(timeout=60) as c:
-        r = await c.get(f"{FW_BASE}/order", params={"limit": 50}, headers=_fw_headers())
-        r.raise_for_status()
-        return r.json()
+        while True:
+            r = await c.get(f"{FW_BASE}/orders",
+                            params={"limit": FW_ORDERS_PAGE, "offset": offset},
+                            headers=_fw_headers())
+            r.raise_for_status()
+            body = r.json()
+            if not isinstance(body, dict):
+                raise RuntimeError("Freewebstore /orders: reponse non-dict")
+            inner = body.get("orders")
+            if isinstance(inner, dict):
+                batch = inner.get("orders")
+                if found is None:
+                    found = inner.get("found")
+            elif isinstance(inner, list):
+                batch = inner
+                if found is None:
+                    found = len(inner)
+            else:
+                raise RuntimeError("Freewebstore /orders: champ orders inattendu")
+            if not isinstance(batch, list):
+                raise RuntimeError("Freewebstore /orders: liste commandes inattendue")
+            collected.extend(o for o in batch if isinstance(o, dict))
+            if isinstance(found, int) and len(collected) >= found:
+                break
+            if len(batch) < FW_ORDERS_PAGE:
+                break
+            offset += len(batch)
+    return {"found": found if isinstance(found, int) else len(collected),
+            "orders": collected}
+
+
+def fw_normalize_order(raw) -> dict:
+    """v5.2 : ADAPTATEUR SECURISE commande Freewebstore -> process_order.
+
+    Structure REELLE confirmee par GET /orders et GET /orders/abandoned
+    (01/11/2026, storeid 1107499) :
+    - identifiant commande : raw["id"]
+    - pays : raw["delivery_address"]["country_iso_2"] (ISO-2, ex. "FR")
+    - lignes produits : raw["order_details"][] avec "quantity",
+      "productSKU" (SKU variante CJ, ex. CJJT205244502BY), "productId",
+      "variantId" (identifiant variante FREWEBSTORE, pas le vid CJ),
+      "net" (prix ligne EUR)
+    - frais de livraison factures : raw["postage"] (niveau commande, EUR,
+      avec postage_tax)
+
+    SECURITE : n'extrait QUE les champs metier. AUCUNE donnee personnelle
+    (nom, email, telephone, adresse, IP, session) n'est copiee.
+    Le vid CJ n'est JAMAIS transporte par Freewebstore : il est resolu a
+    None et process_order demandera une verification manuelle (sans_vid)
+    jusqu'a ce qu'une correspondance SKU -> vid soit disponible."""
+    if not isinstance(raw, dict):
+        return {"id": None, "country": None, "shipping_charged": None,
+                "items": [], "source": "freewebstore"}
+    addr = raw.get("delivery_address") or {}
+    country = None
+    if isinstance(addr, dict):
+        iso = addr.get("country_iso_2")
+        if isinstance(iso, str) and len(iso.strip()) == 2:
+            country = iso.strip().upper()
+    postage = raw.get("postage")
+    if not isinstance(postage, (int, float)) or isinstance(postage, bool):
+        postage = None
+    items = []
+    for d in raw.get("order_details") or []:
+        if not isinstance(d, dict):
+            continue
+        items.append({
+            "vid": None,   # vid CJ non transporte par Freewebstore
+            "sku": d.get("productSKU") or "",
+            "product_id": d.get("productId"),
+            "quantity": d.get("quantity"),
+            "prix_ligne_eur": d.get("net"),
+        })
+    return {"id": raw.get("id"), "country": country,
+            "shipping_charged": postage, "items": items,
+            "source": "freewebstore"}
 
 
 @workflows.activity(start_to_close_timeout=timedelta(minutes=5), retry_policy_max_attempts=2)
@@ -476,7 +567,10 @@ async def process_order(order: dict) -> dict:
             continue
         if not vid:
             line["statut"] = "sans_vid"
-            line["alerte"] = "ligne sans vid CJ : verification manuelle"
+            line["sku"] = it.get("sku") or ""
+            line["alerte"] = (f"ligne sans vid CJ (sku {it.get('sku') or 'inconnu'}) : "
+                              "correspondance SKU->vid requise, "
+                              "verification manuelle")
             report["alertes"].append(f"ligne {idx + 1}: {line['alerte']}")
             report["lignes"].append(line)
             all_lines_checked = False
@@ -919,28 +1013,24 @@ class ShoplinousDailyWorkflow:
                     report["errors"].append(f"produit {pid}: {exc}")
 
         # Surveillance commandes : lecture seule, AUCUN paiement fournisseur.
-        # v5.1 : chaque commande recue est REELLEMENT analysee par
-        # process_order (lecture seule stricte : fret CJ reel avec la
-        # quantite reelle, repartition securisee, vs tarif facture).
+        # v5.2 : GET /orders pagine (limit/offset, en-tete x-api-key),
+        # adaptateur securise fw_normalize_order (AUCUNE donnee personnelle
+        # copiee), PUIS process_order en lecture seule stricte.
         # PROTECTION FOURNISSEUR : aucune creation, modification,
         # paiement ni annulation de commande CJ, jamais, par construction.
         try:
             orders_body = await fw_orders()
-            if not isinstance(orders_body, dict):
-                raise RuntimeError("structure commandes inattendue")
-            order_list = (orders_body.get("orders")
-                          or orders_body.get("list")
-                          or orders_body.get("data") or [])
+            order_list = orders_body.get("orders") or []
             if not isinstance(order_list, list):
                 raise RuntimeError("structure commandes inattendue")
-            report["orders_found"] = len(order_list)
+            report["orders_found"] = orders_body.get("found", len(order_list))
             report["orders_analyzed"] = []
             for o in order_list:
                 if not isinstance(o, dict):
                     report["errors"].append("commande mal formee ignoree")
                     continue
                 try:
-                    oreport = await process_order(o)
+                    oreport = await process_order(fw_normalize_order(o))
                 except Exception as exc:
                     report["errors"].append(
                         f"process_order {o.get('id')}: {exc}")
