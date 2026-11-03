@@ -27,26 +27,56 @@ jobs:
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
         with:
-          version: latest
+          version: 3.0.0
 
-      - name: Verify required Supabase secrets
+      - name: Validate secrets and prepare the IPv4 session-pooler URL
         shell: bash
         run: |
+          set -euo pipefail
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN absent"; exit 1; }
           test -n "$SUPABASE_PROJECT_ID" || { echo "::error::SUPABASE_PROJECT_ID absent"; exit 1; }
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::SUPABASE_DB_PASSWORD absent"; exit 1; }
-          if [[ ! "$SUPABASE_PROJECT_ID" =~ ^[a-z0-9]{20}$ ]]; then
-            echo "::error::SUPABASE_PROJECT_ID doit être le project-ref Supabase de 20 caractères."
+          if [[ "$SUPABASE_PROJECT_ID" != "giarkrdmwfrlagkqnkvi" ]]; then
+            echo "::error::SUPABASE_PROJECT_ID ne correspond pas au projet SHOPLINOUS vérifié."
             exit 1
           fi
 
+          python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          project_ref = os.environ["SUPABASE_PROJECT_ID"]
+          password = os.environ["SUPABASE_DB_PASSWORD"]
+          if not password:
+              raise SystemExit("SUPABASE_DB_PASSWORD absent")
+          if any(ord(char) < 32 or ord(char) == 127 for char in password):
+              raise SystemExit("SUPABASE_DB_PASSWORD contient un caractère de contrôle interdit")
+
+          username = f"postgres.{project_ref}"
+          encoded_password = quote(password, safe="")
+          pooler_url = (
+              f"postgresql://{username}:{encoded_password}"
+              "@aws-0-eu-west-1.pooler.supabase.com:5432/postgres?sslmode=require"
+          )
+
+          def escape_workflow_command(value: str) -> str:
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          # Mask credentials before exposing the URL to later workflow steps.
+          print(f"::add-mask::{escape_workflow_command(encoded_password)}")
+          print(f"::add-mask::{escape_workflow_command(pooler_url)}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write(f"SUPABASE_DB_URL={pooler_url}\n")
+          print("Pooler de session IPv4 préparé pour le project-ref vérifié; identifiants masqués.")
+          PY
+
       - name: Preview pending migrations on the explicitly selected project
-        run: supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" --remote="$SUPABASE_PROJECT_ID"
+        run: supabase db push --dry-run --remote="$SUPABASE_DB_URL"
 
       - name: Apply migrations only after explicit second confirmation
         if: ${{ inputs.confirm_apply == true }}
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --yes --remote="$SUPABASE_PROJECT_ID"
+        run: supabase db push --yes --remote="$SUPABASE_DB_URL"
 
       - name: Dry-run only; no database changes were made
         if: ${{ inputs.confirm_apply != true }}
-        run: echo "Aperçu terminé. Aucune migration n'a été appliquée. Vérifiez le journal, puis relancez le workflow avec confirm_apply=true pour appliquer."
+        run: echo "Aperçu terminé. Aucune migration n'a été appliquée. Vérifiez le journal, puis relancez avec confirm_apply=true pour appliquer."

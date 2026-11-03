@@ -75,7 +75,23 @@ Codes de sortie : 0 = les 5 modeles declares existent sur l'instance ;
 2 = instance injoignable ou configuration absente (aucun appel reseau).
 
 Secrets GitHub Actions a configurer (supabase-migrate.yml) :
-SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD.
+SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID et SUPABASE_DB_PASSWORD
+(mot de passe PostgreSQL brut, jamais une URL).
+
+Le workflow construit lui-meme une URL de connexion Supavisor Session Pooler
+IPv4 a partir du project-ref et du mot de passe, encode les caracteres
+reserves et masque l'URL generee dans les journaux. Pour le projet SHOPLINOUS
+verifie, les parametres du pooler sont :
+- hote : aws-0-eu-west-1.pooler.supabase.com
+- port : 5432 (mode Session)
+- utilisateur : postgres.<project-ref>
+- base : postgres
+
+Le runner GitHub utilise ici ne prend pas en charge la connexion directe
+IPv6 du projet Free. Le pooler partage Session est accessible en IPv4 ;
+le workflow verifie aussi que SUPABASE_PROJECT_ID correspond au project-ref
+SHOPLINOUS attendu avant toute connexion. Aucune URL de connexion ni aucun
+nouveau secret SUPABASE_DB_URL n'est a ajouter manuellement.
 Pour GeniusPay, ajouter aussi GENIUSPAY_API_KEY et GENIUSPAY_API_SECRET
 dans Actions secrets, et GENIUSPAY_WEBHOOK_SECRET dans les secrets du
 service qui executera les paiements apres creation du webhook HTTPS.
@@ -273,18 +289,20 @@ Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux
 
 1. Configurer dans GitHub Actions les trois secrets Supabase :
    SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID et SUPABASE_DB_PASSWORD.
-   Ne jamais coller ces secrets dans le chat. Le secret GeniusPay n'existe
-   qu'après la création du webhook ; il sera ajouté à l'étape 4.
-2. Après fusion validée et vérification du projet cible, exécuter le
-   workflow Apply Supabase database migrations une première fois avec
-   confirm_apply=false (valeur par défaut). Ce lancement vérifie les trois
-   secrets, valide le format du project-ref et affiche le dry-run sans rien
-   modifier. Examiner entièrement le journal et le project-ref.
-3. Seulement si l'aperçu correspond au projet Sandbox attendu, relancer le
-   même workflow avec confirm_apply=true. Le workflow refait le dry-run puis
-   applique les migrations sur ce project-ref explicite. Ne pas utiliser
-   confirm_apply=true si le premier aperçu n'a pas été examiné.
-   Le workflow utilise Supabase CLI v3.
+   SUPABASE_DB_PASSWORD contient le mot de passe PostgreSQL brut ; ne pas
+   mettre une chaine de connexion dans ce secret et ne jamais coller les
+   valeurs dans le chat. Le secret GeniusPay n'existe qu'apres la creation
+   du webhook ; il sera ajoute a l'etape 4.
+2. Apres fusion validee, executer le workflow Apply Supabase database
+   migrations une premiere fois avec confirm_apply=false (valeur par defaut).
+   Le workflow verifie les secrets et le project-ref exact, construit en
+   memoire une URL Supavisor Session Pooler IPv4, puis affiche le dry-run.
+   L'URL et le mot de passe sont masques dans les journaux. Examiner le
+   journal complet et confirmer que la cible est le projet SHOPLINOUS.
+3. Seulement si l'apercu correspond au projet attendu, relancer le meme
+   workflow avec confirm_apply=true. Le workflow refait le dry-run puis
+   applique les migrations. Ne pas utiliser confirm_apply=true si le premier
+   apercu n'a pas ete examine. Le workflow utilise Supabase CLI v3.
 4. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
    sélectionner au minimum payment.success, payment.failed,
    payment.cancelled, payment.expired et payment.refunded, puis sauvegarder
