@@ -4,7 +4,7 @@ Workflow cloud Mistral qui verifie par de VERITABLES requetes HTTP GET que les
 images produits CJ sont accessibles et exploitables. Une URL HTTPS n'est jamais
 consideree comme validee sans preuve HTTP reelle.
 
-## Corrections v2 (exigences de la PR #29)
+## Transport HTTPX avec DNS pinning (v4)
 
 1. **Streaming avec interruption immediate** : `reponse.aiter_bytes()`, arret
    des le depassement de 20 Mo (`TAILLE_MAX_OCTETS`), le corps n'est pas lu
