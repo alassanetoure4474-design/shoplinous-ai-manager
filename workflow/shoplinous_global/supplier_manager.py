@@ -93,7 +93,7 @@ class GestionnaireFournisseurs:
         ajoutes, refuses = [], []
         lecteur = csv.DictReader(io.StringIO(contenu_csv))
         if tuple(lecteur.fieldnames or ()) != COLONNES_CSV:
-            raise ValueError("en-tête CSV invalide : attendu " + ",".join(COLONNES_CSV))
+            raise ValueError("en-tete CSV invalide : attendu " + ",".join(COLONNES_CSV))
         for numero, ligne in enumerate(lecteur, start=2):
             try:
                 price, currency, stock, origin, days = self._valider_champs(
