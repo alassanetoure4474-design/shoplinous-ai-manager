@@ -153,6 +153,27 @@ Deno.test("returns HTTP 503 for transient persistence errors so GeniusPay can re
   if (response.status !== 503) throw new Error("Expected HTTP 503, got " + response.status);
 });
 
+
+Deno.test("acknowledges a signed GeniusPay webhook.test without touching payment persistence", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const payload = {
+    id: "evt_webhook_test_0001",
+    event: "webhook.test",
+    environment: "sandbox",
+    timestamp: FIXED_TIME,
+  };
+  const response = await handler(await makeRequest(payload));
+  const body = await response.json();
+  if (response.status !== 200 || body.test !== true || body.received !== true) {
+    throw new Error("Expected an acknowledged webhook.test event");
+  }
+  if (called) throw new Error("A test event must not call payment persistence");
+});
+
 Deno.test("rejects non-POST methods", async () => {
   const handler = makeHandler();
   const response = await handler(new Request("https://local.test/geniuspay-webhook", {
