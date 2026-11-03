@@ -125,7 +125,21 @@ docker run --env-file .env shoplinous.
 - Les paiements clients restent bloques par le module tant que les deux cles API et le secret webhook ne sont pas configures.
 - Le webhook doit etre expose sur une URL HTTPS publique, verifier HMAC-SHA256 + timestamp (fenetre 300 s), puis lier reference, commande, montant, devise et environnement. Une redirection navigateur ne confirme jamais un paiement.
 - La documentation GeniusPay indique que le secret webhook n'est fourni qu'a la creation du webhook : le sauvegarder immediatement dans `GENIUSPAY_WEBHOOK_SECRET`.
-- Ne pas enregistrer le webhook tant qu'un endpoint HTTPS reel n'est pas deploye. Le worker Mistral seul n'expose pas automatiquement une route HTTP de webhook.
+- Le point d'entrée de webhook doit être l'URL publique de la Supabase Edge Function :
+  https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/geniuspay-webhook.
+  Le secret GeniusPay n'étant retourné qu'à la création du webhook, créer
+  d'abord le webhook Sandbox en indiquant cette URL, puis enregistrer
+  immédiatement le secret retourné dans le secret GitHub
+  GENIUSPAY_WEBHOOK_SECRET. Déployer ensuite la fonction avec le workflow
+  manuel confirmé ; celui-ci injecte le secret dans Supabase avant le déploiement.
+  Si GeniusPay exige une validation HTTP préalable de l'URL lors de la création,
+  interrompre cette étape et faire confirmer la procédure par GeniusPay plutôt
+  que d'utiliser un endpoint temporaire non sécurisé.
+- Après déploiement, utiliser POST /webhooks/{id}/test. Le récepteur reconnaît
+  l'événement signé webhook.test et répond 200 sans toucher aux commandes ni
+  aux paiements. Ensuite, effectuer un paiement technique Sandbox et vérifier
+  son rapprochement en base.
+- Le worker Mistral seul n'expose pas automatiquement une route HTTP de webhook.
 - Ne jamais mettre les cles dans GitHub, dans le code, dans les captures ou dans les journaux. Les saisir uniquement dans les secrets de l'hebergeur qui executera le client et le receveur webhook.
 
 ## 7. Retour arriere
