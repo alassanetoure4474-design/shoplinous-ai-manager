@@ -251,15 +251,20 @@ async def _resoudre_dns(hote: str) -> list[str]:
     3 tentatives espacees de 2 s : un echec DNS transitoire n'invalide pas
     une image ; apres 3 echecs, echec explicite (fail-closed conserve).
     """
+    # socket.getaddrinfo via executor : identique au diagnostic brut CI
+    # (asyncio.getaddrinfo n'existe pas dans tous les environnements).
     derniere_exc: Optional[Exception] = None
     for _essai in range(3):
         try:
-            infos = await asyncio.getaddrinfo(
-                hote,
-                PORT_AUTORISE,
-                family=socket.AF_INET,
-                type=socket.SOCK_STREAM,
-                proto=socket.IPPROTO_TCP,
+            boucle = asyncio.get_running_loop()
+            infos = await boucle.run_in_executor(
+                None,
+                lambda: socket.getaddrinfo(
+                    hote, PORT_AUTORISE,
+                    family=socket.AF_INET,
+                    type=socket.SOCK_STREAM,
+                    proto=socket.IPPROTO_TCP,
+                ),
             )
             return sorted({entree[4][0].split("%")[0] for entree in infos})
         except Exception as exc:
