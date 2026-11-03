@@ -53,6 +53,9 @@ function phpJsonEncode(value: unknown): string {
   // GeniusPay documents PHP json_encode($payload): compact JSON, escaped
   // forward slashes and escaped non-ASCII code units.
   const compact = JSON.stringify(value);
+  if (compact === undefined) {
+    throw new Error("Webhook payload cannot be serialized");
+  }
   return compact
     .replace(/\//g, "\\/")
     .replace(/[\u007f-\uffff]/g, (character) =>
