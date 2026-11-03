@@ -38,7 +38,7 @@ jobs:
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::SUPABASE_DB_PASSWORD absent"; exit 1; }
 
       - name: Link Supabase project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Apply migrations
         run: |
