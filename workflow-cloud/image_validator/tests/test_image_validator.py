@@ -14,6 +14,7 @@ Aucun reseau reel : httpx.MockTransport + resolveur DNS factice injectes.
 """
 
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -22,6 +23,7 @@ import httpx
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+os.environ["SHOPLINOUS_TEST_MODE"] = "1"
 
 import src.workflows.image_validator as iv  # noqa: E402
 from src.workflows.image_validator import (  # noqa: E402
@@ -413,3 +415,15 @@ def test_rapport_vide_coherent():
     assert rapport["rejetees"] == 0
     assert rapport["resultats"] == []
     assert rapport["date_rapport"] is not None
+
+
+def test_production_sans_transport_reseau_est_bloquee():
+    async def go():
+        return await iv._verifier_une_image(
+            "https://cf.cjdropshipping.com/img.jpg",
+            resolveur=_resoudre_publique,
+        )
+
+    resultat = asyncio.run(go())
+    assert not resultat.valide
+    assert "DNS pinning" in resultat.motif_echec
