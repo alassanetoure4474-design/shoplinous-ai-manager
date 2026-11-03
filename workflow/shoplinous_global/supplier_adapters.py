@@ -1,10 +1,11 @@
-"""Supplier Adapter Registry : adaptateurs fournisseurs.
+"""Registre mondial d'adaptateurs fournisseurs.
 
-CJdropshipping = integration REELLE existante (deleguee aux outils
-daily.py). Tous les autres fournisseurs (AliExpress, BigBuy, Spocket,
-Printful, fournisseurs africains/ivoiriens, personnalises) sont
-registres NON CONNECTES : aucun appel n est simule.
+L'origine du fournisseur ou de l'entrepôt n'est pas une liste blanche :
+un adaptateur connecté peut proposer une offre vers n'importe quelle
+destination, sous réserve du devis réel et de la qualification SHOPLINOUS.
+Les intégrations non connectées restent explicitement inactives.
 """
+import re
 
 
 class AdaptateurFournisseur:
@@ -14,88 +15,214 @@ class AdaptateurFournisseur:
     pays_expedition = ()
 
     def methodes(self):
-        return {c: getattr(self, c, None) for c in self.capacites}
+        return {capability: getattr(self, capability, None)
+                for capability in self.capacites}
+
+    def rechercher_offres(self, mot_cle, destination, quantite):
+        """Retourne des offres au format canonique du moteur de qualification.
+
+        Un adaptateur concret doit appeler son API réelle et fournir les
+        preuves de stock, images, identité, conformité et devis de transport.
+        """
+        raise NotImplementedError("recherche normalisée non implémentée")
 
 
 class AdaptateurCJ(AdaptateurFournisseur):
-    """Delegue aux fonctions REELLES de daily.py (outils cj_search,
-    cj_variants, cj_product_detail, cj_stock, cj_freight) sans les
-    modifier. Les commandes restent interdites sans autorisation."""
+    """Délègue aux outils CJ réels de daily.py, sans achat automatique."""
     nom = "cj"
     connected = True
-    capacites = ("produits_recherche", "variantes", "detail", "stock",
-                 "fret")
+    capacites = ("produits_recherche", "variantes", "detail", "stock", "fret")
     pays_expedition = ("CN",)
 
     def produits_recherche(self, mot_cle):
-        import asyncio, daily
-        return asyncio.get_event_loop_policy().new_event_loop(
-        ).run_until_complete(daily.cj_search(mot_cle))
+        import asyncio
+        import daily
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(daily.cj_search(mot_cle))
+        finally:
+            loop.close()
 
     def variantes(self, pid):
-        import asyncio, daily
-        return asyncio.get_event_loop_policy().new_event_loop(
-        ).run_until_complete(daily.cj_variants(pid))
+        import asyncio
+        import daily
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(daily.cj_variants(pid))
+        finally:
+            loop.close()
 
     def detail(self, pid):
-        import asyncio, daily
-        return asyncio.get_event_loop_policy().new_event_loop(
-        ).run_until_complete(daily.cj_product_detail(pid))
+        import asyncio
+        import daily
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(daily.cj_product_detail(pid))
+        finally:
+            loop.close()
 
     def stock(self, vid):
-        import asyncio, daily
-        return asyncio.get_event_loop_policy().new_event_loop(
-        ).run_until_complete(daily.cj_stock(vid))
+        import asyncio
+        import daily
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(daily.cj_stock(vid))
+        finally:
+            loop.close()
 
     def fret(self, vid, pays, quantite):
-        import asyncio, daily
-        return asyncio.get_event_loop_policy().new_event_loop(
-        ).run_until_complete(daily.cj_freight(vid, pays, quantite))
+        import asyncio
+        import daily
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(daily.cj_freight(vid, pays, quantite))
+        finally:
+            loop.close()
 
 
 class AdaptateurNonConnecte(AdaptateurFournisseur):
-    """Modele des fournisseurs prevus mais non contractes."""
+    """Fournisseur répertorié, mais sans API ni contrat actif."""
+
     def __init__(self, nom, pays_expedition=()):
         self.nom = nom
         self.pays_expedition = tuple(pays_expedition)
+        self.capacites = (
+            "produits_recherche", "variantes", "detail", "stock", "fret", "suivi"
+        )
 
     def methodes(self):
-        return {c: None for c in self.capacites}
+        return {capability: None for capability in self.capacites}
 
 
 class RegistreFournisseurs:
-    def __init__(self):
+    def __init__(self, adaptateurs=None):
         cj = AdaptateurCJ()
         self._fournisseurs = {cj.nom: cj}
-        for nom, pays in (
-                ("aliexpress", ("CN",)), ("bigbuy", ("ES", "IT")),
-                ("spocket", ("US", "EU")), ("printful", ("US", "LV")),
-                ("fournisseurs_africains", ("CI", "SN", "NG")),
-                ("fournisseurs_ivoiriens", ("CI",)),
-                ("personnalise", ())):
-            a = AdaptateurNonConnecte(nom, pays)
-            a.capacites = ("produits_recherche", "variantes", "detail",
-                           "stock", "fret", "suivi")
-            self._fournisseurs[nom] = a
+        # Noms prévus, sans prétendre que leurs API/contrats sont actifs.
+        for name, origins in (
+            ("aliexpress", ("CN",)),
+            ("bigbuy", ("ES", "IT")),
+            ("spocket", ("US", "EU")),
+            ("printful", ("US", "LV")),
+            ("fournisseurs_africains", ("CI", "SN", "NG")),
+            ("fournisseurs_ivoiriens", ("CI",)),
+            ("personnalise", ()),
+        ):
+            self._fournisseurs[name] = AdaptateurNonConnecte(name, origins)
+        for adapter in adaptateurs or ():
+            self.enregistrer(adapter)
+
+    def enregistrer(self, adaptateur, remplacer=False):
+        """Enregistre un vrai adaptateur API ou un fournisseur personnalisé.
+
+        pays_expedition est une indication de provenance, jamais une règle
+        d'exclusion des destinations. L'état connected doit rester False
+        tant que l'authentification et les appels réels ne sont pas testés.
+        """
+        name = str(getattr(adaptateur, "nom", "")).strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,63}", name):
+            raise ValueError("nom adaptateur invalide")
+        if not isinstance(getattr(adaptateur, "connected", None), bool):
+            raise ValueError("connected doit être un booléen explicite")
+        capabilities = getattr(adaptateur, "capacites", ())
+        if not isinstance(capabilities, (tuple, list)) or not capabilities:
+            raise ValueError("capacités adaptateur manquantes")
+        origins = getattr(adaptateur, "pays_expedition", ())
+        if not isinstance(origins, (tuple, list, set)):
+            raise ValueError("pays_expedition doit être une collection")
+        if name in self._fournisseurs and not remplacer:
+            raise ValueError("fournisseur déjà enregistré : " + name)
+        self._fournisseurs[name] = adaptateur
+        return name
 
     def tous(self):
         return dict(self._fournisseurs)
 
     def connectes(self):
-        return {n: a for n, a in self._fournisseurs.items()
-                if a.connected}
+        return {
+            name: adapter for name, adapter in self._fournisseurs.items()
+            if adapter.connected is True
+        }
 
     def pour_pays(self, code_pays):
-        """Fournisseurs ACCESSIBLES pour un pays : connectes, ou
-        declares dans la configuration du pays."""
-        from shoplinous_global import country_manager
-        conf = country_manager.pays(code_pays)
-        return [n for n in self._fournisseurs
-                if n in conf["fournisseurs"] or
-                self._fournisseurs[n].connected]
+        """Retourne les adaptateurs actifs pour la destination demandée.
+
+        Le pays d'expédition n'est volontairement pas comparé à code_pays.
+        Seul l'état de connexion compte ici ; chaque offre doit ensuite
+        fournir un devis réel et réussir supplier_qualification.
+        """
+        from intl import get_country
+        get_country(code_pays)
+        return sorted(self.connectes())
+
+    def par_origine(self, code_origine):
+        """Filtre informatif par origine, sans limiter la destination."""
+        from intl import get_country
+        code = str(code_origine).strip().upper()
+        get_country(code)
+        return sorted(
+            name for name, adapter in self._fournisseurs.items()
+            if adapter.connected is True
+            and (code in tuple(getattr(adapter, "pays_expedition", ()))
+                 or "*" in tuple(getattr(adapter, "pays_expedition", ())))
+        )
+
+    def rechercher_offres(self, mot_cle, destination, quantite):
+        """Interroge les adaptateurs actifs qui implémentent le contrat canonique.
+
+        Les pays d'expédition ne filtrent jamais les destinations. Chaque
+        offre renvoyée doit ensuite être qualifiée par le moteur commun.
+        """
+        from collections.abc import Mapping
+        from intl import get_country
+
+        get_country(destination)
+        if not isinstance(mot_cle, str) or not mot_cle.strip():
+            raise ValueError("mot-clé de recherche obligatoire")
+        if not isinstance(quantite, int) or isinstance(quantite, bool) or quantite < 1:
+            raise ValueError("quantité invalide")
+
+        offres, erreurs, ignores = [], [], []
+        for name, adapter in sorted(self.connectes().items()):
+            implementation = getattr(type(adapter), "rechercher_offres", None)
+            if implementation is AdaptateurFournisseur.rechercher_offres:
+                ignores.append({"fournisseur": name, "raison": "connecteur sans recherche normalisée"})
+                continue
+            try:
+                result = adapter.rechercher_offres(
+                    mot_cle.strip(), destination.upper(), quantite
+                )
+                if not isinstance(result, (list, tuple)):
+                    raise ValueError("le connecteur doit retourner une liste d'offres")
+                for offer in result:
+                    if not isinstance(offer, Mapping):
+                        raise ValueError("offre fournisseur non structurée")
+                    normalized = dict(offer)
+                    # Le fournisseur vient de l'adaptateur authentifié,
+                    # jamais d'une valeur arbitraire fournie dans le flux.
+                    normalized["fournisseur"] = name
+                    offres.append(normalized)
+            except Exception as exc:
+                erreurs.append({
+                    "fournisseur": name,
+                    "erreur": type(exc).__name__,
+                    "detail": str(exc)[:180],
+                })
+        return {
+            "destination": destination.upper(),
+            "quantite": quantite,
+            "offres": offres,
+            "erreurs": erreurs,
+            "adaptateurs_sans_recherche": ignores,
+        }
 
     def etat(self):
-        return {n: {"connecte": a.connected,
-                    "pays_expedition": list(a.pays_expedition),
-                    "capacites": list(a.capacites)}
-                for n, a in self._fournisseurs.items()}
+        return {
+            name: {
+                "connecte": adapter.connected is True,
+                "pays_expedition": list(adapter.pays_expedition),
+                "capacites": list(adapter.capacites),
+                "candidature_mondiale": adapter.connected is True,
+            }
+            for name, adapter in self._fournisseurs.items()
+        }

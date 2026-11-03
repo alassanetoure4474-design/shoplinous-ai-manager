@@ -1,12 +1,12 @@
 """SHOPLINOUS GLOBAL - architecture modulaire v6.
 
-18 modules independants, interfaces claires, aucun ne casse les
+19 modules independants, interfaces claires, aucun ne casse les
 32 outils existants (workflow/daily.py) ni les cinq modeles IA
 (workflow/ai_manager.py). Les modules sont volontairement
 hors-ligne par defaut : une integration est "connectee" uniquement
 si un contrat/utilisateur reel existe, jamais simulee.
 
-Modules (1 a 18) :
+Modules (1 a 19) :
  1. market_manager        - marches mondiaux et regroupements
  2. country_manager       - configuration independante par pays
  3. currency_manager      - devises, arrondis, coherence affiche/encaisse
@@ -25,15 +25,16 @@ Modules (1 a 18) :
 16. notification_manager  - notifications multi-canaux
 17. security_audit        - secrets, signatures, journal d'audit, PII
 18. monitoring            - compteurs et sante de la plateforme
+19. supplier_qualification - controle mondial des offres et devis réels
 """
 import importlib
 
-VERSION = "6.0"
+VERSION = "6.2"
 
 MODULES = [
     "market_manager", "country_manager", "currency_manager",
     "exchange_rate_manager", "pricing_manager", "payment_manager",
-    "payment_providers", "supplier_manager", "supplier_adapters",
+    "payment_providers", "supplier_manager", "supplier_adapters", "supplier_qualification",
     "product_catalog", "inventory", "shipping_manager",
     "order_manager", "tracking_manager", "ai_decision_engine",
     "notification_manager", "security_audit", "monitoring",

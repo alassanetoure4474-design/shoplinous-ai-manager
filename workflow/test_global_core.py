@@ -16,8 +16,8 @@ from shoplinous_global import pricing_manager as pm
 
 
 class TestInventaireModules:
-    def test_18_modules_presents_et_charges(self):
-        assert len(g.MODULES) == 18
+    def test_19_modules_presents_et_charges(self):
+        assert len(g.MODULES) == 19
         statut = g.module_status()
         assert statut and all(s["charge"] for s in statut.values())
 
