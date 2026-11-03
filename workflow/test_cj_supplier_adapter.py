@@ -269,3 +269,54 @@ def test_supplier_manager_async_path_keeps_unverified_offer_blocked(monkeypatch)
         assert report["fournisseurs_interroges"] == ["cj"]
 
     asyncio.run(invoke())
+
+
+
+def test_cj_adapter_routes_only_origins_with_verified_stock(monkeypatch):
+    calls = install_fake_daily(monkeypatch)
+    import daily
+
+    daily.stock_by_country = lambda payload: {"CN": 1500, "US": 2200}
+    async def freight_by_origin(vid, country, quantity, start_country_code="CN"):
+        calls["freight"].append((vid, country, quantity, start_country_code))
+        price = "3.00" if start_country_code == "CN" else "4.00"
+        return {"code": 200, "data": [{
+            "logisticName": "Test Line",
+            "logisticPrice": price,
+            "totalPostageFee": price,
+            "logisticAging": "5-8",
+        }]}
+    daily.cj_freight = freight_by_origin
+
+    offers = supplier_adapters.AdaptateurCJ().rechercher_offres(
+        "home organizer", "FR", 1
+    )
+    assert {offer["pays_entrepot"] for offer in offers} == {"CN", "US"}
+    assert {offer["stock"] for offer in offers} == {1500, 2200}
+    assert {call[3] for call in calls["freight"]} == {"CN", "US"}
+
+
+def test_cj_adapter_uses_max_postage_for_cost_but_keeps_conflict_blocked(monkeypatch):
+    install_fake_daily(monkeypatch)
+    import daily
+
+    async def freight_with_destination_surcharge(
+        vid, country, quantity, start_country_code="CN"
+    ):
+        return {"code": 200, "data": [{
+            "logisticName": "CJPacket Ordinary",
+            "logisticPrice": "5.04",
+            "totalPostageFee": "10.84",
+            "logisticAging": "4-10",
+        }]}
+    daily.stock_by_country = lambda payload: {"CN": 1500}
+    daily.cj_freight = freight_with_destination_surcharge
+
+    offer = supplier_adapters.AdaptateurCJ().rechercher_offres(
+        "home organizer", "FR", 1
+    )[0]
+    quote = offer["devis_livraison"]
+    assert quote["cout"] == 10.84
+    assert quote["cout_qualification_cj"] == 10.84
+    assert quote["verifie"] is False
+    assert quote["motif_anomalie_tarif"] == "surcout_destination_a_expliquer"

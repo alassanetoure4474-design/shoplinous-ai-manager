@@ -405,21 +405,31 @@ async def cj_stock(vid: str) -> dict:
 
 
 @workflows.activity(start_to_close_timeout=timedelta(minutes=2), retry_policy_max_attempts=3)
-async def cj_freight(vid: str, country: str, quantity: int = 1) -> dict:
-    """Demande un devis de fret CJ avec la quantite exacte de la commande.
-    Toute quantite entiere positive est transmise sans plafond arbitraire.
-    Les refus/limites metier de CJ remontent comme erreurs ; aucun tarif
-    n'est extrapole et cet endpoint de calcul ne cree aucune commande."""
+async def cj_freight(vid: str, country: str, quantity: int = 1,
+                     start_country_code: str = "CN") -> dict:
+    """Devis CJ exact depuis une origine disposant réellement de stock.
+
+    startCountryCode est confirmé par audit live. Une origine sans stock
+    renvoie zéro canal ; l'appelant doit fournir une origine issue du stock
+    de la variante, jamais une origine supposée.
+    """
     qty = validate_quantity(quantity)
+    origin = str(start_country_code or "").strip().upper()
+    if len(origin) != 2 or not origin.isalpha():
+        raise ValueError("origine startCountryCode ISO-2 invalide")
+    destination = str(country or "").strip().upper()
+    if len(destination) != 2 or not destination.isalpha():
+        raise ValueError("destination countryCode ISO-2 invalide")
     await _THROTTLE.wait()
     async with httpx.AsyncClient(timeout=60) as c:
         r = await c.post(f"{CJ_BASE}/logistic/freight/calculate", headers=_cj_headers(),
                          json={"vid": vid, "quantity": qty,
-                               "countryCode": country, "startCountryCode": "CN"})
+                               "countryCode": destination,
+                               "startCountryCode": origin})
         r.raise_for_status()
-        data = cj_check(r.json(), f"fret {vid}->{country} x{qty}")
+        data = cj_check(r.json(), f"fret {origin}->{destination} {vid} x{qty}")
         if not isinstance(data["data"], list):
-            raise RuntimeError(f"CJ fret {country}: structure inattendue")
+            raise RuntimeError(f"CJ fret {origin}->{destination}: options inattendues")
         return data
 
 
@@ -965,31 +975,42 @@ def similar_name(new_name: str, existing_names: list) -> bool:
     return False
 
 
-def cn_stock_of(stock_payload: dict) -> int:
-    """Extrait le stock China Warehouse d'une reponse stock validee.
+def stock_by_country(stock_payload: dict) -> dict:
+    """Retourne le stock vérifié par entrepôt/origine à partir des entrées CJ.
 
-    CORRECTION v5 : la reponse REELLE observee (01/11/2026) montre
-    storageNum = 11347, totalInventoryNum = 11347, mais
-    stock[0].inventory = 0. La v4 lisait stock[0]["inventory"] en
-    priorite et retournait donc 0 a tort (rejet errone du produit).
-    Priorite corrigee : storageNum > totalInventoryNum > stock[0].inventory.
-    Valeurs non-entiieres ou negatives ignorees (jamais 0 accepte d'une
-    source douteuse si une source fiable existe)."""
+    Les champs areaEn/countryCode et quantités sont ceux observés dans
+    get_cj_variant_stock. Aucune origine n'est inventée : seules les entrées
+    pays ISO2 avec un stock strictement positif sont conservées.
+    """
+    result = {}
     for entry in stock_payload.get("data", []) or []:
-        if not isinstance(entry, dict) or entry.get("countryCode") != "CN":
+        if not isinstance(entry, dict):
             continue
+        country = str(entry.get("countryCode") or "").strip().upper()
+        if len(country) != 2 or not country.isalpha():
+            continue
+        stock = 0
+        # Priorité observée : stock entrepôt, total, puis champs de secours.
         for field in ("storageNum", "totalInventoryNum"):
             value = entry.get(field)
             if isinstance(value, int) and not isinstance(value, bool) and value > 0:
-                return value
-        stocks = entry.get("stock") or []
-        if stocks and isinstance(stocks[0], dict):
-            inventory = stocks[0].get("inventory")
-            if (isinstance(inventory, int)
-                    and not isinstance(inventory, bool)
-                    and inventory > 0):
-                return inventory
-    return 0
+                stock = value
+                break
+        if stock == 0:
+            for row in entry.get("stock") or []:
+                if isinstance(row, dict):
+                    value = row.get("inventory")
+                    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                        stock = value
+                        break
+        if stock > 0:
+            result[country] = max(result.get(country, 0), stock)
+    return result
+
+
+def cn_stock_of(stock_payload: dict) -> int:
+    """Compatibilité historique : extrait uniquement le stock Chine."""
+    return stock_by_country(stock_payload).get("CN", 0)
 
 
 def conforming_freight_options(options: list, rate: float) -> list:
