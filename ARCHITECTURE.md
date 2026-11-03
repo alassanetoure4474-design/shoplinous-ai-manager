@@ -17,7 +17,7 @@ integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 | 6 | payment_manager | Transactions idempotentes, checkout GeniusPay Wave Direct CI/XOF, webhook signe = SEULE preuve de paiement (redirection ignoree), rapprochement comptable | Code operationnel ; activation reelle conditionnee aux cles API, secret webhook et endpoint HTTPS |
 | 7 | payment_providers | GeniusPay checkout heberge + Wave Direct CI/XOF ; CinetPay, PayDunya, KoraPay, Stripe, PayPal en attente de contrats | GeniusPay actif uniquement avec cles API et secret webhook ; autres non connectes |
 | 8 | supplier_manager | API + import CSV STRICT + saisie manuelle ; provenance tracable | Operationnel |
-| 9 | supplier_adapters | Registre extensible d'adaptateurs ; origine fournisseur/entrepôt informative, jamais une liste blanche de destinations | CJ actif ; autres connecteurs à authentifier et tester |
+| 9 | supplier_adapters | Registre extensible ; CJ remonte catalogue, variantes, stock CN, images GET validées et devis réels en lecture seule ; origine fournisseur/entrepôt informative | CJ normalisé actif ; conformité produit et restrictions douanières restent bloquantes faute de preuves ; autres connecteurs non connectés |
 | 10 | product_catalog | Catalogue multi-fournisseurs, anti-doublons ; publication = workflow existant sous autorisation | Operationnel |
 | 11 | inventory | Stocks agreges, non mesure = non garanti, alertes seuil | Operationnel |
 | 12 | shipping_manager | Comparaison devis REELS (destination/quantite exacte/poids/delai/restrictions) ; AUCUNE extrapolation | Operationnel |
@@ -27,11 +27,11 @@ integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 | 16 | notification_manager | Canaux journal (actif) / email / sms / webhook (non connectes) ; redaction systematique | Operationnel |
 | 17 | security_audit | Redaction secrets, HMAC webhooks, journal audit chainage SHA-256, liste blanche PII | Operationnel |
 | 18 | monitoring | Compteurs, sante des modules, panorama des connexions REELLES | Operationnel |
-| 19 | supplier_qualification | Qualification mondiale par offre/destination/quantité : preuve fournisseur, conformité produit, stock >= 1000, >= 2 images vérifiées, achat <= 8 EUR/unité, fret réel <= 6 EUR/unité, délai <= 15 jours, restrictions levées, marge x3 ; aucune restriction sur pays d'origine | Moteur et tests opérationnels ; offres API externes connectées uniquement après authentification réelle |
+| 19 | supplier_qualification | Qualification mondiale par offre/destination/quantité : preuve fournisseur, conformité produit, stock >= 1000, >= 2 images vérifiées, achat <= 8 EUR/unité, fret réel <= 6 EUR/unité, délai <= 15 jours, restrictions levées, marge x3 ; aucune restriction sur pays d'origine | Moteur et tests opérationnels ; CJ alimente maintenant le moteur, mais ses offres restent refusées si conformité produit ou restrictions douanières ne sont pas prouvées |
 
 ## Honnetete des etats (ne jamais confondre)
 
-- REEL : integration CJ (deleguee aux outils existants), tests CI.
+- REEL : integration CJ (recherche normalisee deleguee aux outils existants ; catalogue, variantes, stock CN, GET images et devis exacts en lecture seule), tests CI.
 - SIMULE (mocks) : tests paiement/webhooks/fournisseurs sans reseau.
 - NON CONNECTE : prestataires de paiement et fournisseurs sans contrat/API
   actif (AliExpress, BigBuy, Spocket, Printful et catalogues personnalisés).
