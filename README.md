@@ -85,3 +85,8 @@ Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les referencent
 - Les prix d'annonces utilisent la devise de la destination. Toute conversion hors devise de base exige des taux explicites ; aucun taux, prix local ou moyen de paiement n'est inventé.
 - Les traductions de base sont présentes en français, anglais, espagnol, portugais et arabe. L'arabe est marqué RTL.
 - **Limites non levées par ce changement :** les 249 territoires ne sont pas 249 marchés vendables. La validation CJdropshipping reste à effectuer produit par produit et pays par pays ; la disponibilité des prestataires de paiement, les règles fiscales et les contrats marchands restent à confirmer avant ouverture. Les connecteurs sociaux demeurent désactivés tant qu'ils ne sont pas authentifiés.
+
+
+## Recherche mondiale des fournisseurs
+
+Le workflow `shoplinous_global_supplier_search` appelle CJdropshipping en lecture seule pour un mot-clé, une destination et une quantité exacts. Il retourne les offres qualifiées et les motifs de refus. Il ne passe aucune commande fournisseur et ne publie aucun produit.

@@ -89,6 +89,13 @@ class AdaptateurCJ(AdaptateurFournisseur):
             self._rechercher_offres_async, daily, mot_cle, destination, quantite
         )
 
+    async def rechercher_offres_async(self, mot_cle, destination, quantite):
+        """Point d'entrée asynchrone pour les workflows Mistral."""
+        import daily
+        return await self._rechercher_offres_async(
+            daily, mot_cle, destination, quantite
+        )
+
     async def _rechercher_offres_async(self, daily, mot_cle, destination, quantite):
         """Transforme les réponses CJ réelles en offres normalisées.
 
@@ -397,6 +404,68 @@ class RegistreFournisseurs:
                     normalized = dict(offer)
                     # Le fournisseur vient de l'adaptateur authentifié,
                     # jamais d'une valeur arbitraire fournie dans le flux.
+                    normalized["fournisseur"] = name
+                    offers.append(normalized)
+            except Exception as exc:
+                errors.append({
+                    "fournisseur": name,
+                    "erreur": type(exc).__name__,
+                    "detail": str(exc)[:180],
+                })
+        return {
+            "destination": destination.upper(),
+            "quantite": quantite,
+            "offres": offers,
+            "erreurs": errors,
+            "adaptateurs_sans_recherche": ignored,
+        }
+
+    async def rechercher_offres_async(self, mot_cle, destination, quantite):
+        """Recherche asynchrone compatible avec les activités/workflows."""
+        from collections.abc import Mapping
+        from intl import get_country
+
+        get_country(destination)
+        if not isinstance(mot_cle, str) or not mot_cle.strip():
+            raise ValueError("mot-clé de recherche obligatoire")
+        if not isinstance(quantite, int) or isinstance(quantite, bool) or quantite < 1:
+            raise ValueError("quantité invalide")
+
+        offers, errors, ignored = [], [], []
+        for name, adapter in sorted(self.connectes().items()):
+            if name == "cj":
+                import os
+                if not os.environ.get("CJ_API_KEY"):
+                    ignored.append({
+                        "fournisseur": name,
+                        "raison": "CJ_API_KEY absent dans cet environnement",
+                    })
+                    continue
+            async_implementation = getattr(type(adapter), "rechercher_offres_async", None)
+            sync_implementation = getattr(type(adapter), "rechercher_offres", None)
+            if async_implementation is None and (
+                sync_implementation is AdaptateurFournisseur.rechercher_offres
+            ):
+                ignored.append({
+                    "fournisseur": name,
+                    "raison": "connecteur sans recherche normalisée",
+                })
+                continue
+            try:
+                if async_implementation is not None:
+                    result = await adapter.rechercher_offres_async(
+                        mot_cle.strip(), destination.upper(), quantite
+                    )
+                else:
+                    result = adapter.rechercher_offres(
+                        mot_cle.strip(), destination.upper(), quantite
+                    )
+                if not isinstance(result, (list, tuple)):
+                    raise ValueError("le connecteur doit retourner une liste d'offres")
+                for offer in result:
+                    if not isinstance(offer, Mapping):
+                        raise ValueError("offre fournisseur non structurée")
+                    normalized = dict(offer)
                     normalized["fournisseur"] = name
                     offers.append(normalized)
             except Exception as exc:

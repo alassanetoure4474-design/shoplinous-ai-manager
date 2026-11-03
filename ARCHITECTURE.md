@@ -79,3 +79,8 @@ Securite publicitaire absolue :
 5. Le calendrier refuse tout canal non autorise (facebook, instagram,
    tiktok, google, pinterest : tous a False tant qu aucun connecteur
    n est active).
+
+
+### Workflow de recherche mondiale des fournisseurs
+
+`shoplinous_global_supplier_search` orchestre le taux USD/EUR horodaté, la recherche CJ, les variantes, le stock CN, la validation GET des images et le devis exact destination/quantité. Il applique le moteur de qualification commun et reste strictement en lecture seule.
