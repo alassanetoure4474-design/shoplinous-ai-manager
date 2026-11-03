@@ -98,8 +98,6 @@ class AdaptateurCJ(AdaptateurFournisseur):
         Une durée de validité de 15 minutes est une politique locale de fraîcheur
         SHOPLINOUS, pas une durée annoncée par CJ.
         """
-        from urllib.parse import urlparse
-
         if not isinstance(mot_cle, str) or not mot_cle.strip():
             raise ValueError("mot-clé de recherche obligatoire")
         if not isinstance(destination, str) or len(destination.strip()) != 2:
@@ -138,9 +136,17 @@ class AdaptateurCJ(AdaptateurFournisseur):
 
             detail_payload = await daily.cj_product_detail(product_id)
             image_candidates = set()
-            if product.get("bigImage"):
+            if isinstance(product.get("bigImage"), str):
                 image_candidates.add(product["bigImage"])
-            image_candidates.update(daily.parse_cj_images(detail_payload))
+            image_candidates.update(
+                url for url in daily.parse_cj_images(detail_payload)
+                if isinstance(url, str)
+            )
+            for variant in variants:
+                if isinstance(variant, dict) and isinstance(
+                    variant.get("variantImage"), str
+                ):
+                    image_candidates.add(variant["variantImage"])
 
             # Les GET d'images sont faits une fois par produit. Seules deux
             # URLs distinctes réellement lues et validées sont conservées.
@@ -247,6 +253,7 @@ class AdaptateurCJ(AdaptateurFournisseur):
                         # officielles et l'API CJ est authentifiée par daily.py.
                         "fournisseur_verifie": True,
                         "preuve_fournisseur": self.PREUVE_IDENTITE,
+                        "entite_juridique_fournisseur": self.FOURNISSEUR_LEGAL,
                         # Les réponses API examinées ne fournissent pas de
                         # certificats/rapports de conformité produit.
                         "conformite_verifiee": False,
