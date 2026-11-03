@@ -202,6 +202,24 @@ Deno.test("acknowledges GeniusPay dashboard webhook.test probes without signatur
   if (called) throw new Error("A dashboard test probe must never call payment persistence");
 });
 
+Deno.test("accepts a minimal body-only GeniusPay dashboard test probe", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const response = await handler(new Request("https://local.test/geniuspay-webhook", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type: "webhook.test", environment: "sandbox" }),
+  }));
+  const body = await response.json();
+  if (response.status !== 200 || body.test !== true || body.received !== true) {
+    throw new Error("Expected a minimal dashboard test probe to be acknowledged");
+  }
+  if (called) throw new Error("A dashboard test probe must never call payment persistence");
+});
+
 Deno.test("rejects unsigned payment events even when the dashboard test probe is allowed", async () => {
   let called = false;
   const handler = makeHandler(async () => {
