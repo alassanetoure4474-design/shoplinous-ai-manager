@@ -1,10 +1,10 @@
-"""SHOPLINOUS — Moteur publicitaire.
+"""SHOPLINOUS - Moteur publicitaire.
 Scoring produits, annonces multilingues honnetes, calendrier organique,
 campagnes payantes en brouillon budget 0 uniquement, tableau de bord sans
 statistiques fictives. Aucune publication reelle sans canal autorise."""
 
-from dataclasses import dataclass, field
-from workflow.intl import get_country, LANGUAGES
+from dataclasses import dataclass
+from intl import get_country, LANGUAGES
 
 
 CANAL_AUTORISE = {  # aucun connecteur actif : publication reelle impossible
@@ -95,7 +95,7 @@ class CampagnePayante:
     statut: str = "brouillon"  # jamais "active" sans autorisation reelle
 
 
-def creer_campagne_payante(nom: str, pays: list, budget: float = 0.0) -> CampagnePayante:
+def creer_campagne_payante(nom, pays, budget=0.0) -> CampagnePayante:
     if budget != 0:
         raise ValueError("Budget non autorise : les campagnes restent a 0")
     for p in pays:
@@ -109,7 +109,7 @@ class CalendrierOrganique:
     def __init__(self):
         self.planning = {}  # jour -> liste de publications
 
-    def planifier(self, jour: str, annonce: dict, canal: str) -> dict:
+    def planifier(self, jour, annonce, canal) -> dict:
         if not CANAL_AUTORISE.get(canal, False):
             raise ValueError("Canal non autorise : " + canal)
         items = self.planning.setdefault(jour, [])
@@ -120,7 +120,7 @@ class CalendrierOrganique:
         return pub
 
 
-def tableau_de_bord(planning: dict, statistiques=None) -> dict:
+def tableau_de_bord(planning, statistiques=None) -> dict:
     """N'invente jamais une statistique : seules les stats reelles passees
     apparaissent ; les autres champs valent None."""
     nb = sum(len(v) for v in planning.values())
