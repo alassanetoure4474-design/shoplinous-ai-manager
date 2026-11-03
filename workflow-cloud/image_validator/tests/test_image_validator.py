@@ -1,9 +1,10 @@
-"""Tests unitaires du validateur HTTP GET d'images SHOPLINOUS (v2).
+"""Tests unitaires du validateur HTTP GET d'images SHOPLINOUS (v3).
 
 Couverture :
 - validation statique des URL (schema, port, liste blanche, identifiants) ;
 - protection SSRF dynamique : IP privees/locales refusees, DNS echoue ;
-- streaming avec interruption immediate au-dela de la taille max ;
+- streaming REEL (client.stream) : chaque bloc est controle, interruption
+  immediate au-dela de la taille max, corps NON telecharge entierement ;
 - redirections autorisees (meme domaine), interdites (hors liste), en boucle ;
 - MIME incoherent (Content-Type != signature binaire) et Content-Type non image ;
 - cadence globale 1 req/s verrouee entre executions concurrentes ;
@@ -53,6 +54,23 @@ def _transport(handler):
 
 def _reponse_image(contenu=JPG, mime="image/jpeg", statut=200):
     return httpx.Response(statut, headers={"content-type": mime}, content=contenu)
+
+
+class FluxServeurCompteur(httpx.AsyncByteStream):
+    """Flux serveur factice qui COMPTE les blocs reellement consommes.
+
+    Prouve que le validateur n'aspir pas le corps entier : si la lecture est
+    interrompue (limite depassee), le compteur s'arrete avant la fin.
+    """
+
+    def __init__(self, morceaux):
+        self.morceaux = morceaux
+        self.blocs_consommes = 0
+
+    async def __aiter__(self):
+        for morceau in self.morceaux:
+            self.blocs_consommes += 1
+            yield morceau
 
 
 # ------------------------------------------------------- validation statique
@@ -206,7 +224,38 @@ def test_statut_erreur_rejete():
     assert not resultat.valide and "404" in resultat.motif_echec
 
 
-# ------------------------------------------------------- streaming 20 Mo
+# --------------------------------- streaming : corps non telecharge entier
+def test_corps_non_telecharge_entierement_hors_limite(monkeypatch):
+    """Preuve : quand la limite est depassee, le flux serveur n'est PAS
+    consomme jusqu'au bout — seuls les premiers blocs sont lus."""
+    monkeypatch.setattr(iv, "TAILLE_MAX_OCTETS", 10 * 1024)
+    morceaux = [b"\xff\xd8\xff\xe0" + b"\x42" * 1020]
+    morceaux += [b"\x42" * 1024 for _ in range(400)]  # ~401 Ko au total
+    flux = FluxServeurCompteur(morceaux)
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-type": "image/jpeg"}, stream=flux
+        )
+
+    async def go():
+        return await iv._verifier_une_image(
+            "https://cf.cjdropshipping.com/gros.jpg",
+            transport=_transport(handler),
+            resolveur=_resoudre_publique,
+        )
+
+    resultat = asyncio.run(go())
+    assert not resultat.valide and "plus grand" in resultat.motif_echec
+    # Preuve centrale : le serveur n'a servi qu'une petite partie du corps.
+    assert flux.blocs_consommes < len(morceaux), (
+        f"Le corps a ete integralement lu ({flux.blocs_consommes} blocs / "
+        f"{len(morceaux)}) : le streaming n'interrompt pas la lecture"
+    )
+    assert flux.blocs_consommes <= 64  # ~10 Ko de limite + un dernier bloc
+    assert resultat.taille_octets < sum(len(m) for m in morceaux)
+
+
 def test_streaming_interruption_au_dela_taille_max(monkeypatch):
     # Taille max abaissee a 10 Ko pour le test : 200 Ko doivent etre coupees.
     monkeypatch.setattr(iv, "TAILLE_MAX_OCTETS", 10 * 1024)
@@ -223,6 +272,28 @@ def test_streaming_interruption_au_dela_taille_max(monkeypatch):
     assert not resultat.valide and "plus grand" in resultat.motif_echec
     # Interruption immediate : on n'a pas charge le corps complet de 200 Ko.
     assert resultat.taille_octets < len(gros_corps)
+
+
+def test_streaming_corps_petit_lu_entierement():
+    """Un corps sous la limite est lu entierement (aucune coupure prematuree)."""
+    flux = FluxServeurCompteur([JPG])
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-type": "image/jpeg"}, stream=flux
+        )
+
+    async def go():
+        return await iv._verifier_une_image(
+            "https://cf.cjdropshipping.com/petit.jpg",
+            transport=_transport(handler),
+            resolveur=_resoudre_publique,
+        )
+
+    resultat = asyncio.run(go())
+    assert resultat.valide
+    assert flux.blocs_consommes == 1
+    assert resultat.taille_octets == len(JPG)
 
 
 # ------------------------------------------------------- redirections
