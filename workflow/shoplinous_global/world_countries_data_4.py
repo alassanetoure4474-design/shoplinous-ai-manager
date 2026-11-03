@@ -26,7 +26,7 @@ SV|SLV|Salvador|El Salvador|503|USD|es|AM_C
 SX|SXM|Saint-Martin (Pays-Bas)|Sint Maarten|1|ANG|nl|CARAIBES
 SY|SYR|Syrie|Syria|963|SYP|ar|MO
 SZ|SWZ|Eswatini|Eswatini|268|SZL|en|AF_S
-TC|TCA|Iles Turques-et-CaIques|Turks and Caicos Islands|1|USD|en|CARAIBES
+TC|TCA|Iles Turques-et-Caiques|Turks and Caicos Islands|1|USD|en|CARAIBES
 TD|TCD|Tchad|Chad|235|XAF|fr|AF_C
 TF|ATF|Terres australes francaises|French Southern Territories|262|EUR|fr|AUTRE
 TG|TGO|Togo|Togo|228|XOF|fr|AF_O
