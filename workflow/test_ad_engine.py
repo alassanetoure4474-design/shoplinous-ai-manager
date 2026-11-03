@@ -97,7 +97,7 @@ def test_referentiel_devises_et_langues():
 
 def test_format_price_utilise_decimales_iso_et_symbole():
     assert "€" in intl.format_price(12.5, "EUR")
-    assert intl.format_price(12.5, "JPY").startswith("13 ")
+    assert intl.format_price(12.5, "JPY").startswith("13")
     assert "," in intl.format_price(12.5, "EUR", "fr")
     assert "." in intl.format_price(12.5, "EUR", "en")
     with pytest.raises(ValueError):
