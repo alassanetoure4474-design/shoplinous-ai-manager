@@ -202,6 +202,43 @@ Deno.test("acknowledges GeniusPay dashboard webhook.test probes without signatur
   if (called) throw new Error("A dashboard test probe must never call payment persistence");
 });
 
+Deno.test("accepts a signed webhook.test when GeniusPay omits descriptive headers", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const payload = {
+    id: "evt_signed_headerless_test_0001",
+    event: "webhook.test",
+    environment: "sandbox",
+    timestamp: FIXED_TIME,
+  };
+  const response = await handler(await makeRequest(payload, {
+    "X-Webhook-Event": "",
+    "X-Webhook-Environment": "",
+  }));
+  const body = await response.json();
+  if (response.status !== 200 || body.test !== true || body.signature_verified !== true) {
+    throw new Error("Expected signed webhook.test to pass with optional descriptive headers");
+  }
+  if (called) throw new Error("A signed test event must never call payment persistence");
+});
+
+Deno.test("still rejects signed payment events when required descriptive headers are missing", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const response = await handler(await makeRequest(validPayload(), {
+    "X-Webhook-Event": "",
+    "X-Webhook-Environment": "",
+  }));
+  if (response.status !== 400) throw new Error("Expected HTTP 400, got " + response.status);
+  if (called) throw new Error("Payment events must retain all required webhook headers");
+});
+
 Deno.test("accepts a minimal body-only GeniusPay dashboard test probe", async () => {
   let called = false;
   const handler = makeHandler(async () => {
