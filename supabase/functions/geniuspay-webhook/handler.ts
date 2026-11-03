@@ -143,9 +143,9 @@ export function createGeniusPayWebhookHandler(
     const payloadTimestamp = Number(payload.timestamp);
     const now = dependencies.nowSeconds();
 
-    if (!signatureHeader || !timestampHeader || !eventHeader || !environmentHeader) {
+    if (!signatureHeader || !timestampHeader) {
       const allSignatureHeadersMissing =
-        !signatureHeader && !timestampHeader && !eventHeader && !environmentHeader;
+        !signatureHeader && !timestampHeader;
       const dashboardTestEvent =
         payloadEvent === "webhook.test" ||
         payload.type === "webhook.test" ||
@@ -174,12 +174,14 @@ export function createGeniusPayWebhookHandler(
     if (!Number.isSafeInteger(timestamp) || Math.abs(now - timestamp) > WEBHOOK_WINDOW_SECONDS) {
       return jsonResponse(401, { error: "webhook_timestamp_invalid_or_expired" });
     }
+    const missingEventEnvironmentHeaders = !eventHeader || !environmentHeader;
     if (
       !payloadEvent ||
       !ALLOWED_EVENTS.has(payloadEvent) ||
-      payloadEvent !== eventHeader ||
+      (eventHeader && payloadEvent !== eventHeader) ||
       !payloadEnvironment ||
-      payloadEnvironment !== environmentHeader.toLowerCase() ||
+      (environmentHeader && payloadEnvironment !== environmentHeader.toLowerCase()) ||
+      (missingEventEnvironmentHeaders && payloadEvent !== "webhook.test") ||
       !Number.isSafeInteger(payloadTimestamp) ||
       payloadTimestamp !== timestamp
     ) {
