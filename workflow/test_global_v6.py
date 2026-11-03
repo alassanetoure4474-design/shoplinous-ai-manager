@@ -262,10 +262,10 @@ class TestSecurityAudit:
 
 
 class TestMonitoring:
-    def test_sante_des_18_modules(self):
+    def test_sante_des_19_modules(self):
         m = mo.Monitoring()
         s = m.sante()
-        assert len(s["modules"]) == 18
+        assert len(s["modules"]) == 19
         assert s["modules_defaillants"] == []
         assert all(s["modules"].values())
 
