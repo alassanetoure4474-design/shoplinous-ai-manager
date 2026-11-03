@@ -147,6 +147,14 @@ def format_price(amount: float, currency: str, lang: str = "fr") -> str:
     return _cur.formater(amount, currency, lang)
 
 
+def taux_trace(montant, devise_source: str, devise_cible: str, taux,
+               source_taux: str, date_taux: str) -> dict:
+    """Trace de conversion horodatee (source + date du taux) pour
+    l historique de commande : voir world_currencies.convertir_trace."""
+    return _cur.convertir_trace(montant, devise_source, devise_cible,
+                               taux, source_taux, date_taux)
+
+
 # --- Langues : traductions completes, arabe reel, RTL ---
 LANGUAGES = ["fr", "en", "es", "pt", "ar"]
 RTL = {"ar": True}
