@@ -63,6 +63,14 @@ H. v5.8 : CONTROLE DE MARGE STRICT (regle 8, decision proprietaire
    UE27+GB/CH/NO), une alerte INFO marge_pire_pays est emise sans
    casser la conformite fondee sur la France.
 
+I. v5.9 : COUVERTURE DE SURVEILLANCE : tout produit FW publie sans
+   AUCUNE entree vid_table (produit cree sans variante, ou SKU sans
+   correspondance CJ exacte et univoque) est signale
+   "produit_non_surveille" (fail-closed, LECTURE SEULE). Aucune
+   association inventee : la resolution reste manuelle (ajout de
+   variante FW avec SKU CJ, mapping SKU exact, ou exclusion
+   assumee et documentee).
+
 Regles de reference (base de connaissances SHOPLINOUS, 01/11/2026) :
 1. Stock China Warehouse >= 1000 pour CHAQUE variante conservee
 2. Prix fournisseur <= 8 EUR pour CHAQUE variante conservee
@@ -698,6 +706,54 @@ async def fw_variant_records(catalogue: list | None = None) -> list:
                     "stock_affiche_fw": v.get("stock"),
                 })
     return records
+
+
+def detecter_produits_non_surveilles(catalogue: list, fw_records: list,
+                                     vid_table: dict) -> list:
+    """v5.9 : produits FW NON couverts par catalog_watch (pur).
+
+    Un produit du catalogue Freewebstore est NON SURVEILLE si aucune
+    de ses variantes n'aboutit a une entree vid_table (correspondance
+    exacte SKU -> vid). Couvre notamment les produits crees SANS
+    variants[] (constate en lecture seule le 03/11/2026 :
+    SPL-COINBOX-EUR 64593185 et SPL-PRESSE-AIL-1 73715777) et ceux
+    dont les SKU sont absents ou ambigus chez CJ.
+
+    MOTEUR PUR, LECTURE SEULE : aucune ecriture, aucune association
+    approximative. La sortie est une liste d'alertes metier ; la
+    resolution (ajout de variante, mapping exact, exclusion assumee)
+    reste une decision manuelle du proprietaire.
+    """
+    table = (vid_table or {}).get("table") or {}
+    fw_par_produit: dict = {}
+    surveilles: set = set()
+    for rec in fw_records or []:
+        if not isinstance(rec, dict):
+            continue
+        pid = str(rec.get("fw_product_id") or "")
+        if not pid:
+            continue
+        fw_par_produit.setdefault(pid, []).append(rec)
+        if rec.get("variant_sku") in table:
+            surveilles.add(pid)
+    non_surveilles = []
+    for p in catalogue or []:
+        if not isinstance(p, dict) or not p.get("id"):
+            continue
+        pid = str(p["id"])
+        variantes = fw_par_produit.get(pid) or []
+        if pid in surveilles:
+            continue
+        motif = ("produit sans variante FW"
+                 if not variantes else
+                 "aucune variante associee a un vid CJ (SKU absent ou ambigu)")
+        non_surveilles.append({
+            "fw_product_id": pid,
+            "fw_product_sku": p.get("sku") or "",
+            "nb_variantes_fw": len(variantes),
+            "motif": motif,
+        })
+    return non_surveilles
 
 
 async def build_vid_table(variant_records: list,
@@ -1540,6 +1596,27 @@ class ShoplinousDailyWorkflow:
         report["alerts"].extend(
             {"vid_table": a.get("variant_sku"), "alerte": a.get("motif")}
             for a in vid_table["absents"] + vid_table["ambigus"])
+
+        # v5.9 : produits FW NON couverts par la surveillance (fail-closed).
+        # Detecte les produits publies sans AUCUNE entree vid_table :
+        # sans variante FW, ou SKU sans correspondance CJ exacte.
+        # AUCUNE ecriture, AUCUNE association inventee : resolution
+        # manuelle uniquement (variante, mapping exact ou exclusion).
+        try:
+            non_surveilles = detecter_produits_non_surveilles(
+                catalogue, fw_records, vid_table)
+            if non_surveilles:
+                report["produits_non_surveilles"] = non_surveilles
+                for pns in non_surveilles:
+                    report["alerts"].append(
+                        {"produit_non_surveille": pns["fw_product_id"],
+                         "alerte": "produit FW absent de catalog_watch ("
+                                   + pns["motif"] + ") : resolution "
+                                   "manuelle requise (ajout de variante, "
+                                   "mapping SKU exact ou exclusion assumee)"})
+        except Exception as exc:
+            report["errors"].append(
+                "produits_non_surveilles: detection impossible (" + str(exc) + ")")
 
         # v5.7/v5.8 : SURVEILLANCE DU CATALOGUE PUBLIE (LECTURE SEULE).
         # Revalide chaque variante publiee (vid_table) contre les regles
