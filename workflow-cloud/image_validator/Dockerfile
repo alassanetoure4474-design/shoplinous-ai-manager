@@ -6,6 +6,6 @@ ENV PYTHONPATH=/app PYTHONUNBUFFERED=1
 COPY pyproject.toml ./
 COPY src ./src
 
-RUN pip install --no-cache-dir "mistralai-workflows>=3.10" "httpx>=0.27" "pydantic>=2.7"
+RUN pip install --no-cache-dir "mistralai-workflows>=3.10" "httpx>=0.27,<1.0" "httpcore>=1.0,<2.0" "pydantic>=2.7"
 
 CMD ["python", "-m", "src.entrypoints.worker"]
