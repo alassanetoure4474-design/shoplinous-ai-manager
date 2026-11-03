@@ -175,6 +175,63 @@ Deno.test("acknowledges a signed GeniusPay webhook.test without touching payment
   if (called) throw new Error("A test event must not call payment persistence");
 });
 
+Deno.test("acknowledges GeniusPay dashboard webhook.test probes without signature headers", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const payload = {
+    id: "evt_dashboard_test_0001",
+    event: "webhook.test",
+    environment: "sandbox",
+    timestamp: FIXED_TIME,
+  };
+  const response = await handler(new Request("https://local.test/geniuspay-webhook", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  }));
+  const body = await response.json();
+  if (response.status !== 200 || body.received !== true || body.test !== true) {
+    throw new Error("Expected the unsigned dashboard test probe to be acknowledged");
+  }
+  if (body.signature_verified !== false) {
+    throw new Error("Dashboard test response must disclose that no HMAC was verified");
+  }
+  if (called) throw new Error("A dashboard test probe must never call payment persistence");
+});
+
+Deno.test("rejects unsigned payment events even when the dashboard test probe is allowed", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const response = await handler(new Request("https://local.test/geniuspay-webhook", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(validPayload()),
+  }));
+  if (response.status !== 400) throw new Error("Expected HTTP 400, got " + response.status);
+  if (called) throw new Error("Unsigned payment events must never reach persistence");
+});
+
+Deno.test("acknowledges signed payment.initiated without persisting an order update", async () => {
+  let called = false;
+  const handler = makeHandler(async () => {
+    called = true;
+    return { data: null, error: null };
+  });
+  const payload = validPayload({ event: "payment.initiated" });
+  const response = await handler(await makeRequest(payload));
+  const body = await response.json();
+  if (response.status !== 200 || body.ignored !== true) {
+    throw new Error("Expected payment.initiated to be acknowledged as ignored");
+  }
+  if (called) throw new Error("payment.initiated must not mutate payment persistence");
+});
+
 Deno.test("rejects non-POST methods", async () => {
   const handler = makeHandler();
   const response = await handler(new Request("https://local.test/geniuspay-webhook", {

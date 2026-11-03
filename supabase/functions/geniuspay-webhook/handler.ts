@@ -7,6 +7,7 @@ const ALLOWED_EVENTS = new Set([
   "payment.cancelled",
   "payment.expired",
   "payment.refunded",
+  "payment.initiated",
   "webhook.test",
 ]);
 
@@ -114,16 +115,6 @@ export function createGeniusPayWebhookHandler(
     const environmentHeader = request.headers.get("X-Webhook-Environment") ?? "";
     const deliveryHeader = request.headers.get("X-Webhook-Delivery");
 
-    if (!signatureHeader || !timestampHeader || !eventHeader || !environmentHeader) {
-      return jsonResponse(400, { error: "missing_webhook_headers" });
-    }
-
-    const timestamp = Number(timestampHeader);
-    const now = dependencies.nowSeconds();
-    if (!Number.isSafeInteger(timestamp) || Math.abs(now - timestamp) > WEBHOOK_WINDOW_SECONDS) {
-      return jsonResponse(401, { error: "webhook_timestamp_invalid_or_expired" });
-    }
-
     let rawBody: string;
     try {
       rawBody = await request.text();
@@ -150,6 +141,37 @@ export function createGeniusPayWebhookHandler(
       ? payload.environment.toLowerCase()
       : "";
     const payloadTimestamp = Number(payload.timestamp);
+    const now = dependencies.nowSeconds();
+
+    if (!signatureHeader || !timestampHeader || !eventHeader || !environmentHeader) {
+      const allSignatureHeadersMissing =
+        !signatureHeader && !timestampHeader && !eventHeader && !environmentHeader;
+      const validDashboardTest =
+        allSignatureHeadersMissing &&
+        payloadEvent === "webhook.test" &&
+        payloadEnvironment === "sandbox" &&
+        typeof payload.id === "string" &&
+        payload.id.trim().length > 0 &&
+        Number.isSafeInteger(payloadTimestamp) &&
+        Math.abs(now - payloadTimestamp) <= WEBHOOK_WINDOW_SECONDS;
+
+      // GeniusPay's dashboard tester can send a body-only webhook.test probe.
+      // This event is acknowledged without persistence; payment events still
+      // require all headers and a valid HMAC signature below.
+      if (validDashboardTest) {
+        return jsonResponse(200, {
+          received: true,
+          test: true,
+          signature_verified: false,
+        });
+      }
+      return jsonResponse(400, { error: "missing_webhook_headers" });
+    }
+
+    const timestamp = Number(timestampHeader);
+    if (!Number.isSafeInteger(timestamp) || Math.abs(now - timestamp) > WEBHOOK_WINDOW_SECONDS) {
+      return jsonResponse(401, { error: "webhook_timestamp_invalid_or_expired" });
+    }
     if (
       !payloadEvent ||
       !ALLOWED_EVENTS.has(payloadEvent) ||
@@ -188,7 +210,18 @@ export function createGeniusPayWebhookHandler(
     // GeniusPay's dashboard/API test event proves delivery and HMAC only.
     // It carries no payment transaction and must never mutate order state.
     if (payloadEvent === "webhook.test") {
-      return jsonResponse(200, { received: true, test: true });
+      return jsonResponse(200, {
+        received: true,
+        test: true,
+        signature_verified: true,
+      });
+    }
+
+    // payment.initiated is subscribed in the merchant dashboard but does not
+    // change persisted order/payment state. Acknowledge it after HMAC
+    // verification so GeniusPay does not retry an event SHOPLINOUS does not use.
+    if (payloadEvent === "payment.initiated") {
+      return jsonResponse(200, { received: true, ignored: true, event: payloadEvent });
     }
 
     const data = payload.data;
