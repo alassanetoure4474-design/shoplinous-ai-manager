@@ -1,3 +1,4 @@
+import { callSupabaseRpc } from "./supabase_rpc.ts";
 import {
   createGeniusPayWebhookHandler,
   hmacHex,
