@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_apply:
-        description: "Confirmer l'application de la migration sur le projet Supabase cible"
+        description: "Confirmer l'application après avoir vérifié un dry-run précédent"
         required: true
         type: boolean
         default: false
@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   migrate:
-    if: ${{ inputs.confirm_apply == true }}
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -36,8 +35,18 @@ jobs:
           test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN absent"; exit 1; }
           test -n "$SUPABASE_PROJECT_ID" || { echo "::error::SUPABASE_PROJECT_ID absent"; exit 1; }
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::SUPABASE_DB_PASSWORD absent"; exit 1; }
+          if [[ ! "$SUPABASE_PROJECT_ID" =~ ^[a-z0-9]{20}$ ]]; then
+            echo "::error::SUPABASE_PROJECT_ID doit être le project-ref Supabase de 20 caractères."
+            exit 1
+          fi
 
-      - name: Apply migrations
-        run: |
-          supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" --remote="$SUPABASE_PROJECT_ID"
-          supabase db push --password "$SUPABASE_DB_PASSWORD" --yes --remote="$SUPABASE_PROJECT_ID"
+      - name: Preview pending migrations on the explicitly selected project
+        run: supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" --remote="$SUPABASE_PROJECT_ID"
+
+      - name: Apply migrations only after explicit second confirmation
+        if: ${{ inputs.confirm_apply == true }}
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --yes --remote="$SUPABASE_PROJECT_ID"
+
+      - name: Dry-run only; no database changes were made
+        if: ${{ inputs.confirm_apply != true }}
+        run: echo "Aperçu terminé. Aucune migration n'a été appliquée. Vérifiez le journal, puis relancez le workflow avec confirm_apply=true pour appliquer."
