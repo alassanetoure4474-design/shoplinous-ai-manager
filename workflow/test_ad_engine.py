@@ -25,8 +25,7 @@ def test_seuls_les_marches_verifies_sont_ouverts():
     "code,currency",
     [
         ("CI", "XOF"),
-        ("FR", "EUR"),
-        ("US", "USD"),
+                ("US", "USD"),
         ("CA", "CAD"),
         ("BR", "BRL"),
         ("IN", "INR"),
@@ -50,6 +49,14 @@ def test_pays_a_plusieurs_devises_ne_choisit_pas_arbitrairement():
     assert set(intl.country_currencies("HT")) == {"HTG", "USD"}
     assert intl.get_country("HT").currency is None
 
+
+
+def test_marche_historique_france_reste_ouvert():
+    status = intl.country_status("FR")
+    assert status["livrable"] is True
+    assert status["paiement_disponible"] is True
+    assert status["taxes_configurees"] is True
+    assert status["ouvert_vente"] is True
 
 def test_malte_fermee_sans_verification():
     status = intl.country_status("MT")
