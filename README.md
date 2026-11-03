@@ -9,7 +9,7 @@ de la boutique Freewebstore avec assistance IA.
 - `workflow/shoplinous_global/supplier_qualification.py` : moteur de qualification mondiale des offres par destination et quantité exacte ; origine fournisseur/entrepôt sans liste blanche, mais preuve d'identité, conformité, stock, images, coûts, taux horodatés, devis réel, douane et marge x3 obligatoires. Les pistes CSV/manuelles ne sont jamais vendables sans vérification.
 - `workflow/shoplinous_global/supplier_adapters.py` : registre extensible ; l'adaptateur CJ est raccordé au format mondial (catalogue, variantes, stock CN, images GET et fret réel destination/quantité exacte) en lecture seule. Il n'achète et ne publie rien. Les offres restent non vendables tant que les preuves de conformité produit et de restrictions douanières manquent.
 - `workflow/daily.py` : workflow quotidien Mistral Workflows (32 outils :
-  16 activites + 17 fonctions publiques ; evaluation produits, table
+  15 activites + 17 fonctions publiques ; evaluation produits, table
   SKU->vid, analyse de commandes en lecture seule, controle d'integrite
   fret v5.6, devis CJ dynamique a quantite exacte). Mode VEILLE par
   defaut : `allow_publish=False` (aucune creation ni modification
@@ -85,3 +85,8 @@ Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les referencent
 - Les prix d'annonces utilisent la devise de la destination. Toute conversion hors devise de base exige des taux explicites ; aucun taux, prix local ou moyen de paiement n'est inventé.
 - Les traductions de base sont présentes en français, anglais, espagnol, portugais et arabe. L'arabe est marqué RTL.
 - **Limites non levées par ce changement :** les 249 territoires ne sont pas 249 marchés vendables. La validation CJdropshipping reste à effectuer produit par produit et pays par pays ; la disponibilité des prestataires de paiement, les règles fiscales et les contrats marchands restent à confirmer avant ouverture. Les connecteurs sociaux demeurent désactivés tant qu'ils ne sont pas authentifiés.
+
+
+## Recherche mondiale des fournisseurs
+
+Le workflow `shoplinous_global_supplier_search` appelle CJdropshipping en lecture seule pour un mot-clé, une destination et une quantité exacts. Il retourne les offres qualifiées et les motifs de refus. Il ne passe aucune commande fournisseur et ne publie aucun produit.
