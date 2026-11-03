@@ -1,14 +1,21 @@
-"""SHOPLINOUS — référentiels internationaux, devises et langues.
+"""SHOPLINOUS — référentiel mondial ISO 3166/4217 et internationalisation.
 
-Le référentiel ISO est embarqué en local. Être répertorié ne signifie jamais
-qu'un marché est ouvert : livraison, paiement et fiscalité sont validés
-séparément. Aucun taux de change n'est inventé.
+Référentiel pays fourni par pycountry (ISO 3166-1), noms et devises
+territoriales par Babel/CLDR. L'enregistrement d'un pays ne signifie jamais
+qu'il est ouvert à la vente : les contrôles réels sont séparés.
 """
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import isfinite
 
-from iso_countries_data import DATA
+import pycountry
+from babel import Locale
+from babel.numbers import (
+    get_currency_name,
+    get_currency_precision,
+    get_currency_symbol,
+    get_territory_currencies,
+)
 
 
 @dataclass
@@ -40,52 +47,80 @@ class Country:
         )
 
 
-COUNTRY_FIELDS = DATA["country_fields"]
-COUNTRY_RECORDS = {
-    row[0]: dict(zip(COUNTRY_FIELDS, row))
-    for row in DATA["countries"]
+# ISO 3166-1 : ensembles géographiques stables, avec territoires rattachés
+# à leur région géographique. Ils servent uniquement au classement d'interface.
+REGION_CODES = {
+    "Afrique": set("""DZ AO BJ BW BF BI CV CM CF TD KM CG CD CI DJ EG GQ ER SZ
+ET GA GM GH GN GW KE LS LR LY MG MW ML MR MU MA MZ NA NE NG RE RW SH ST SN
+SC SL SO ZA SS SD TZ TG TN UG EH ZM ZW""".split()),
+    "Amériques": set("""AI AG AR AW BS BB BZ BM BQ BO BR CA KY CL CO CR CU CW DM
+DO EC SV FK GF GL GD GP GT GY HT HN JM MQ MX MS NI PA PY PE PR BL KN LC MF
+PM VC SX SR TT TC US UY VE VG VI""".split()),
+    "Asie": set("""AF AM AZ BH BD BT BN KH CN CX CC IO GE HK IN ID IR IQ IL JP
+JO KZ KW KG LA LB MO MY MV MN MM NP KP OM PK PS PH QA SA SG KR LK SY TW TJ
+TH TL TR TM AE UZ VN YE""".split()),
+    "Europe": set("""AX AL AD AT BY BE BA BG HR CY CZ DK EE FO FI FR DE GI GR GG
+VA HU IS IE IM IT JE LV LI LT LU MT MD MC ME NL MK NO PL PT RO RU SM RS SK
+SI ES SJ SE CH UA GB""".split()),
+    "Océanie": set("""AS AU CK FJ PF GU KI MH FM NR NC NZ NU NF MP PW PG PN WS
+SB TK TO TV UM VU WF""".split()),
+    "Antarctique": {"AQ", "BV", "GS", "HM", "TF"},
 }
-if len(COUNTRY_RECORDS) != 249:
-    raise RuntimeError("Le référentiel ISO 3166-1 doit contenir 249 codes alpha-2.")
+_REGION_BY_CODE = {
+    code: region
+    for region, codes in REGION_CODES.items()
+    for code in codes
+}
+
+
+def _display_name(code: str, language: str) -> str:
+    locale = Locale.parse(language)
+    country = locale.territories.get(code)
+    if country:
+        return str(country)
+    obj = pycountry.countries.get(alpha_2=code)
+    return str(obj.name if obj else code)
+
+
+# Construire les 249 codes pays/territoires à partir du paquet ISO validé.
+COUNTRIES = {}
+for _record in pycountry.countries:
+    _code = _record.alpha_2
+    if not _code:
+        continue
+    _currencies = tuple(get_territory_currencies(_code, tender=True))
+    COUNTRIES[_code] = Country(
+        code=_code,
+        name_fr=_display_name(_code, "fr"),
+        region=_REGION_BY_CODE.get(_code, "Autre"),
+        registered=True,
+        # Fermé par défaut ; seuls les marchés historiquement vérifiés sont ouverts.
+        shippable=False,
+        payment_available=False,
+        taxes_configured=False,
+        alpha3=getattr(_record, "alpha_3", ""),
+        numeric=getattr(_record, "numeric", ""),
+        name_en=_display_name(_code, "en"),
+        currencies=_currencies,
+    )
+
+if len(COUNTRIES) != 249:
+    raise RuntimeError(
+        "Le référentiel ISO 3166-1 doit contenir 249 codes alpha-2 ; "
+        f"obtenu : {len(COUNTRIES)}"
+    )
 
 UE27 = [
     "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE",
     "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT",
     "RO", "SK", "SI", "ES", "SE",
 ]
-# Liste blanche conservée : uniquement les marchés historiquement vérifiés.
+# Liste blanche historique conservée ; Malte reste fermée.
 VERIFIED_MARKETS = sorted(set(UE27 + ["GB", "CH", "NO"]) - {"MT"})
-
-NAMES_FR = {code: record["name_fr"] for code, record in COUNTRY_RECORDS.items()}
-REGIONS = {code: record["region"] for code, record in COUNTRY_RECORDS.items()}
-for _code in UE27:
-    REGIONS[_code] = "Europe"
-for _code, _region in {
-    "BM": "Amériques", "BV": "Antarctique", "CV": "Afrique",
-    "FK": "Amériques", "FO": "Europe", "GS": "Antarctique",
-    "HM": "Océanie", "IS": "Europe", "KM": "Afrique",
-    "MG": "Afrique", "MU": "Afrique", "SC": "Afrique",
-    "IO": "Asie", "CC": "Asie", "CX": "Asie",
-}.items():
-    if _code in REGIONS:
-        REGIONS[_code] = _region
-
-COUNTRIES = {}
-for _code, _record in COUNTRY_RECORDS.items():
-    _verified = _code in VERIFIED_MARKETS
-    COUNTRIES[_code] = Country(
-        code=_code,
-        name_fr=_record["name_fr"],
-        region=REGIONS.get(_code, "Autre"),
-        registered=True,
-        shippable=_verified,
-        payment_available=_verified,
-        taxes_configured=_verified,
-        alpha3=_record["alpha3"],
-        numeric=_record["numeric"],
-        name_en=_record["name_en"],
-        currencies=tuple(_record["currencies"]),
-    )
+for _code in VERIFIED_MARKETS:
+    COUNTRIES[_code].shippable = True
+    COUNTRIES[_code].payment_available = True
+    COUNTRIES[_code].taxes_configured = True
 
 
 def get_country(code: str) -> Country:
@@ -97,7 +132,7 @@ def get_country(code: str) -> Country:
 
 
 def list_countries(region: str = None) -> list:
-    """Retourne les 249 territoires ISO, sans présumer de leur ouverture."""
+    """Retourne tous les territoires ISO, sans présumer de leur ouverture."""
     values = sorted(COUNTRIES.values(), key=lambda item: item.name_fr.casefold())
     if region:
         values = [country for country in values if country.region == region]
@@ -105,7 +140,7 @@ def list_countries(region: str = None) -> list:
 
 
 def country_currencies(code: str) -> list:
-    """Devises ayant cours légal selon le snapshot CLDR de ce territoire."""
+    """Codes ISO 4217 de monnaie ayant cours légal selon CLDR."""
     return list(get_country(code).currencies)
 
 
@@ -129,11 +164,9 @@ def country_status(code: str) -> dict:
 
 
 def register_country(code: str, name_fr: str = None, region: str = None, **flags) -> Country:
-    """Met à jour les contrôles d'un pays ISO existant ; fermé par défaut."""
+    """Met à jour les contrôles d'un territoire ISO existant ; fermé par défaut."""
     normalized = str(code).strip().upper()
-    if normalized not in COUNTRY_RECORDS:
-        raise KeyError("Code pays ISO 3166-1 inconnu : " + normalized)
-    country = COUNTRIES[normalized]
+    country = get_country(normalized)
     if name_fr:
         country.name_fr = name_fr
     if region:
@@ -145,28 +178,19 @@ def register_country(code: str, name_fr: str = None, region: str = None, **flags
     return country
 
 
-# ISO 4217 : codes de devises actuellement associés à au moins un territoire
-# comme monnaie ayant cours légal dans le snapshot CLDR du 03/11/2026.
-CURRENCY_FIELDS = DATA["currency_fields"]
-_ALL_CURRENCY_META = {
-    row[0]: dict(zip(CURRENCY_FIELDS, row))
-    for row in DATA["currencies"]
-}
-_ACTIVE_TENDER_CODES = {
-    currency
-    for record in COUNTRY_RECORDS.values()
-    for currency in record["currencies"]
-}
-CURRENCIES = {
-    code: {
-        "nom": meta["name_fr"],
-        "nom_en": meta["name_en"],
-        "symbole": meta["symbol"] or code,
-        "decimales": meta["decimals"],
-    }
-    for code, meta in _ALL_CURRENCY_META.items()
-    if code in _ACTIVE_TENDER_CODES
-}
+# ISO 4217 : codes de monnaies courantes obtenus depuis les monnaies légales
+# CLDR des territoires répertoriés, pas une liste de devises arbitraire.
+CURRENCIES = {}
+for _country in COUNTRIES.values():
+    for _currency in _country.currencies:
+        if _currency in CURRENCIES:
+            continue
+        CURRENCIES[_currency] = {
+            "nom": get_currency_name(_currency, locale="fr"),
+            "nom_en": get_currency_name(_currency, locale="en"),
+            "symbole": get_currency_symbol(_currency, locale="fr") or _currency,
+            "decimales": get_currency_precision(_currency),
+        }
 
 
 def register_currency(code: str, nom: str, symbole: str, decimales: int = 2) -> None:
@@ -184,10 +208,10 @@ def register_currency(code: str, nom: str, symbole: str, decimales: int = 2) -> 
 
 
 def convert(amount: float, source: str, cible: str, rates: dict) -> float:
-    """Convertit via des taux fournis, jamais via un taux inventé.
+    """Convertit avec des taux fournis dans une même unité de référence.
 
-    Convention : rates[CODE] représente le nombre d'unités de cette devise
-    pour une unité de référence commune.
+    rates[CODE] représente le nombre d'unités de la devise pour une unité
+    de référence commune. Aucun taux n'est deviné ni récupéré implicitement.
     """
     source = str(source).upper()
     cible = str(cible).upper()
@@ -208,7 +232,10 @@ def convert(amount: float, source: str, cible: str, rates: dict) -> float:
         target_rate = float(rates[cible])
     except (TypeError, ValueError) as exc:
         raise ValueError("Taux de change invalide") from exc
-    if not isfinite(source_rate) or not isfinite(target_rate) or source_rate <= 0 or target_rate <= 0:
+    if (
+        not isfinite(source_rate) or not isfinite(target_rate)
+        or source_rate <= 0 or target_rate <= 0
+    ):
         raise ValueError("Les taux de change doivent être finis et strictement positifs.")
     return value / source_rate * target_rate
 
@@ -230,7 +257,6 @@ def format_price(amount: float, currency: str, lang: str = "fr") -> str:
     return f"{txt} {CURRENCIES[currency]['symbole']}"
 
 
-# --- Langues : les traductions marquées disponibles sont réellement remplies.
 LANGUAGES = ["fr", "en", "es", "pt", "ar"]
 TRANSLATIONS = {
     "fr": {
