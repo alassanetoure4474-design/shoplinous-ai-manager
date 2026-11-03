@@ -10,7 +10,9 @@ Securite :
   resolution DNS verifiee : chaque adresse IP resolue doit etre publique
   (adresses privees, locales, link-local, reservees, multicast refusees) ;
 - redirections suivies une par une (max 3), chaque saut revalide completement ;
-- telechargement en streaming avec interruption immediate au-dela de 20 Mo ;
+- requete en STREAMING via client.stream("GET", ...) : chaque bloc du corps est
+  controle avant de poursuivre la lecture, interruption immediate au-dela de
+  20 Mo, reponse fermee proprement (redirection, erreur, limite depassee) ;
 - cadence GLOBALE maximale de 1 requete/s, verrouee entre executions concurrentes ;
 
 LIMITE DOCUMENTEE (cache) : le cache est en memoire du processus worker. Il
@@ -211,9 +213,16 @@ async def _verifier_une_image(
     transport: Optional[httpx.AsyncBaseTransport] = None,
     resolveur: Optional[Callable[[str], Awaitable[list[str]]]] = None,
 ) -> ResultatImage:
-    """Verifie une image par un HTTP GET en streaming reelement emis.
+    """Verifie une image par un HTTP GET en STREAMING reellement emis.
 
-    ``transport`` et ``resolveur`` sont injectables pour les tests unitaires.
+    `client.stream("GET", ...)` : la reponse n'est jamais chargee entiere en
+    memoire. Chaque bloc du corps est controle avant de poursuivre la
+    lecture ; au-dela de TAILLE_MAX_OCTETS la lecture est interrompue
+    immediatement et la reponse fermee proprement (`aclose` + sortie du
+    gestionnaire de contexte). Idem en cas de redirection, d'erreur ou de
+    statut non 200 : le contexte ferme la reponse.
+
+    `transport` et `resolveur` sont injectables pour les tests unitaires.
     """
     if resolveur is None:
         resolveur = _resoudre_dns
@@ -238,8 +247,76 @@ async def _verifier_une_image(
     async with httpx.AsyncClient(**arguments_client) as client:
         for _ in range(REDIRECTIONS_MAX + 1):
             await _attendre_tour()
+            octets = b""
+            trop_grand = False
             try:
-                reponse = await client.get(url_courante)
+                # Requete en STREAMING : le corps n'est lu que bloc par bloc.
+                async with client.stream("GET", url_courante) as reponse:
+                    statut = reponse.status_code
+
+                    if 300 <= statut < 400:
+                        cible = reponse.headers.get("location", "")
+                        if not cible:
+                            # sortie du contexte : reponse fermee proprement
+                            return ResultatImage(
+                                url=url, statut_http=statut,
+                                date_verification=_maintenant_utc(),
+                                url_finale=str(url_courante), valide=False,
+                                motif_echec=f"Redirection {statut} sans cible",
+                            )
+                        suivante = httpx.URL(str(url_courante)).join(cible)
+                        u2, motif = _url_statique_valide(str(suivante))
+                        if u2 is None:
+                            return ResultatImage(
+                                url=url, statut_http=statut,
+                                date_verification=_maintenant_utc(),
+                                url_finale=str(url_courante), valide=False,
+                                motif_echec=f"Redirection vers destination interdite : {motif}",
+                            )
+                        u2, motif = await _url_reseau_valide(u2, resolveur)
+                        if u2 is None:
+                            return ResultatImage(
+                                url=url, statut_http=statut,
+                                date_verification=_maintenant_utc(),
+                                url_finale=str(url_courante), valide=False,
+                                motif_echec=f"Redirection vers destination interdite : {motif}",
+                            )
+                        url_courante = u2
+                        continue  # fermeture propre via le gestionnaire de contexte
+
+                    if statut != 200:
+                        # sortie du contexte : reponse fermee proprement
+                        return ResultatImage(
+                            url=url, statut_http=statut,
+                            date_verification=_maintenant_utc(),
+                            url_finale=str(url_courante), valide=False,
+                            motif_echec=f"Statut HTTP {statut} != 200",
+                        )
+
+                    type_mime = (
+                        (reponse.headers.get("content-type") or "")
+                        .split(";")[0]
+                        .strip()
+                        .lower()
+                    )
+                    if not type_mime.startswith("image/"):
+                        # sortie du contexte : reponse fermee proprement
+                        return ResultatImage(
+                            url=url, statut_http=statut, type_mime=type_mime or None,
+                            date_verification=_maintenant_utc(),
+                            url_finale=str(url_courante), valide=False,
+                            motif_echec=f"Content-Type non image ({type_mime or 'absent'})",
+                        )
+
+                    # Chaque bloc est controle AVANT de poursuivre la lecture.
+                    async for morceau in reponse.aiter_bytes():
+                        octets += morceau
+                        if len(octets) > TAILLE_MAX_OCTETS:
+                            trop_grand = True
+                            # Fermeture immediate : la lecture s'arrete net,
+                            # le reste du corps n'est PAS telecharge.
+                            await reponse.aclose()
+                            break
             except httpx.TimeoutException:
                 return _erreur(
                     url,
@@ -249,69 +326,6 @@ async def _verifier_une_image(
                 return _erreur(url, f"Erreur reseau (connexion) : {type(exc).__name__}")
             except httpx.HTTPError as exc:
                 return _erreur(url, f"Erreur HTTP client : {type(exc).__name__}")
-
-            statut = reponse.status_code
-
-            if 300 <= statut < 400:
-                cible = reponse.headers.get("location", "")
-                if not cible:
-                    return ResultatImage(
-                        url=url, statut_http=statut,
-                        date_verification=_maintenant_utc(),
-                        url_finale=str(url_courante), valide=False,
-                        motif_echec=f"Redirection {statut} sans cible",
-                    )
-                suivante = httpx.URL(url_courante).join(cible)
-                u2, motif = _url_statique_valide(str(suivante))
-                if u2 is None:
-                    return ResultatImage(
-                        url=url, statut_http=statut,
-                        date_verification=_maintenant_utc(),
-                        url_finale=str(url_courante), valide=False,
-                        motif_echec=f"Redirection vers destination interdite : {motif}",
-                    )
-                u2, motif = await _url_reseau_valide(u2, resolveur)
-                if u2 is None:
-                    return ResultatImage(
-                        url=url, statut_http=statut,
-                        date_verification=_maintenant_utc(),
-                        url_finale=str(url_courante), valide=False,
-                        motif_echec=f"Redirection vers destination interdite : {motif}",
-                    )
-                url_courante = u2
-                continue
-
-            if statut != 200:
-                return ResultatImage(
-                    url=url, statut_http=statut,
-                    date_verification=_maintenant_utc(),
-                    url_finale=str(url_courante), valide=False,
-                    motif_echec=f"Statut HTTP {statut} != 200",
-                )
-
-
-            type_mime = (
-                (reponse.headers.get("content-type") or "")
-                .split(";")[0]
-                .strip()
-                .lower()
-            )
-            if not type_mime.startswith("image/"):
-                return ResultatImage(
-                    url=url, statut_http=statut, type_mime=type_mime or None,
-                    date_verification=_maintenant_utc(),
-                    url_finale=str(url_courante), valide=False,
-                    motif_echec=f"Content-Type non image ({type_mime or 'absent'})",
-                )
-
-            # Telechargement en STREAMING avec interruption immediate > 20 Mo
-            octets = b""
-            trop_grand = False
-            async for morceau in reponse.aiter_bytes():
-                octets += morceau
-                if len(octets) > TAILLE_MAX_OCTETS:
-                    trop_grand = True
-                    break  # interruption immediate : le corps n'est pas lu en entier
 
             if trop_grand:
                 return ResultatImage(
