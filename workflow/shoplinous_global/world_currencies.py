@@ -44,16 +44,10 @@ def est_devise_valide(devise: str) -> bool:
 SYMBOLS = {
     "EUR": "EUR", "USD": "$", "GBP": "GBP", "XOF": "FCFA", "XAF": "FCFA",
     "XPF": "FCFP", "JPY": "JPY", "CNY": "CNY", "CAD": "CAD", "AUD": "AUD",
-    "CHF": "CHF", "SEK": "kr", "DKK": "kr", "NOK": "kr", "ISK": "kr",
-    "INR": "INR", "BRL": "R$", "MXN": "MXN", "ZAR": "R", "NGN": "NGN",
-    "GHS": "GHS", "MAD": "MAD", "KES": "KES", "AED": "AED", "SAR": "SAR",
-    "QAR": "QAR", "KWD": "KWD", "BHD": "BHD", "OMR": "OMR", "JOD": "JOD",
-    "ILS": "ILS", "EGP": "EGP", "TND": "TND", "DZD": "DZD", "XCD": "XCD",
-    "HTG": "G", "DOP": "DOP", "CUP": "CUP", "PAB": "B/.", "CRC": "CRC",
-    "ARS": "ARS", "CLP": "CLP", "COP": "COP", "PEN": "PEN", "UYU": "UYU",
-    "BOB": "BOB", "PYG": "PYG", "VES": "VES", "GTQ": "Q", "HNL": "L",
-    "NIO": "NIO", "BZD": "BZD", "BBD": "BBD", "JMD": "JMD", "TTD": "TTD",
-    "BSD": "B$", "KYD": "KYD", "BMD": "BMD", "CNY2": "CN",
+    "CHF": "CHF", "INR": "INR", "BRL": "R$", "MXN": "MXN", "ZAR": "R",
+    "NGN": "NGN", "GHS": "GHS", "MAD": "MAD", "KES": "KES", "AED": "AED",
+    "SAR": "SAR", "QAR": "QAR", "KWD": "KWD", "BHD": "BHD", "OMR": "OMR",
+    "JOD": "JOD", "ILS": "ILS", "EGP": "EGP", "TND": "TND", "DZD": "DZD",
 }
 
 
@@ -98,36 +92,26 @@ def convertir_trace(montant, devise_source: str, devise_cible: str,
 
 
 def formater(montant, devise: str, langue: str = "fr") -> str:
-    """Formate un montant selon la devise (exposant ISO) et la langue.
+    """Formate un montant selon l exposant ISO 4217 et la langue.
 
-    Separateurs : espace (fr/en/eu) ; symbole place apres le montant,
-    sauf USD/CAD/GBP en anglais (convention $x.xx).
+    fr : "1 234,56 EUR" ; en : "USD 1,234.56" ou "$17.90".
     """
-    m = arrondir(montant, devise)
     exp = exposant(devise)
-    txt = format(m, "f")
-    if exp == 0:
-        parties = txt.split(".")[0]
-    else:
-        parties = txt
-    entier, _, decimales = txt.partition(".")
-    if exp > 0:
-        # separateur de milliers espace
-        signe = ""
-        if entier.startswith("-"):
-            signe, entier = "-", entier[1:]
-        entier = "{:,}".format(int(entier)).replace(",", " ")
-        corps = entier + "," + (decimales + "0" * exp)[:exp]
-        texte = signe + corps
-    else:
-        signe = ""
-        if entier.startswith("-"):
-            signe, entier = "-", entier[1:]
-        entier_fmt = "{:,}".format(int(entier)).replace(",", " ")
-        texte = signe + entier_fmt
+    q = arrondir(montant, devise)
+    negatif = q < 0
+    if negatif:
+        q = -q
+    entier = int(q)
+    decimales = str(q).partition(".")[2] if exp > 0 else ""
     s = symbole(devise)
-    if langue == "en" and devise in ("USD", "CAD", "GBP"):
-        return s + texte.replace(",", ".").lstrip()
     if langue == "en":
-        return texte.replace(",", ",") + " " + s
+        texte = ("-" if negatif else "") + "{:,}".format(entier)
+        if decimales:
+            texte = texte + "." + (decimales + "0" * exp)[:exp]
+        if devise in ("USD", "CAD", "GBP"):
+            return s + texte
+        return texte + " " + s
+    texte = ("-" if negatif else "") + "{:,}".format(entier).replace(",", " ")
+    if decimales:
+        texte = texte + "," + (decimales + "0" * exp)[:exp]
     return texte + " " + s
