@@ -284,15 +284,15 @@ Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux
    applique les migrations sur ce project-ref explicite. Ne pas utiliser
    confirm_apply=true si le premier aperçu n'a pas été examiné.
    Le workflow utilise Supabase CLI v3.
-3. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
+4. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
    sélectionner au minimum payment.success, payment.failed,
    payment.cancelled, payment.expired et payment.refunded, puis sauvegarder
    immédiatement le secret retourné dans le secret GitHub
    GENIUSPAY_WEBHOOK_SECRET.
-4. Exécuter manuellement Deploy GeniusPay webhook (manual) et cocher
+5. Exécuter manuellement Deploy GeniusPay webhook (manual) et cocher
    confirm_deploy. Le workflow pousse le secret vers Supabase et déploie
    uniquement la fonction geniuspay-webhook avec JWT désactivé.
-5. Tester d'abord avec un webhook Sandbox GeniusPay ; contrôler la réponse 200,
+6. Tester d'abord avec un webhook Sandbox GeniusPay ; contrôler la réponse 200,
    la déduplication et le changement de statut dans Supabase.
 
 Le workflow de déploiement est manuel et exige une case de confirmation.
