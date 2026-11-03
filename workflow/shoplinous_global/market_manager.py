@@ -61,3 +61,10 @@ def restriction_active(code_pays, sujet):
     """True si le sujet est restreint dans le pays (fiscal/douane)."""
     conf = country_manager.pays(code_pays)
     return sujet in conf["restrictions"]
+
+
+
+def catalogue_mondial(region=None, inclure_fermes=True):
+    """Expose les 249 territoires ISO sans ouvrir ceux qui ne sont pas vérifiés."""
+    from intl import list_countries
+    return list_countries(region=region, include_closed=inclure_fermes)
