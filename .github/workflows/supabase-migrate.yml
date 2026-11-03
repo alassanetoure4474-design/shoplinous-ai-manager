@@ -37,10 +37,7 @@ jobs:
           test -n "$SUPABASE_PROJECT_ID" || { echo "::error::SUPABASE_PROJECT_ID absent"; exit 1; }
           test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::SUPABASE_DB_PASSWORD absent"; exit 1; }
 
-      - name: Link Supabase project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
-
       - name: Apply migrations
         run: |
-          supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" --remote
-          supabase db push --password "$SUPABASE_DB_PASSWORD" --yes --remote
+          supabase db push --dry-run --password "$SUPABASE_DB_PASSWORD" --remote="$SUPABASE_PROJECT_ID"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --yes --remote="$SUPABASE_PROJECT_ID"
