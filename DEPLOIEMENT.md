@@ -236,7 +236,11 @@ Le module workflow/shoplinous_global/supabase_store.py fournit :
 
 Variables nécessaires dans l'environnement serveur qui exécutera ce module :
 - SUPABASE_URL
-- SUPABASE_SERVICE_ROLE_KEY (ou une clé secrète serveur compatible)
+- SUPABASE_SERVICE_ROLE_KEY (ancien JWT serveur) ou SUPABASE_SECRET_KEYS.default
+  (nouvelle clé serveur `sb_secret_*` sur Edge Functions).
+  Les nouvelles clés `sb_secret_*` doivent être envoyées dans l'en-tête
+  `apikey` uniquement, sans `Authorization: Bearer`. Les anciennes clés
+  service_role JWT conservent les deux en-têtes.
 - GENIUSPAY_API_KEY
 - GENIUSPAY_API_SECRET
 - GENIUSPAY_ENVIRONMENT=sandbox
