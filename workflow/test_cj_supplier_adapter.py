@@ -72,6 +72,7 @@ def fake_daily():
         return {"code": 200, "data": [{
             "logisticName": "Test Line",
             "logisticPrice": "3.00",
+            "totalPostageFee": "3.00",
             "logisticAging": "5-8",
         }]}
 
@@ -139,6 +140,53 @@ def test_cj_adapter_returns_live_normalized_offer_for_exact_destination_and_qty(
     assert calls["freight"] == [("variant-1", "FR", 3)]
     assert calls["stock"] == 1
     assert len(calls["images"]) == 2
+
+
+def test_cj_adapter_marks_conflicting_total_postage_fee_as_unverified(monkeypatch):
+    calls = install_fake_daily(monkeypatch)
+    import daily
+
+    async def freight_with_conflict(vid, country, quantity):
+        calls["freight"].append((vid, country, quantity))
+        return {"code": 200, "data": [{
+            "logisticName": "CJPacket Ordinary E",
+            "logisticPrice": "5.22",
+            "totalPostageFee": "8.42",
+            "logisticAging": "7-15",
+        }]}
+
+    daily.cj_freight = freight_with_conflict
+    offer = supplier_adapters.AdaptateurCJ().rechercher_offres(
+        "home organizer", "FR", 1
+    )[0]
+    quote = offer["devis_livraison"]
+    assert quote["verifie"] is False
+    assert quote["cout_logistique_cj"] == 5.22
+    assert quote["cout_total_postage_cj"] == 8.42
+    assert "devis suspendu" in quote["anomalie_tarif"]
+
+
+def test_cj_adapter_marks_missing_total_postage_fee_as_unverified(monkeypatch):
+    calls = install_fake_daily(monkeypatch)
+    import daily
+
+    async def freight_without_total(vid, country, quantity):
+        calls["freight"].append((vid, country, quantity))
+        return {"code": 200, "data": [{
+            "logisticName": "CJPacket Ordinary E",
+            "logisticPrice": "5.22",
+            "logisticAging": "7-15",
+        }]}
+
+    daily.cj_freight = freight_without_total
+    offer = supplier_adapters.AdaptateurCJ().rechercher_offres(
+        "home organizer", "FR", 1
+    )[0]
+    quote = offer["devis_livraison"]
+    assert quote["verifie"] is False
+    assert quote["cout_logistique_cj"] == 5.22
+    assert quote["cout_total_postage_cj"] is None
+    assert "devis suspendu" in quote["anomalie_tarif"]
 
 
 def test_global_manager_keeps_cj_offer_blocked_without_compliance_and_customs_proof(
