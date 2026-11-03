@@ -1,11 +1,11 @@
-"""Global Market Manager : regroupements de marches mondiaux.
+"""Regroupements opérationnels et catalogue mondial.
 
-Neuf marches couvrant Afrique de l'Ouest, centrale, du Nord, autres
-marches africains, Europe, Amerique du Nord, Amerique latine, Asie,
-Oceanie. Chaque marche liste ses pays configures ; un pays appartient
-a exactement un marche.
+MARCHES ne contient que les profils opérationnels déjà configurés. Le catalogue
+ISO mondial est exposé séparément et ne transforme jamais un pays non vérifié
+en destination commerciale.
 """
 from shoplinous_global import country_manager
+
 
 MARCHES = {
     "afrique_ouest": {"libelle": "Afrique de l'Ouest",
@@ -14,10 +14,10 @@ MARCHES = {
     "afrique_nord": {"libelle": "Afrique du Nord", "pays": ["MA"]},
     "afrique_autres": {"libelle": "Autres marches africains", "pays": ["KE", "ZA"]},
     "europe": {"libelle": "Europe", "pays": ["FR", "GB"]},
-    "amerique_nord": {"libelle": "Amerique du Nord", "pays": ["US", "CA"]},
-    "amerique_latine": {"libelle": "Amerique latine", "pays": []},
+    "amerique_nord": {"libelle": "Amérique du Nord", "pays": ["US", "CA"]},
+    "amerique_latine": {"libelle": "Amérique latine", "pays": []},
     "asie": {"libelle": "Asie", "pays": []},
-    "oceanie": {"libelle": "Oceanie", "pays": []},
+    "oceanie": {"libelle": "Océanie", "pays": []},
 }
 
 
@@ -32,32 +32,39 @@ def pays_du_marche(marche):
 
 
 def marche_du_pays(code):
-    for nom, conf in MARCHES.items():
-        if code in conf["pays"]:
-            return nom
+    for name, config in MARCHES.items():
+        if code in config["pays"]:
+            return name
     raise ValueError("pays hors marches configures: " + repr(code))
 
 
 def coherence():
-    """Chaque pays configure appartient a exactement un marche."""
     appartenances = {}
     for code in country_manager.codes_pays():
         try:
             appartenances[code] = marche_du_pays(code)
         except ValueError:
             appartenances[code] = None
-    vus = []
-    dup = []
-    for nom, conf in MARCHES.items():
-        for p in conf["pays"]:
-            if p in vus:
-                dup.append(p)
-            vus.append(p)
-    return {"pays_sans_marche": [c for c, m in appartenances.items()
-                                 if m is None], "pays_doubles": dup}
+    seen = []
+    duplicates = []
+    for name, config in MARCHES.items():
+        for code in config["pays"]:
+            if code in seen:
+                duplicates.append(code)
+            seen.append(code)
+    return {
+        "pays_sans_marche": [code for code, market in appartenances.items()
+                             if market is None],
+        "pays_doubles": duplicates,
+    }
 
 
 def restriction_active(code_pays, sujet):
-    """True si le sujet est restreint dans le pays (fiscal/douane)."""
-    conf = country_manager.pays(code_pays)
-    return sujet in conf["restrictions"]
+    config = country_manager.pays(code_pays)
+    return sujet in config["restrictions"]
+
+
+def catalogue_mondial(region=None, inclure_fermes=True):
+    """Retourne le référentiel ISO complet avec statut commercial explicite."""
+    from intl import list_countries
+    return list_countries(region=region, include_closed=inclure_fermes)
