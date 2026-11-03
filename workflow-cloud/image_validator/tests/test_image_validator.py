@@ -51,6 +51,10 @@ def _transport(handler):
     return httpx.MockTransport(handler)
 
 
+def _reponse_image(contenu=JPG, mime="image/jpeg", statut=200):
+    return httpx.Response(statut, headers={"content-type": mime}, content=contenu)
+
+
 # ------------------------------------------------------- validation statique
 def test_schema_https_obligatoire():
     u, motif = _url_statique_valide("http://cf.cjdropshipping.com/img.jpg")
@@ -108,7 +112,7 @@ def test_ssrf_ip_privee_resolue():
     async def go():
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/img.jpg",
-            transport=_transport(lambda req: httpx.Response(200, content=JPG)),
+            transport=_transport(lambda req: _reponse_image()),
             resolveur=resoud_prive,
         )
 
@@ -131,15 +135,10 @@ def test_dns_echoue():
 
 # ----------------------------------------------------------- image valide
 def test_image_valide():
-    def handler(request):
-        return httpx.Response(
-            200, headers={"content-type": "image/jpeg"}, content=JPG
-        )
-
     async def go():
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/img.jpg",
-            transport=_transport(handler),
+            transport=_transport(lambda req: _reponse_image()),
             resolveur=_resoudre_publique,
         )
 
@@ -153,15 +152,14 @@ def test_image_valide():
 
 
 def test_content_type_non_image_rejete():
-    def handler(request):
-        return httpx.Response(
-            200, headers={"content-type": "text/html"}, content=b"<html></html>"
-        )
-
     async def go():
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/img.jpg",
-            transport=_transport(handler),
+            transport=_transport(
+                lambda req: httpx.Response(
+                    200, headers={"content-type": "text/html"}, content=b"<html></html>"
+                )
+            ),
             resolveur=_resoudre_publique,
         )
 
@@ -170,16 +168,11 @@ def test_content_type_non_image_rejete():
 
 
 def test_mime_incoherent_binaire_prioritaire():
-    def handler(request):
-        # Content-Type annonce PNG, corps reellement JPEG
-        return httpx.Response(
-            200, headers={"content-type": "image/png"}, content=JPG
-        )
-
     async def go():
+        # Content-Type annonce PNG, corps reellement JPEG
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/img.jpg",
-            transport=_transport(handler),
+            transport=_transport(lambda req: _reponse_image(mime="image/png")),
             resolveur=_resoudre_publique,
         )
 
@@ -188,20 +181,29 @@ def test_mime_incoherent_binaire_prioritaire():
 
 
 def test_contenu_trop_petit_rejete():
-    def handler(request):
-        return httpx.Response(
-            200, headers={"content-type": "image/jpeg"}, content=b"\xff\xd8\xff"
-        )
-
     async def go():
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/img.jpg",
-            transport=_transport(handler),
+            transport=_transport(
+                lambda req: _reponse_image(contenu=b"\xff\xd8\xff")
+            ),
             resolveur=_resoudre_publique,
         )
 
     resultat = asyncio.run(go())
     assert not resultat.valide and "trop petit" in resultat.motif_echec
+
+
+def test_statut_erreur_rejete():
+    async def go():
+        return await iv._verifier_une_image(
+            "https://cf.cjdropshipping.com/img.jpg",
+            transport=_transport(lambda req: _reponse_image(statut=404)),
+            resolveur=_resoudre_publique,
+        )
+
+    resultat = asyncio.run(go())
+    assert not resultat.valide and "404" in resultat.motif_echec
 
 
 # ------------------------------------------------------- streaming 20 Mo
@@ -210,15 +212,10 @@ def test_streaming_interruption_au_dela_taille_max(monkeypatch):
     monkeypatch.setattr(iv, "TAILLE_MAX_OCTETS", 10 * 1024)
     gros_corps = b"\xff\xd8\xff\xe0" + b"\x42" * 200_000
 
-    def handler(request):
-        return httpx.Response(
-            200, headers={"content-type": "image/jpeg"}, content=gros_corps
-        )
-
     async def go():
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/gros.jpg",
-            transport=_transport(handler),
+            transport=_transport(lambda req: _reponse_image(contenu=gros_corps)),
             resolveur=_resoudre_publique,
         )
 
@@ -235,9 +232,7 @@ def test_redirection_meme_domaine_autorisee():
             return httpx.Response(
                 302, headers={"location": "https://cf.cjdropshipping.com/b.jpg"}
             )
-        return httpx.Response(
-            200, headers={"content-type": "image/jpeg"}, content=JPG
-        )
+        return _reponse_image()
 
     async def go():
         return await iv._verifier_une_image(
@@ -291,11 +286,6 @@ def test_cadence_globale_concurrente(monkeypatch):
     monkeypatch.setattr(iv, "INTERVALLE_REQ_S", 0.05)
     monkeypatch.setattr(iv, "_DERNIER_ENVOI", 0.0)
 
-    def handler(request):
-        return httpx.Response(
-            200, headers={"content-type": "image/jpeg"}, content=JPG
-        )
-
     urls = [
         "https://cf.cjdropshipping.com/i1.jpg",
         "https://cf.cjdropshipping.com/i2.jpg",
@@ -307,7 +297,9 @@ def test_cadence_globale_concurrente(monkeypatch):
         resultats = await asyncio.gather(
             *(
                 iv._verifier_une_image(
-                    url, transport=_transport(handler), resolveur=_resoudre_publique
+                    url,
+                    transport=_transport(lambda req: _reponse_image()),
+                    resolveur=_resoudre_publique,
                 )
                 for url in urls
             )
@@ -335,30 +327,12 @@ def test_cache_ttl():
     assert url not in iv._CACHE
 
 
-def test_verifier_images_utilise_le_cache():
-    appels = []
-
-    def handler(request):
-        appels.append(request.url.path)
-        return httpx.Response(
-            200, headers={"content-type": "image/jpeg"}, content=JPG
-        )
-
+def test_rapport_vide_coherent():
     async def go():
-        rapport1 = await iv.verifier_images(
-            ["https://cf.cjdropshipping.com/x.jpg"]
-        )
-        rapport2 = await iv.verifier_images(
-            ["https://cf.cjdropshipping.com/x.jpg"]
-        )
-        return rapport1, rapport2
-
-    # Injection via monkeypatch du transport par defaut (aucun reseau reel).
-    rapport1, rapport2 = asyncio.run(go()) if False else (None, None)
-    # Le transport ne pouvant pas etre injecte dans verifier_images sans
-    # patch, on verifie ici seulement la coherence du rapport en cache :
-    async def go2():
         return await iv.verifier_images([])
 
-    vide = asyncio.run(go2())
-    assert vide["validees"] == 0 and vide["rejetees"] == 0
+    rapport = asyncio.run(go())
+    assert rapport["validees"] == 0
+    assert rapport["rejetees"] == 0
+    assert rapport["resultats"] == []
+    assert rapport["date_rapport"] is not None
