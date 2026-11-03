@@ -1,21 +1,18 @@
 """Point d'entree du worker SHOPLINOUS image validator.
 
-Imports robustes : selon la version du SDK, le paquet est expose soit comme
-module autonome (`mistralai_workflows`), soit comme sous-module du SDK Mistral
-(`mistralai.workflows`). Les deux formes sont essayees dans l'ordre.
+Le SDK Mistral Workflows expose directement run_worker(). Le worker lui
+transmet explicitement les classes de workflow locales : aucun helper de
+decouverte externe ou CLI n'est requis.
 """
-
 import asyncio
 
-try:  # SDK recent : paquet autonome
-    import mistralai_workflows as msw
-except ImportError:  # SDK unifie : sous-module mistralai
-    from mistralai import workflows as msw
+import mistralai.workflows as workflows
+
+from src.workflows.image_validator import ValidateurImagesWorkflow
 
 
 async def main() -> None:
-    decouverts = msw.discover_workflows()
-    await msw.run_worker(decouverts)
+    await workflows.run_worker([ValidateurImagesWorkflow])
 
 
 if __name__ == "__main__":
