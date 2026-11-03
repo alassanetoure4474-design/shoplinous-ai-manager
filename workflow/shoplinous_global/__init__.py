@@ -28,12 +28,12 @@ Modules (1 a 18) :
 """
 import importlib
 
-VERSION = "6.0"
+VERSION = "6.1"
 
 MODULES = [
     "market_manager", "country_manager", "currency_manager",
     "exchange_rate_manager", "pricing_manager", "payment_manager",
-    "payment_providers", "supplier_manager", "supplier_adapters",
+    "payment_providers", "supplier_manager", "supplier_adapters", "supplier_qualification",
     "product_catalog", "inventory", "shipping_manager",
     "order_manager", "tracking_manager", "ai_decision_engine",
     "notification_manager", "security_audit", "monitoring",
