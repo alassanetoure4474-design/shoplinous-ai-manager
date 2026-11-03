@@ -91,11 +91,11 @@ USER_AGENT = (
 )
 
 _SIGNATURES = (
-    ("\xff\xd8\xff", "image/jpeg"),
-    ("\x89PNG\r\n\x1a\n", "image/png"),
-    ("GIF87a", "image/gif"),
-    ("GIF89a", "image/gif"),
-    ("BM", "image/bmp"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"BM", "image/bmp"),
 )
 
 

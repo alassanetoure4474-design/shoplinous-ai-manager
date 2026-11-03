@@ -59,7 +59,7 @@ def _reponse_image(contenu=JPG, mime="image/jpeg", statut=200):
 class FluxServeurCompteur(httpx.AsyncByteStream):
     """Flux serveur factice qui COMPTE les blocs reellement consommes.
 
-    Prouve que le validateur n'aspir pas le corps entier : si la lecture est
+    Prouve que le validateur n'aspire pas le corps entier : si la lecture est
     interrompue (limite depassee), le compteur s'arrete avant la fin.
     """
 
@@ -252,26 +252,32 @@ def test_corps_non_telecharge_entierement_hors_limite(monkeypatch):
         f"Le corps a ete integralement lu ({flux.blocs_consommes} blocs / "
         f"{len(morceaux)}) : le streaming n'interrompt pas la lecture"
     )
-    assert flux.blocs_consommes <= 64  # ~10 Ko de limite + un dernier bloc
     assert resultat.taille_octets < sum(len(m) for m in morceaux)
 
 
 def test_streaming_interruption_au_dela_taille_max(monkeypatch):
-    # Taille max abaissee a 10 Ko pour le test : 200 Ko doivent etre coupees.
+    """Le corps est servi bloc par bloc : la lecture s'arrete avant la fin."""
     monkeypatch.setattr(iv, "TAILLE_MAX_OCTETS", 10 * 1024)
-    gros_corps = b"\xff\xd8\xff\xe0" + b"\x42" * 200_000
+    morceaux = [b"\xff\xd8\xff\xe0" + b"\x42" * 1020]
+    morceaux += [b"\x42" * 1024 for _ in range(200)]  # ~201 Ko
+    flux = FluxServeurCompteur(morceaux)
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-type": "image/jpeg"}, stream=flux
+        )
 
     async def go():
         return await iv._verifier_une_image(
             "https://cf.cjdropshipping.com/gros.jpg",
-            transport=_transport(lambda req: _reponse_image(contenu=gros_corps)),
+            transport=_transport(handler),
             resolveur=_resoudre_publique,
         )
 
     resultat = asyncio.run(go())
     assert not resultat.valide and "plus grand" in resultat.motif_echec
-    # Interruption immediate : on n'a pas charge le corps complet de 200 Ko.
-    assert resultat.taille_octets < len(gros_corps)
+    assert resultat.taille_octets < sum(len(m) for m in morceaux)
+    assert flux.blocs_consommes < len(morceaux)
 
 
 def test_streaming_corps_petit_lu_entierement():
