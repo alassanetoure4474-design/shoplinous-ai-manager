@@ -1,6 +1,9 @@
-name: GeniusPay - verification Sandbox et Wave Direct
+name: GeniusPay - verification Sandbox, Wave Direct et Carte EUR
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -9,12 +12,15 @@ permissions:
 jobs:
   verify-geniuspay:
     # Important: secrets are only used with code from main, never a PR branch.
+    # Le declencheur push est limite a main : la garde ci-dessous reste
+    # verifiee pour chaque execution (github.ref == refs/heads/main).
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       GENIUSPAY_API_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
       GENIUSPAY_API_SECRET: ${{ secrets.GENIUSPAY_API_SECRET }}
+      GENIUSPAY_WEBHOOK_SECRET: ${{ secrets.GENIUSPAY_WEBHOOK_SECRET }}
       GENIUSPAY_ENVIRONMENT: sandbox
     steps:
       - name: Checkout main
@@ -49,3 +55,6 @@ jobs:
 
       - name: Tester Wave Direct CI (transaction Sandbox simulee de 200 XOF)
         run: python workflow/test_geniuspay_wave_sandbox.py
+
+      - name: Tester carte EUR 24,90 (checkout + relecture + webhook signe Sandbox)
+        run: python workflow/test_geniuspay_eur_sandbox.py
