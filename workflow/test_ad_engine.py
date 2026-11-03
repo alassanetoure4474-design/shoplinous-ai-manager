@@ -11,6 +11,7 @@ def test_referentiel_iso_mondial_complet():
     assert intl.get_country("CI").name_fr == "Côte d’Ivoire"
     assert intl.get_country("US").name_en == "United States"
     assert intl.get_country("CI").region == "Afrique"
+    assert all(country.region != "Autre" for country in intl.COUNTRIES.values())
 
 
 def test_seuls_les_marches_verifies_sont_ouverts():
