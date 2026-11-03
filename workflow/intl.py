@@ -118,10 +118,17 @@ UE27 = [
 ]
 # Liste blanche historique conservée ; Malte reste fermée.
 VERIFIED_MARKETS = sorted(set(UE27 + ["GB", "CH", "NO"]) - {"MT"})
+# Livraison verifiee : UE27 + GB/CH/NO (sauf MT).
+# Paiement et fiscalite : preuves operationnelles disponibles uniquement
+# pour la France. Ne jamais assimiler une couverture logistique a un
+# moyen d'encaissement ou a une configuration fiscale.
+PAYMENT_VERIFIED_MARKETS = frozenset({"FR"})
+TAXES_CONFIGURED_MARKETS = frozenset({"FR"})
+
 for _code in VERIFIED_MARKETS:
     COUNTRIES[_code].shippable = True
-    COUNTRIES[_code].payment_available = True
-    COUNTRIES[_code].taxes_configured = True
+    COUNTRIES[_code].payment_available = _code in PAYMENT_VERIFIED_MARKETS
+    COUNTRIES[_code].taxes_configured = _code in TAXES_CONFIGURED_MARKETS
 
 
 def get_country(code: str) -> Country:
