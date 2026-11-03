@@ -30,8 +30,8 @@ Lecture seule : aucun achat, aucune commande, aucun paiement, aucune ecriture.
 """
 
 from __future__ import annotations
-
 import asyncio
+import importlib
 import ipaddress
 import os
 import time
@@ -42,47 +42,39 @@ from pydantic import BaseModel, Field
 
 import httpx
 
-try:  # production : SDK Mistral Workflows reellement installe
-    import mistralai.workflows as workflows
-except ImportError:
-    if os.environ.get("SHOPLINOUS_TEST_MODE") != "1":
-        raise RuntimeError("SDK mistralai-workflows absent : demarrage production refuse")
-    # Tests unitaires uniquement : shim explicite, jamais en production.
-    class _RepliWorkflows:
-        """Shim hors-ligne pour les tests unitaires (SDK non installe).
+def _charger_classe_backend_asynchrone():
+    """Charge la classe de backend reseau asynchrone d'httpcore, quel que
+    soit son emplacement/nom selon la version (1.x : httpcore._backends,
+    versions ulterieures : httpcore.backends ; variantes asyncio et anyio).
 
-        Les decorateurs deviennent des identites : les fonctions et classes
-        restent inchangees, seule la declaration Mistral est ignoree. En
-        production, le SDK reel est importe et les decorateurs s'appliquent.
-        """
+    Fail-closed : si aucun candidat n'est trouve, RuntimeError explicite
+    listant les combinaisons essayees (aucune connexion reseau possible).
+    """
+    candidats = [
+        ("httpcore.backends.asyncio", "AsyncIOBackend"),
+        ("httpcore.backends.asyncio", "AsyncioBackend"),
+        ("httpcore.backends.anyio", "AnyIOBackend"),
+        ("httpcore._backends.asyncio", "AsyncIOBackend"),
+        ("httpcore._backends.asyncio", "AsyncioBackend"),
+        ("httpcore._backends.anyio", "AnyIOBackend"),
+    ]
+    echecs = []
+    for module, classe in candidats:
+        try:
+            m = importlib.import_module(module)
+            objet = getattr(m, classe, None)
+            if objet is not None and hasattr(objet, "connect_tcp"):
+                return objet
+        except ImportError as exc:
+            echecs.append(f"{module}: {exc}")
+    raise RuntimeError(
+        "Backend reseau asynchrone httpcore introuvable (combinaisons essayees : "
+        + ", ".join(f"{mod}.{cls}" for mod, cls in candidats)
+        + f") — echecs : {echecs}. Verifiez la version d'httpcore "
+        "(httpx>=0.27,<1.0 et httpcore>=1.0,<2.0 supportees)."
+    )
 
-        class _FabriqueActivite:
-            def __call__(self, fonction):
-                return fonction
-
-        class _FabriqueWorkflow:
-            @staticmethod
-            def define(**kwargs):
-                def decorateur(cls):
-                    return cls
-                return decorateur
-
-            @staticmethod
-            def entrypoint(fonction):
-                return fonction
-
-        def activity(self, *args, **kwargs):
-            return self._FabriqueActivite()
-
-        workflow = _FabriqueWorkflow()
-
-    workflows = _RepliWorkflows()
-
-
-try:  # httpcore >= 1.0 (dependance d'httpx) : backend async public
-    from httpcore.backends.asyncio import AsyncIOBackend as _BackendAsynchrone
-except ImportError:  # httpcore < 1.0 : emplacement historique
-    from httpcore._backends.asyncio import AsyncIOBackend as _BackendAsynchrone
+_BackendAsynchrone = _charger_classe_backend_asynchrone()
 
 
 # ---------------------------------------------------------------- constantes
