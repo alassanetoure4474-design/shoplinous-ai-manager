@@ -225,11 +225,9 @@ class AdaptateurCJ(AdaptateurFournisseur):
                         except (TypeError, ValueError):
                             total_postage_fee = float("nan")
                     freight_mismatch = (
-                        total_postage_fee is not None
-                        and (
-                            not math.isfinite(total_postage_fee)
-                            or abs(total_postage_fee - shipping_cost) > 0.01
-                        )
+                        total_postage_fee is None
+                        or not math.isfinite(total_postage_fee)
+                        or abs(total_postage_fee - shipping_cost) > 0.01
                     )
                     normalized_quotes.append({
                         "reference": (
