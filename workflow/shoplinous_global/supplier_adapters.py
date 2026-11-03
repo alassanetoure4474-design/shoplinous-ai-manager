@@ -6,6 +6,7 @@ destination, sous réserve du devis réel et de la qualification SHOPLINOUS.
 Les intégrations non connectées restent explicitement inactives.
 """
 import asyncio
+import math
 import re
 import time
 
