@@ -53,7 +53,7 @@ KN|KNA|Saint-Christophe-et-Nieves|Saint Kitts and Nevis|1|XCD|en|CARAIBES
 KP|PRK|Coree du Nord|North Korea|850|KPW|ko|AS_E
 KR|KOR|Coree du Sud|South Korea|82|KRW|ko|AS_E
 KW|KWT|Koweit|Kuwait|965|KWD|ar|MO
-KY|CYM|Iles CaImans|Cayman Islands|1|KYD|en|CARAIBES
+KY|CYM|Iles Caimans|Cayman Islands|1|KYD|en|CARAIBES
 KZ|KAZ|Kazakhstan|Kazakhstan|7|KZT|ru|AS_C
 LA|LAO|Laos|Laos|856|LAK|lo|AS_SE
 LB|LBN|Liban|Lebanon|961|LBP|ar|MO
