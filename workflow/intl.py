@@ -139,11 +139,13 @@ def get_country(code: str) -> Country:
     return country
 
 
-def list_countries(region: str = None) -> list:
-    """Retourne tous les territoires ISO, sans présumer de leur ouverture."""
+def list_countries(region: str = None, include_closed: bool = True) -> list:
+    """Catalogue ISO mondial avec filtres de région et d'ouverture commerciale."""
     values = sorted(COUNTRIES.values(), key=lambda item: item.name_fr.casefold())
     if region:
         values = [country for country in values if country.region == region]
+    if not include_closed:
+        values = [country for country in values if country.open_for_sale]
     return [country_status(country.code) for country in values]
 
 
@@ -167,7 +169,17 @@ def country_status(code: str) -> dict:
         "livrable": country.shippable,
         "paiement_disponible": country.payment_available,
         "taxes_configurees": country.taxes_configured,
+        "support_technique": bool(country.currencies),
         "ouvert_vente": country.open_for_sale,
+        "raisons_fermeture": [
+            reason for condition, reason in (
+                (not country.registered, "pays_non_repertorie"),
+                (not country.currencies, "devise_non_identifiee"),
+                (not country.shippable, "livraison_non_verifiee"),
+                (not country.payment_available, "paiement_non_verifie"),
+                (not country.taxes_configured, "fiscalite_non_configuree"),
+            ) if condition
+        ],
     }
 
 
