@@ -367,6 +367,17 @@ class RegistreFournisseurs:
 
         offers, errors, ignored = [], [], []
         for name, adapter in sorted(self.connectes().items()):
+            # Une classe connectée dans le dépôt ne signifie pas que le secret
+            # existe dans chaque environnement (CI, poste local, worker).
+            # Ne jamais tenter un appel réseau CJ sans sa clé API.
+            if name == "cj":
+                import os
+                if not os.environ.get("CJ_API_KEY"):
+                    ignored.append({
+                        "fournisseur": name,
+                        "raison": "CJ_API_KEY absent dans cet environnement",
+                    })
+                    continue
             implementation = getattr(type(adapter), "rechercher_offres", None)
             if implementation is AdaptateurFournisseur.rechercher_offres:
                 ignored.append({
