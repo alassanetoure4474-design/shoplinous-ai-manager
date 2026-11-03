@@ -20,6 +20,37 @@ def test_supabase_store_from_env_accepte_la_cle_secret_nommee(monkeypatch):
     assert store._service_key == "sb_secret_server_only"
 
 
+
+def test_supabase_store_from_env_ne_choisit_pas_une_cle_secrete_non_default(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.delenv("SUPABASE_SECRET_KEY", raising=False)
+    monkeypatch.setenv(
+        "SUPABASE_SECRET_KEYS",
+        json.dumps({"billing": "sb_secret_billing_only"}),
+    )
+
+    with pytest.raises(ss.SupabasePersistenceError, match="absente"):
+        ss.SupabaseStore.from_env()
+
+
+def test_rpc_legacy_service_role_jwt_conserve_authorization_bearer():
+    seen = {}
+
+    def handler(request):
+        seen["headers"] = request.headers
+        return httpx.Response(200, json={"ok": True})
+
+    legacy_jwt = "eyJhbGciOiJIUzI1NiJ9.legacy.signature"
+    store = ss.SupabaseStore(
+        "https://project.supabase.co",
+        legacy_jwt,
+        transport=httpx.MockTransport(handler),
+    )
+    assert store._rpc("shoplinous_reserve_wave_payment", {}) == {"ok": True}
+    assert seen["headers"]["apikey"] == legacy_jwt
+    assert seen["headers"]["authorization"] == "Bearer " + legacy_jwt
+
 def test_supabase_store_refuse_http_et_cle_absente():
     with pytest.raises(ss.SupabasePersistenceError, match="HTTPS"):
         ss.SupabaseStore("http://project.supabase.co", "secret")
@@ -54,7 +85,7 @@ def test_reservation_wave_envoie_une_rpc_serveur_sandbox():
     assert result["created"] is True
     assert seen["url"].endswith("/rest/v1/rpc/shoplinous_reserve_wave_payment")
     assert seen["headers"]["apikey"] == "sb_secret_server_only"
-    assert seen["headers"]["authorization"] == "Bearer sb_secret_server_only"
+    assert "authorization" not in seen["headers"]
     assert seen["body"]["p_order_number"] == "FW-123"
     assert seen["body"]["p_country"] == "CI"
     assert seen["body"]["p_currency"] == "XOF"
