@@ -145,19 +145,21 @@ class TestLivraisonCJ:
         assert r["raison"].startswith("marche_ferme")
 
     def test_aucune_extrapolation_entre_pays(self):
-        # un devis FR ne vaut pas pour DE : rien n est suppose
+        # un devis valable pour DE ne vaut rien pour FR : chaque couple
+        # produit/destination exige SON devis CJ reel
         r = world_shipping.verifier_produit_destination(
-            "S1", "DE", [self.devis_fr()])
+            "S1", "FR", [self.devis_fr(destination="DE")])
         assert r["vendable"] is False
         assert r["raison"] == "aucun_devis_pour_cette_destination"
 
     def test_regles_lient_cout_delai_stock(self):
-        for champ, kw, refus in (
-                ("delai", {"delai": "12-50"}, "delai_trop_long"),
-                ("cout", {"cout_eur": 9.0}, "cout_trop_eleve"),
-                ("stock", {"stock_cn": 500}, "stock_cn_insuffisant")):
+        cas = (("delai", {"delai": "12-50"}, "delai_trop_long"),
+               ("cout", {"cout_eur": 9.0}, "cout_trop_eleve"),
+               ("stock", {"stock_cn": 500}, "stock_cn_insuffisant"))
+        for champ, kw, refus in cas:
             e = world_shipping.evaluer_devis(self.devis_fr(**kw))
-            assert champ + " -> " + refus or refus in e["refus"]
+            assert champ == champ  # couple documente
+            assert refus in e["refus"], (champ, e["refus"])
             assert e["eligible"] is False
 
 
