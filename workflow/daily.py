@@ -36,6 +36,17 @@ F. v5.3 : TABLE SKU->vid (correspondance Freewebstore -> CJ) :
    Absent ou ambigu -> sans_vid CONSERVE + alerte manuelle. Amorce
    VID_TABLE_SEED verifiee (lecture seule, 02/11/2026). Aucune ecriture
    boutique ni CJ ; allow_publish=False inchange.
+G. v5.7 : SURVEILLANCE DU CATALOGUE PUBLIE (module catalog_watch) :
+   apres la construction de la vid_table, CHAQUE variante publiee est
+   REVALIDEE contre les regles 1-9 : stock CN >= 1000, cout <= 8 EUR,
+   marge >= 3x, presence de la variante chez CJ, coherence du stock
+   affiche (regle 9). Reutilise fw_records, vid_table et rate deja
+   obtenus : aucun appel FW supplementaire ; UN appel cj_variants par
+   produit CJ et un cj_stock par variante, cadence CJ 1 req/s via le
+   verrou _THROTTLE existant. STRICTEMENT en lecture seule : aucun
+   prix ni stock boutique modifie, aucune ecriture FW ni CJ. Une
+   indisponibilite CJ produit une alerte par variante (fail-closed) et
+   n'interrompt JAMAIS le reste du workflow.
 
 Regles de reference (base de connaissances SHOPLINOUS, 01/11/2026) :
 1. Stock China Warehouse >= 1000 pour CHAQUE variante conservee
@@ -102,6 +113,7 @@ import mistralai.workflows as workflows
 # double calcul, aucun appel reseau supplementaire, aucune ecriture.
 import freight_collector_v56 as fc56
 import ai_manager
+import catalog_watch as cw
 
 # ---------------------------------------------------------------- regles ----
 MIN_STOCK_CN = 1000
@@ -639,6 +651,8 @@ async def fw_variant_records(catalogue: list | None = None) -> list:
         if not isinstance(p, dict) or not p.get("id"):
             continue
         detail = await fw_get_product(str(p["id"]))
+        core = detail.get("core") or {}
+        prix_produit = core.get("price")
         for v in detail.get("variants") or []:
             if isinstance(v, dict) and v.get("uvid") and v.get("sku"):
                 records.append({
@@ -646,6 +660,8 @@ async def fw_variant_records(catalogue: list | None = None) -> list:
                     "fw_product_sku": p.get("sku") or "",
                     "fw_variant_id": v["uvid"],
                     "variant_sku": v["sku"],
+                    "prix_fw": prix_produit,
+                    "stock_affiche_fw": v.get("stock"),
                 })
     return records
 
@@ -744,6 +760,62 @@ async def build_vid_table(variant_records: list,
                             "motif": "SKU correspond a plusieurs vids CJ"})
     return {"table": table, "absents": absents, "ambigus": ambigus,
             "nb_variantes_fw": len(variant_records or [])}
+
+
+async def surveiller_catalogue_publie(fw_records, vid_table, rate,
+                                      cj_variants_fn=None,
+                                      cj_stock_fn=None):
+    """v5.7 : revalidation LECTURE SEULE des variantes DEJA publiees.
+
+    Reutilise fw_records (prix boutique et stock affiche, lus en amont
+    par fw_variant_records) et la vid_table (correspondances EXACTES
+    uniquement). UN appel cj_variants par produit CJ et un cj_stock par
+    variante : la cadence CJ 1 req/s est garantie par le verrou
+    _THROTTLE deja integre aux activites. Zero invention : une donnee
+    indisponible produit une alerte, jamais une valeur inventee.
+    AUCUNE ecriture FW ni CJ : aucun prix ni stock modifie.
+
+    Retourne (resume, alertes) : resume ne contient que des compteurs,
+    alertes sont prets pour report["alerts"].
+    """
+    variants_fn = cj_variants_fn or cj_variants
+    stock_fn = cj_stock_fn or cj_stock
+    table = (vid_table or {}).get("table") or {}
+    prix_fw = {}
+    stock_affiche_fw = {}
+    for rec in fw_records or []:
+        sku = rec.get("variant_sku")
+        if not sku or sku not in table:
+            continue
+        if rec.get("prix_fw") is not None:
+            prix_fw[sku] = rec.get("prix_fw")
+        if rec.get("stock_affiche_fw") is not None:
+            stock_affiche_fw[sku] = rec.get("stock_affiche_fw")
+
+    async def _variants(pid):
+        return await variants_fn(pid)
+
+    async def _stock(vid):
+        return cn_stock_of(await stock_fn(vid))
+
+    verdicts, rapport = await cw.surveiller_catalogue(
+        _variants, _stock, rate, vid_table,
+        prix_fw=prix_fw, stock_affiche_fw=stock_affiche_fw)
+    resume = {
+        "statut": rapport["statut"],
+        "nb_variantes": rapport["nb_variantes"],
+        "nb_conformes": rapport["nb_conformes"],
+        "nb_non_conformes": rapport["nb_non_conformes"],
+        "nb_alertes": rapport["nb_alertes"],
+        "lecture_seule": True,
+    }
+    alertes = [
+        {"catalog_watch": a.get("variant_sku"),
+         "gravite": a.get("gravite"),
+         "alerte": a.get("code") + " : " + a.get("message")}
+        for a in rapport.get("alertes") or []
+    ]
+    return resume, alertes
 
 
 @workflows.activity(start_to_close_timeout=timedelta(minutes=5), retry_policy_max_attempts=2)
@@ -1360,6 +1432,7 @@ class ShoplinousDailyWorkflow:
                 if seed_sku not in vid_table["table"]:
                     vid_table["table"][seed_sku] = dict(seed_entry)
         except Exception as exc:
+            fw_records = []
             vid_table = {"table": {k: dict(v)
                                    for k, v in VID_TABLE_SEED.items()},
                          "absents": [], "ambigus": [],
@@ -1375,6 +1448,23 @@ class ShoplinousDailyWorkflow:
         report["alerts"].extend(
             {"vid_table": a.get("variant_sku"), "alerte": a.get("motif")}
             for a in vid_table["absents"] + vid_table["ambigus"])
+
+        # v5.7 : SURVEILLANCE DU CATALOGUE PUBLIE (LECTURE SEULE).
+        # Revalide chaque variante publiee (vid_table) contre les regles
+        # 1-9 : stock CN, cout fournisseur, marge, presence CJ, coherence
+        # du stock affiche. Reutilise fw_records, vid_table et rate deja
+        # obtenus : aucun appel FW supplementaire ; UN appel cj_variants
+        # par produit CJ et un cj_stock par variante, cadence 1 req/s
+        # via _THROTTLE. Une indisponibilite CJ produit une alerte par
+        # variante (fail-closed) et n'interrompt JAMAIS le workflow.
+        # AUCUNE ecriture : aucun prix ni stock boutique modifie.
+        try:
+            resume_cw, alertes_cw = await surveiller_catalogue_publie(
+                fw_records, vid_table, rate)
+            report["catalog_watch"] = resume_cw
+            report["alerts"].extend(alertes_cw)
+        except Exception as exc:
+            report["errors"].append(f"catalog_watch: {exc}")
 
         # Surveillance commandes : lecture seule, AUCUN paiement fournisseur.
         # v5.2 : GET /orders pagine (limit/offset, en-tete x-api-key),
