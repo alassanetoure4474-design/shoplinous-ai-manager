@@ -72,6 +72,7 @@ def fake_daily():
         return {"code": 200, "data": [{
             "logisticName": "Test Line",
             "logisticPrice": "3.00",
+            "totalPostageFee": "3.00",
             "logisticAging": "5-8",
         }]}
 
