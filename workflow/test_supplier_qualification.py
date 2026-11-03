@@ -33,10 +33,12 @@ def offer(origin="US", warehouse="US", supplier="Global Supply", sku="SKU-1",
         "devise_achat": purchase_currency,
         "stock": stock,
         "stock_verifie": True,
+        "preuve_stock": "stock-check-2026-001",
         "stock_verifie_le": NOW - 90,
         "images_validees": images,
         "images_verifiees_le": NOW - 90,
         "preuve_images": "img-check-2026-001",
+        "images_urls_verifiees": ["https://cdn.example.test/image-1.jpg", "https://cdn.example.test/image-2.jpg"],
         "fournisseur_verifie": True,
         "preuve_fournisseur": "supplier-kyc-verified-001",
         "conformite_verifiee": True,
@@ -147,6 +149,25 @@ class TestReglesBoutique:
             offer(images=1), "FR", 1, rates(), maintenant=NOW
         )
         assert "moins de 2 images réellement validées" in result["refus"]
+
+    def test_images_sans_deux_urls_https_distinctes_refusees(self):
+        candidate = offer()
+        candidate["images_urls_verifiees"] = [
+            "http://cdn.example.test/image-1.jpg",
+            "https://cdn.example.test/image-1.jpg",
+        ]
+        result = qualification.evaluer_offre(
+            candidate, "FR", 1, rates(), maintenant=NOW
+        )
+        assert "au moins 2 URLs HTTPS d'images distinctes sont requises" in result["refus"]
+
+    def test_stock_sans_preuve_de_verification_refuse(self):
+        candidate = offer()
+        candidate.pop("preuve_stock")
+        result = qualification.evaluer_offre(
+            candidate, "FR", 1, rates(), maintenant=NOW
+        )
+        assert "preuve de vérification du stock absente" in result["refus"]
 
     def test_identite_et_conformite_obligatoires(self):
         candidate = offer()
