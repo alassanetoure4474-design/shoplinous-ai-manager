@@ -27,7 +27,7 @@ create table if not exists public.shoplinous_payments (
     amount numeric(14, 2) not null check (amount > 0),
     currency text not null check (currency = 'XOF'),
     country text not null check (country = 'CI'),
-    environment text not null check (environment in ('sandbox', 'live')),
+    environment text not null check (environment = 'sandbox'),
     status text not null default 'creating'
         check (status in ('creating', 'pending', 'succeeded', 'failed',
                           'cancelled', 'expired', 'refunded')),
@@ -52,7 +52,7 @@ create table if not exists public.geniuspay_webhook_events (
     payment_id uuid not null references public.shoplinous_payments(id) on delete restrict,
     provider_reference text not null,
     event_type text not null,
-    environment text not null check (environment in ('sandbox', 'live')),
+    environment text not null check (environment = 'sandbox'),
     provider_status text not null,
     amount numeric(14, 2) not null,
     currency text not null,
@@ -111,7 +111,7 @@ begin
        or length(p_idempotency_key) > 128 then
         raise exception 'invalid_idempotency_key' using errcode = '22023';
     end if;
-    if lower(coalesce(p_environment, '')) not in ('sandbox', 'live') then
+    if lower(coalesce(p_environment, '')) <> 'sandbox' then
         raise exception 'invalid_payment_environment' using errcode = '22023';
     end if;
 
@@ -222,7 +222,7 @@ begin
        or p_checkout_url !~ '^https://(www\.)?wave\.com/' then
         raise exception 'invalid_wave_checkout_url' using errcode = '22023';
     end if;
-    if lower(coalesce(p_environment, '')) not in ('sandbox', 'live') then
+    if lower(coalesce(p_environment, '')) <> 'sandbox' then
         raise exception 'invalid_payment_environment' using errcode = '22023';
     end if;
 
