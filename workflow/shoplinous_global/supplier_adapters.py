@@ -44,9 +44,9 @@ class AdaptateurCJ(AdaptateurFournisseur):
         "produits_recherche", "variantes", "detail", "stock", "fret",
         "rechercher_offres",
     )
-    # "*" signifie capacité de découverte dynamique, PAS stock universel :
-    # seules les origines retournées avec stock positif par CJ sont proposées.
-    pays_expedition = ("*",)
+    # Les origines ne sont pas une propriété fixe de CJ : elles sont
+    # découvertes variante par variante depuis les stocks réels.
+    pays_expedition = ()
 
     # Entité juridique indiquée dans les conditions officielles de CJ.
     PREUVE_IDENTITE = "https://cjdropshipping.com/user-agreement/en"
