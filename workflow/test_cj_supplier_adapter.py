@@ -52,6 +52,12 @@ def fake_daily():
         raw = payload["data"][0]["productImage"]
         return json.loads(raw)
 
+    def cn_stock_of(payload):
+        for entry in payload.get("data", []):
+            if entry.get("countryCode") == "CN":
+                return int(entry.get("storageNum") or entry.get("totalInventoryNum") or 0)
+        return 0
+
     async def cj_stock(vid):
         assert vid == "variant-1"
         calls["stock"] += 1
@@ -83,6 +89,7 @@ def fake_daily():
         cj_stock=cj_stock,
         cj_freight=cj_freight,
         parse_cj_images=parse_cj_images,
+        cn_stock_of=cn_stock_of,
         check_image=check_image,
     )
     return fake, calls
@@ -90,6 +97,7 @@ def fake_daily():
 
 def install_fake_daily(monkeypatch):
     fake, calls = fake_daily()
+    monkeypatch.setenv("CJ_API_KEY", "test-key-not-used-by-fake")
     monkeypatch.setitem(sys.modules, "daily", fake)
     return calls
 
