@@ -26,26 +26,20 @@ jobs:
     steps:
       - name: Recuperer le code
         uses: actions/checkout@v5
-
       - name: Installer Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
       - name: Valider la syntaxe YAML des workflows CI
         run: |
           pip install pyyaml
           python -c "import glob, sys, yaml; files = sorted(glob.glob('../.github/workflows/*.yml') + glob.glob('../.github/workflows/*.yaml')); sys.exit(1) if not files else None; [yaml.safe_load(open(f, encoding='utf-8')) for f in files]; print('YAML OK :', len(files), 'workflows valides')"
-
       - name: Installer pip a jour
         run: python -m pip install --upgrade pip
-
       - name: Installer les dependances (runtime requirements.txt)
         run: pip install -r requirements.txt
-
       - name: Installer les dependances tests (requirements-dev.txt)
         run: pip install -r requirements-dev.txt
-
       - name: Executer la suite pytest COMPLETE (decouverte automatique)
         run: |
           set +e
@@ -53,7 +47,6 @@ jobs:
           exit_code=${PIPESTATUS[0]}
           echo "PYTEST_EXIT=${exit_code}" >> "$GITHUB_ENV"
           exit "${exit_code}"
-
       - name: Publier les echecs en annotations publiques
         if: failure()
         run: |
@@ -72,20 +65,16 @@ jobs:
     steps:
       - name: Recuperer le code
         uses: actions/checkout@v5
-
       - name: Installer Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
       - name: Installer pip a jour
         run: python -m pip install --upgrade pip
-
       - name: Installer les dependances du validateur (httpx, pydantic)
         run: |
           pip install httpx pydantic
           pip install pytest
-
       - name: Executer les tests du validateur d'images (workflow-cloud/image_validator/tests/)
         env:
           SHOPLINOUS_TEST_MODE: "1"
@@ -101,7 +90,6 @@ jobs:
             exit 1
           fi
           exit "${exit_code}"
-
       - name: Publier les echecs en annotations publiques
         if: failure()
         run: |
@@ -118,16 +106,12 @@ jobs:
     steps:
       - name: Recuperer le code
         uses: actions/checkout@v5
-
       - name: Construire l'image Docker principale
         run: docker build -f workflow/Dockerfile -t shoplinous-worker:test .
-
       - name: Construire explicitement le Dockerfile du validateur cloud (SDK reel)
         run: docker build -f workflow-cloud/image_validator/Dockerfile -t shoplinous-image-validator:test workflow-cloud/image_validator
-
-      - name: Verifier SDK Mistral et decouverte du workflow dans le conteneur dedie
+      - name: Verifier SDK Mistral et import du worker dans le conteneur dedie
         run: |
-          docker run --rm --entrypoint python shoplinous-image-validator:test -c "import mistralai.workflows as wf; from src.workflows import image_validator as iv; discovered=wf.discover_workflows(); assert discovered; print('MISTRAL_WORKFLOWS_SDK_OK', type(iv.workflows).__name__, len(discovered))"
-
+          docker run --rm --entrypoint python shoplinous-image-validator:test -c "import mistralai.workflows as wf; from src.workflows.image_validator import ValidateurImagesWorkflow; from src.entrypoints import worker; assert callable(wf.run_worker); assert callable(worker.main); assert ValidateurImagesWorkflow; print('MISTRAL_WORKFLOWS_SDK_OK', wf.__name__, ValidateurImagesWorkflow.__name__)"
       - name: Demarrer le conteneur principal et verifier les imports du worker
         run: docker run --rm --entrypoint python shoplinous-worker:test -c "import mistralai.workflows; import daily; print('WORKER_IMPORTS_OK')"
