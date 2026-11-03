@@ -47,6 +47,21 @@ G. v5.7 : SURVEILLANCE DU CATALOGUE PUBLIE (module catalog_watch) :
    prix ni stock boutique modifie, aucune ecriture FW ni CJ. Une
    indisponibilite CJ produit une alerte par variante (fail-closed) et
    n'interrompt JAMAIS le reste du workflow.
+H. v5.8 : CONTROLE DE MARGE STRICT (regle 8, decision proprietaire
+   03/11/2026) : prix de vente >= 3 x (cout fournisseur + frais de
+   livraison REELS vers le pays de REFERENCE, la France). Le cout de
+   livraison est un VRAI devis cj_freight (quantity=1) : s'il est
+   indisponible, invalide ou <= 0, la marge est NON VERIFIABLE
+   (alerte "livraison_indisponible") - un 0.0 par defaut ne peut PLUS
+   valider une marge. Prix boutique CONFIRME uniquement via
+   core.pricing.baseprice (structure FW reelle verifiee le 03/11/2026
+   sur /product/18809643 : les variants[] ne portent AUCUN prix propre,
+   le prix produit s'applique a chaque variante ; core.price n'est
+   pas pris en compte a la creation) : toute autre source est
+   signalee "marge non verifiable" (alerte prix_boutique_non_confirme).
+   Si le prix ne couvre pas 3 x (cout + fret du PIRE pays du marche
+   UE27+GB/CH/NO), une alerte INFO marge_pire_pays est emise sans
+   casser la conformite fondee sur la France.
 
 Regles de reference (base de connaissances SHOPLINOUS, 01/11/2026) :
 1. Stock China Warehouse >= 1000 pour CHAQUE variante conservee
@@ -643,7 +658,18 @@ async def fw_variant_records(catalogue: list | None = None) -> list:
     GET /product/{id} (02/11/2026) : le detail produit porte
     core.id, core.sku et variants[] avec 'uvid' (= le variantId
     present dans les commandes) et 'sku' (= le SKU variante CJ
-    saisi a la creation). Aucune ecriture."""
+    saisi a la creation). Aucune ecriture.
+
+    PRIX v5.8 (verifie en lecture seule le 03/11/2026 sur le produit
+    reel 18809643) : les variants[] ne portent AUCUN prix propre ; le
+    prix de vente applicable a chaque variante est le prix PRODUIT, et
+    le champ qui fait foi est core.pricing.baseprice (24.9 constate ==
+    core.price sur ce produit, mais core.price n'est PAS pris en
+    compte a la creation via l'API). On capture donc baseprice en
+    priorite (source "pricing.baseprice" = CONFIRMEE) et core.price
+    seulement en repli (source "core.price" = NON CONFIRMEE : la
+    surveillance de marge traitera alors le prix comme non verifiable,
+    jamais comme conforme par defaut). Aucune ecriture."""
     if catalogue is None:
         catalogue = await fw_list_all_products()
     records = []
@@ -652,7 +678,14 @@ async def fw_variant_records(catalogue: list | None = None) -> list:
             continue
         detail = await fw_get_product(str(p["id"]))
         core = detail.get("core") or {}
-        prix_produit = core.get("price")
+        pricing = core.get("pricing") or {}
+        baseprice = pricing.get("baseprice")
+        if baseprice is not None:
+            prix_produit = baseprice
+            prix_source = "pricing.baseprice"
+        else:
+            prix_produit = core.get("price")
+            prix_source = "core.price" if prix_produit is not None else None
         for v in detail.get("variants") or []:
             if isinstance(v, dict) and v.get("uvid") and v.get("sku"):
                 records.append({
@@ -661,6 +694,7 @@ async def fw_variant_records(catalogue: list | None = None) -> list:
                     "fw_variant_id": v["uvid"],
                     "variant_sku": v["sku"],
                     "prix_fw": prix_produit,
+                    "prix_fw_source": prix_source,
                     "stock_affiche_fw": v.get("stock"),
                 })
     return records
@@ -764,8 +798,11 @@ async def build_vid_table(variant_records: list,
 
 async def surveiller_catalogue_publie(fw_records, vid_table, rate,
                                       cj_variants_fn=None,
-                                      cj_stock_fn=None):
-    """v5.7 : revalidation LECTURE SEULE des variantes DEJA publiees.
+                                      cj_stock_fn=None,
+                                      cj_freight_fn=None,
+                                      pays_reference="FR",
+                                      pays_marche=None):
+    """v5.8 : revalidation LECTURE SEULE des variantes DEJA publiees.
 
     Reutilise fw_records (prix boutique et stock affiche, lus en amont
     par fw_variant_records) et la vid_table (correspondances EXACTES
@@ -775,6 +812,23 @@ async def surveiller_catalogue_publie(fw_records, vid_table, rate,
     indisponible produit une alerte, jamais une valeur inventee.
     AUCUNE ecriture FW ni CJ : aucun prix ni stock modifie.
 
+    MARGE v5.8 (regle 8 STRICT, decision proprietaire 03/11/2026) :
+    - cout de livraison REEL unitaire vers le pays de REFERENCE
+      (France par defaut) : la conformite marge exige
+      prix >= 3 x (cout + livraison_reelle). Livraison inconnue
+      (indisponible, invalide ou <= 0) -> marge NON verifiable
+      (fail-closed), JAMAIS 0 EUR par defaut ;
+    - pire pays du marche (UE27 + GB/CH/NO, Malte ecarte) : alerte
+      INFO si le prix ne couvre pas 3 x (cout + fret pire pays),
+      sans casser la conformite fondee sur la France ;
+    - prix boutique CONFIRME uniquement via core.pricing.baseprice
+      (source "pricing.baseprice") : toute autre source est signalee
+      marge non verifiable ;
+    - cj_freight_fn ABSENT = livraison inconnue (fail-closed) :
+      aucune invention, aucune requete reseau.
+    Si cj_freight_fn est fourni, UN devis cj_freight par (vid, pays)
+    a la quantite 1, cadence 1 req/s via _THROTTLE.
+
     Retourne (resume, alertes) : resume ne contient que des compteurs,
     alertes sont prets pour report["alerts"].
     """
@@ -782,6 +836,7 @@ async def surveiller_catalogue_publie(fw_records, vid_table, rate,
     stock_fn = cj_stock_fn or cj_stock
     table = (vid_table or {}).get("table") or {}
     prix_fw = {}
+    prix_fw_source = {}
     stock_affiche_fw = {}
     for rec in fw_records or []:
         sku = rec.get("variant_sku")
@@ -789,6 +844,9 @@ async def surveiller_catalogue_publie(fw_records, vid_table, rate,
             continue
         if rec.get("prix_fw") is not None:
             prix_fw[sku] = rec.get("prix_fw")
+            source = rec.get("prix_fw_source")
+            if source:
+                prix_fw_source[sku] = source
         if rec.get("stock_affiche_fw") is not None:
             stock_affiche_fw[sku] = rec.get("stock_affiche_fw")
 
@@ -798,9 +856,43 @@ async def surveiller_catalogue_publie(fw_records, vid_table, rate,
     async def _stock(vid):
         return cn_stock_of(await stock_fn(vid))
 
+    livraison_fn = None
+    if cj_freight_fn is not None:
+        pays = [c for c in (pays_marche or DEST_COUNTRIES)]
+
+        async def _couts_livraison(vid):
+            """Devis CJ reels unitaires (quantity=1) : min des options
+            CONFORMES (<= 6 EUR, <= 15 j) par pays ; reference = pays
+            de reference, pire_marche = max sur le marche servi.
+            Un pays sans option conforme ou en erreur est ignore
+            (fail-closed, jamais invente)."""
+            reference = None
+            pire = None
+            for country in pays:
+                try:
+                    options = await cj_freight_fn(vid, country, quantity=1)
+                except Exception:
+                    continue
+                conformes = conforming_freight_options(
+                    (options or {}).get("data") if isinstance(options, dict)
+                    else options, rate)
+                if not conformes:
+                    continue
+                cout_pays = min(o["price_eur"] for o in conformes)
+                if country == pays_reference:
+                    reference = cout_pays
+                if pire is None or cout_pays > pire:
+                    pire = cout_pays
+            return {"reference": (round(reference, 2)
+                                  if reference is not None else None),
+                    "pire_marche": (round(pire, 2)
+                                    if pire is not None else None)}
+        livraison_fn = _couts_livraison
+
     verdicts, rapport = await cw.surveiller_catalogue(
         _variants, _stock, rate, vid_table,
-        prix_fw=prix_fw, stock_affiche_fw=stock_affiche_fw)
+        prix_fw=prix_fw, stock_affiche_fw=stock_affiche_fw,
+        prix_fw_source=prix_fw_source, cout_livraison_fn=livraison_fn)
     resume = {
         "statut": rapport["statut"],
         "nb_variantes": rapport["nb_variantes"],
@@ -1449,18 +1541,23 @@ class ShoplinousDailyWorkflow:
             {"vid_table": a.get("variant_sku"), "alerte": a.get("motif")}
             for a in vid_table["absents"] + vid_table["ambigus"])
 
-        # v5.7 : SURVEILLANCE DU CATALOGUE PUBLIE (LECTURE SEULE).
+        # v5.7/v5.8 : SURVEILLANCE DU CATALOGUE PUBLIE (LECTURE SEULE).
         # Revalide chaque variante publiee (vid_table) contre les regles
-        # 1-9 : stock CN, cout fournisseur, marge, presence CJ, coherence
-        # du stock affiche. Reutilise fw_records, vid_table et rate deja
-        # obtenus : aucun appel FW supplementaire ; UN appel cj_variants
-        # par produit CJ et un cj_stock par variante, cadence 1 req/s
-        # via _THROTTLE. Une indisponibilite CJ produit une alerte par
-        # variante (fail-closed) et n'interrompt JAMAIS le workflow.
+        # 1-9 : stock CN, cout fournisseur, marge STRICT (regle 8 :
+        # prix >= 3x (cout + livraison REELLE, pays de reference
+        # France ; livraison inconnue = marge non verifiable, jamais
+        # 0 EUR par defaut ; alerte info si le pire pays du marche
+        # depasse), presence CJ, coherence du stock affiche. Reutilise
+        # fw_records, vid_table et rate deja obtenus : aucun appel FW
+        # supplementaire ; UN appel cj_variants par produit CJ, un
+        # cj_stock par variante et UN cj_freight (quantity=1) par
+        # (vid, pays du marche), cadence CJ 1 req/s via _THROTTLE. Une
+        # indisponibilite CJ produit une alerte par variante
+        # (fail-closed) et n'interrompt JAMAIS le workflow.
         # AUCUNE ecriture : aucun prix ni stock boutique modifie.
         try:
             resume_cw, alertes_cw = await surveiller_catalogue_publie(
-                fw_records, vid_table, rate)
+                fw_records, vid_table, rate, cj_freight_fn=cj_freight)
             report["catalog_watch"] = resume_cw
             report["alerts"].extend(alertes_cw)
         except Exception as exc:
@@ -1585,3 +1682,4 @@ class ShoplinousGlobalSupplierSearchWorkflow:
         report["achats_declenches"] = False
         report["publications_declenchees"] = False
         return report
+
