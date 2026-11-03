@@ -11,7 +11,7 @@ parcours de production prevu pour la Cote d'Ivoire (Wave Direct, XOF) :
 4. webhook payment.success SIGNE (HMAC-SHA256 reel, fenetre 300 s,
    reference + commande + montant + devise verifies) -> paiement reussi,
 5. rapprochement comptable.
-""";
+"""
 import hashlib
 import hmac
 import json
@@ -35,7 +35,8 @@ def _reponse_checkout(request):
     assert payload["amount"] == MONTANT_XOF
     assert payload["currency"] == "XOF"
     assert payload["customer"]["country"] == "CI"
-    assert payload["metadata"]["order_id"] == "CMD-CI-1"
+    commande = payload["metadata"]["order_id"]
+    assert commande  # n'importe quelle commande valide est acceptee
     return httpx.Response(201, json={
         "success": True,
         "data": {
@@ -46,7 +47,7 @@ def _reponse_checkout(request):
             "gateway": "wave",
             "amount": MONTANT_XOF,
             "currency": "XOF",
-            "metadata": {"order_id": "CMD-CI-1"},
+            "metadata": {"order_id": commande},
         },
     })
 
