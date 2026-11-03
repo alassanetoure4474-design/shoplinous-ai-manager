@@ -186,6 +186,8 @@ def evaluer_offre(offre: Mapping, destination: str, quantite: int,
         refus.append("stock inférieur au minimum de 1000 unités")
     if offre.get("stock_verifie") is not True:
         refus.append("stock non vérifié auprès de la source")
+    if not str(offre.get("preuve_stock") or "").strip():
+        refus.append("preuve de vérification du stock absente")
     stock_date = offre.get("stock_verifie_le")
     if not isinstance(stock_date, (int, float)):
         refus.append("date de vérification du stock absente")
@@ -200,6 +202,16 @@ def evaluer_offre(offre: Mapping, destination: str, quantite: int,
         refus.append("moins de 2 images réellement validées")
     if not str(offre.get("preuve_images") or "").strip():
         refus.append("preuve de validation des images absente")
+    image_urls = offre.get("images_urls_verifiees")
+    if not isinstance(image_urls, (list, tuple)):
+        refus.append("URLs des images vérifiées absentes")
+    else:
+        distinct_https = {
+            str(url).strip() for url in image_urls
+            if isinstance(url, str) and str(url).strip().startswith("https://")
+        }
+        if len(distinct_https) < REGLES_BOUTIQUE["images_validees_min"]:
+            refus.append("au moins 2 URLs HTTPS d'images distinctes sont requises")
     images_date = offre.get("images_verifiees_le")
     if not isinstance(images_date, (int, float)):
         refus.append("date de validation des images absente")
