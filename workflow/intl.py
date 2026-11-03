@@ -15,6 +15,7 @@ from babel.numbers import (
     get_currency_precision,
     get_currency_symbol,
     get_territory_currencies,
+    format_currency,
 )
 
 
@@ -244,6 +245,8 @@ def format_price(amount: float, currency: str, lang: str = "fr") -> str:
     currency = str(currency).upper()
     if currency not in CURRENCIES:
         raise ValueError("Devise inconnue : " + currency)
+    if lang not in ("fr", "en", "es", "pt", "ar"):
+        raise ValueError("Langue non supportée : " + lang)
     try:
         value = Decimal(str(amount))
         if not value.is_finite():
@@ -251,10 +254,9 @@ def format_price(amount: float, currency: str, lang: str = "fr") -> str:
         decimals = CURRENCIES[currency]["decimales"]
         quantum = Decimal(1).scaleb(-decimals)
         value = value.quantize(quantum, rounding=ROUND_HALF_UP)
+        return format_currency(value, currency, locale=lang)
     except (InvalidOperation, ValueError, TypeError) as exc:
         raise ValueError("Montant invalide") from exc
-    txt = f"{value:,.{decimals}f}".replace(",", " ")
-    return f"{txt} {CURRENCIES[currency]['symbole']}"
 
 
 LANGUAGES = ["fr", "en", "es", "pt", "ar"]
