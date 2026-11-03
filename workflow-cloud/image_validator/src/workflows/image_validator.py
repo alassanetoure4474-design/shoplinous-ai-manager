@@ -329,11 +329,33 @@ def _construire_transport_production(epingle: _BackendEpingle) -> httpx.AsyncBas
     et httpcore utilise le nom de domaine d'origine pour le SNI : seul le
     transport TCP est remplace par le backend epingle.
     """
-    return httpx.AsyncHTTPTransport(
+    # HTTPX 0.27/0.28 n'expose PAS network_backend dans le constructeur
+    # public d'AsyncHTTPTransport. Son pool httpcore expose toutefois le
+    # backend réseau utilisé par toutes les connexions. On construit d'abord
+    # le transport HTTPX normal (contexte TLS vérifié, proxies env désactivés),
+    # puis on remplace explicitement le backend du pool. Si la structure
+    # interne attendue change dans une version future, on échoue fermé.
+    transport = httpx.AsyncHTTPTransport(
         verify=True,
         trust_env=False,
-        network_backend=epingle,
     )
+    pool = getattr(transport, "_pool", None)
+    if pool is None or not hasattr(pool, "_network_backend"):
+        try:
+            import asyncio
+            asyncio.run(transport.aclose())
+        except Exception:
+            pass
+        raise RuntimeError(
+            "HTTPX/httpcore incompatibles : backend réseau du pool inaccessible ; "
+            "connexion DNS non épinglée refusée"
+        )
+    pool._network_backend = epingle
+    if pool._network_backend is not epingle:
+        raise RuntimeError(
+            "Échec d'installation du backend DNS épinglé ; connexion refusée"
+        )
+    return transport
 
 
 # --------------------------------------------------------------- signature
