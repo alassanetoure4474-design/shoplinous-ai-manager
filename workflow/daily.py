@@ -991,8 +991,7 @@ def stock_by_country(stock_payload: dict) -> dict:
             continue
         stock = 0
         # Priorité observée : stock entrepôt, total, puis champs de secours.
-        for field in ("storageNum", "totalInventoryNum",
-                      "factoryInventoryNum", "cjInventoryNum"):
+        for field in ("storageNum", "totalInventoryNum"):
             value = entry.get(field)
             if isinstance(value, int) and not isinstance(value, bool) and value > 0:
                 stock = value
