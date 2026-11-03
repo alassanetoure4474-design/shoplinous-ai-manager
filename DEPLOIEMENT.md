@@ -277,8 +277,9 @@ Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux
 2. Après fusion validée et vérification du projet cible, exécuter manuellement
    le workflow Apply Supabase database migrations et cocher confirm_apply.
    Sans cette confirmation, le job ne démarre pas. Le workflow vérifie la
-   présence des trois secrets Supabase, lie le projet et affiche un dry-run
-   des migrations avant leur application. Il utilise Supabase CLI v3.
+   présence des trois secrets Supabase, cible explicitement le project-ref
+   et affiche un dry-run des migrations avant leur application. Il utilise
+   Supabase CLI v3.
    Examiner le dry-run et le project-ref avant de considérer le déploiement
    Sandbox comme validé.
 3. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
