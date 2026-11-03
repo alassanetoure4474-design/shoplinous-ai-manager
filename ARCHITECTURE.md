@@ -49,8 +49,28 @@ integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 
 ## Pour connecter reellement (a faire cote client)
 
-1. Pour GeniusPay, configurer les cles API et le secret webhook dans le service serveur, deployer un endpoint HTTPS receveur puis valider le flux de bout en bout en Sandbox avant d'autoriser Live. Les autres prestataires exigent leurs contrats marchands et secrets webhook.
+1. Pour GeniusPay, configurer les cles API et le secret webhook dans le service serveur, deployer un endpoint HTTPS receveur puis valider le flux de bout en bout en Sandbox avant d autoriser Live. Les autres prestataires exigent leurs contrats marchands et secrets webhook.
 2. Contrats fournisseurs additionnels (AliExpress, BigBuy, ...) puis
    adaptateurs a implementer sur la base AdaptateurFournisseur.
 3. Service de taux de change reel a brancher sur FournisseurTaux.
 4. Deploiement gere Mistral Workflows (voir DEPLOIEMENT.md section 8).
+
+## Modules complementaires v6.1 (novembre 2026)
+
+| # | Module | Role | Etat |
+|---|--------|------|------|
+| 19 | intl (workflow/intl.py) | 30 pays enregistres dont 29 marches verifies (UE27 + GB/CH/NO, Malte exclue : aucune option CJ <= 15 jours) ; statuts distincts enregistre/livrable/paiement/taxes/ouvert a la vente ; devises extensible (EUR USD XOF XAF GBP CAD CNY JPY NGN GHS MAD ZAR KES) ; conversion UNIQUEMENT avec des taux fournis (BCE/Frankfurter au runtime), jamais inventes ; langues fr/en/es/pt/ar extensibles avec traductions completes exigees | Operationnel ; un pays non enregistre ne peut pas etre propose |
+| 20 | ad_engine (workflow/ad_engine.py) | Moteur publicitaire : scoring produits (stock, marge >= 3x, images >= 2, livrabilite), annonces honnetes multilingues (aucun faux avis, aucune fausse reduction, aucune offre dans un pays non ouvert ou non livrable), calendrier organique max 3 publications/jour sur canaux autorises UNIQUEMENT, campagnes payantes en brouillon budget 0 strictement, tableau de bord sans statistique fictive | Operationnel ; AUCUN canal social n est autorise (aucun connecteur actif) : aucune publication reelle possible |
+
+Securite publicitaire absolue :
+
+1. Un produit rupture, non rentable, sans images ou non livrable
+   n est jamais promu.
+2. Une annonce n est jamais generee pour un pays non ouvert a la vente.
+3. Une campagne payante ne peut JAMAIS avoir un budget > 0 sans
+   autorisation reelle ; elle reste en brouillon.
+4. Le tableau de bord n invente aucune statistique : les champs sans
+   donnee reelle valent None.
+5. Le calendrier refuse tout canal non autorise (facebook, instagram,
+   tiktok, google, pinterest : tous a False tant qu aucun connecteur
+   n est active).
