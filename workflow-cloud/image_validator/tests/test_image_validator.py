@@ -1,16 +1,18 @@
-"""Tests unitaires du validateur HTTP GET d'images SHOPLINOUS (v3).
+"""Tests unitaires du validateur HTTP GET d'images SHOPLINOUS (v4).
 
 Couverture :
 - validation statique des URL (schema, port, liste blanche, identifiants) ;
 - protection SSRF dynamique : IP privees/locales refusees, DNS echoue ;
-- streaming REEL (client.stream) : chaque bloc est controle, interruption
-  immediate au-dela de la taille max, corps NON telecharge entierement ;
+- production : transport DNS pinne reellement construit (IP validee epinglee) ;
+- streaming REEL (client.stream) : interruption immediate au-dela de la
+  taille max, corps NON telecharge entierement ;
 - redirections autorisees (meme domaine), interdites (hors liste), en boucle ;
-- MIME incoherent (Content-Type != signature binaire) et Content-Type non image ;
+- MIME incoherent et Content-Type non image ;
 - cadence globale 1 req/s verrouee entre executions concurrentes ;
-- cache TTL 6 h (entrees fraiches servies, entrees expirees evincees).
+- cache TTL 6 h.
 
-Aucun reseau reel : httpx.MockTransport + resolveur DNS factice injectes.
+Tests d'epinglage DNS (anti-rebinding) : voir test_dns_pinning.py.
+Aucun reseau reel ici : httpx.MockTransport + resolveur DNS factice injectes.
 """
 
 import asyncio
@@ -59,11 +61,7 @@ def _reponse_image(contenu=JPG, mime="image/jpeg", statut=200):
 
 
 class FluxServeurCompteur(httpx.AsyncByteStream):
-    """Flux serveur factice qui COMPTE les blocs reellement consommes.
-
-    Prouve que le validateur n'aspire pas le corps entier : si la lecture est
-    interrompue (limite depassee), le compteur s'arrete avant la fin.
-    """
+    """Flux serveur factice qui COMPTE les blocs reellement consommes."""
 
     def __init__(self, morceaux):
         self.morceaux = morceaux
@@ -151,6 +149,54 @@ def test_dns_echoue():
 
     resultat = asyncio.run(go())
     assert not resultat.valide and "DNS" in resultat.motif_echec
+
+
+# ---------------------------------------------- production : DNS pinning
+def test_production_construit_transport_epingle_sur_ip_validee(monkeypatch):
+    """Sans transport injecte, la production DOIT construire le transport
+    epingle et connecter exactement l'IP publique validee par le resolveur."""
+    captures = []
+
+    def fausse_usine(epingle):
+        captures.append(epingle)
+        return _transport(lambda req: _reponse_image())
+
+    monkeypatch.setattr(iv, "_construire_transport_production", fausse_usine)
+
+    async def go():
+        return await iv._verifier_une_image(
+            "https://cf.cjdropshipping.com/img.jpg",
+            resolveur=_resoudre_publique,
+        )
+
+    resultat = asyncio.run(go())
+    assert resultat.valide, resultat.motif_echec
+    assert len(captures) == 1
+    ip_epinglee = captures[0]._ip_epinglees.get("cf.cjdropshipping.com")
+    assert ip_epinglee == IP_PUBLIQUE
+
+
+def test_production_ip_non_publique_bloquee_avant_connexion(monkeypatch):
+    """FAIL-CLOSED conserve : sans IP publique validee, la production ne
+    construit AUCUN transport et ne tente AUCUNE connexion."""
+
+    def usine_interdite(epingle):
+        raise AssertionError("Transport construit sans IP validee : fail-closed viole")
+
+    monkeypatch.setattr(iv, "_construire_transport_production", usine_interdite)
+
+    async def resoud_prive(hote):
+        return ["192.168.1.10"]
+
+    async def go():
+        return await iv._verifier_une_image(
+            "https://cf.cjdropshipping.com/img.jpg",
+            resolveur=resoud_prive,
+        )
+
+    resultat = asyncio.run(go())
+    assert not resultat.valide
+    assert "non publique" in resultat.motif_echec
 
 
 # ----------------------------------------------------------- image valide
@@ -249,7 +295,6 @@ def test_corps_non_telecharge_entierement_hors_limite(monkeypatch):
 
     resultat = asyncio.run(go())
     assert not resultat.valide and "plus grand" in resultat.motif_echec
-    # Preuve centrale : le serveur n'a servi qu'une petite partie du corps.
     assert flux.blocs_consommes < len(morceaux), (
         f"Le corps a ete integralement lu ({flux.blocs_consommes} blocs / "
         f"{len(morceaux)}) : le streaming n'interrompt pas la lecture"
@@ -415,15 +460,3 @@ def test_rapport_vide_coherent():
     assert rapport["rejetees"] == 0
     assert rapport["resultats"] == []
     assert rapport["date_rapport"] is not None
-
-
-def test_production_sans_transport_reseau_est_bloquee():
-    async def go():
-        return await iv._verifier_une_image(
-            "https://cf.cjdropshipping.com/img.jpg",
-            resolveur=_resoudre_publique,
-        )
-
-    resultat = asyncio.run(go())
-    assert not resultat.valide
-    assert "DNS pinning" in resultat.motif_echec

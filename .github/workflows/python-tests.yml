@@ -6,7 +6,8 @@
 # Job pytest-image-validator : execute REELLEMENT les tests du dossier
 # workflow-cloud/image_validator/tests/ (le job "pytest" ci-dessus ne
 # couvre que le dossier workflow/). Une garde verifie que >= 20 tests
-# sont bien executes.
+# sont bien executes. Un smoke reseau reel (DNS pinning vers CJ) prouve
+# l'epinglage en production ; il est non bloquant (dependance externe).
 name: Tests pytest workflow
 
 on:
@@ -90,6 +91,12 @@ jobs:
             exit 1
           fi
           exit "${exit_code}"
+      - name: Smoke reseau reel DNS pinning vers CJ (preuve, non bloquant)
+        env:
+          SHOPLINOUS_TEST_MODE: "1"
+          TEST_RESEAU_REEL: "1"
+        continue-on-error: true
+        run: python -m pytest tests -m reseau_reel -v -s
       - name: Publier les echecs en annotations publiques
         if: failure()
         run: |
