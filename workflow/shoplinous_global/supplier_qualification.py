@@ -262,7 +262,17 @@ def evaluer_offre(offre: Mapping, destination: str, quantite: int,
         refus.append(str(exc))
 
     try:
+        # Coût conservateur : ne jamais sous-estimer le coût rendu si
+        # CJ distingue logisticPrice et totalPostageFee. La divergence
+        # reste bloquante via quote["verifie"] plus haut.
         shipping = _decimal(quote.get("cout"), "coût transport")
+        for field in ("cout_logistique_cj", "cout_total_postage_cj"):
+            raw_component = quote.get(field)
+            if raw_component is not None:
+                component = _decimal(raw_component, field)
+                if component < 0:
+                    raise ValueError("coût transport négatif")
+                shipping = max(shipping, component)
         if shipping < 0:
             raise ValueError("coût transport négatif")
         shipping_currency = str(quote.get("devise") or "").upper()
