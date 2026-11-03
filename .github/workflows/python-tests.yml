@@ -87,6 +87,8 @@ jobs:
           pip install pytest
 
       - name: Executer les tests du validateur d'images (workflow-cloud/image_validator/tests/)
+        env:
+          SHOPLINOUS_TEST_MODE: "1"
         run: |
           set +e
           python -m pytest tests -v 2>&1 | tee pytest_cloud_output.txt
@@ -117,8 +119,15 @@ jobs:
       - name: Recuperer le code
         uses: actions/checkout@v5
 
-      - name: Construire l'image Docker
+      - name: Construire l'image Docker principale
         run: docker build -f workflow/Dockerfile -t shoplinous-worker:test .
 
-      - name: Demarrer le conteneur et verifier les imports du worker
+      - name: Construire explicitement le Dockerfile du validateur cloud (SDK reel)
+        run: docker build -f workflow-cloud/image_validator/Dockerfile -t shoplinous-image-validator:test workflow-cloud/image_validator
+
+      - name: Verifier SDK Mistral et decouverte du workflow dans le conteneur dedie
+        run: |
+          docker run --rm --entrypoint python shoplinous-image-validator:test -c "import mistralai.workflows as wf; from src.workflows import image_validator as iv; discovered=wf.discover_workflows(); assert discovered; print('MISTRAL_WORKFLOWS_SDK_OK', type(iv.workflows).__name__, len(discovered))"
+
+      - name: Demarrer le conteneur principal et verifier les imports du worker
         run: docker run --rm --entrypoint python shoplinous-worker:test -c "import mistralai.workflows; import daily; print('WORKER_IMPORTS_OK')"
