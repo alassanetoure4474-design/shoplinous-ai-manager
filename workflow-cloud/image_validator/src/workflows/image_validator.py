@@ -341,11 +341,6 @@ def _construire_transport_production(epingle: _BackendEpingle) -> httpx.AsyncBas
     )
     pool = getattr(transport, "_pool", None)
     if pool is None or not hasattr(pool, "_network_backend"):
-        try:
-            import asyncio
-            asyncio.run(transport.aclose())
-        except Exception:
-            pass
         raise RuntimeError(
             "HTTPX/httpcore incompatibles : backend réseau du pool inaccessible ; "
             "connexion DNS non épinglée refusée"
