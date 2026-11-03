@@ -271,9 +271,10 @@ Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux
 
 ### Déploiement manuel — à faire uniquement après configuration des secrets
 
-1. Configurer dans GitHub Actions : SUPABASE_ACCESS_TOKEN,
-   SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD et
-   GENIUSPAY_WEBHOOK_SECRET. Ne jamais coller ces secrets dans le chat.
+1. Configurer dans GitHub Actions les trois secrets Supabase :
+   SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_ID et SUPABASE_DB_PASSWORD.
+   Ne jamais coller ces secrets dans le chat. Le secret GeniusPay n'existe
+   qu'après la création du webhook ; il sera ajouté à l'étape 4.
 2. Après fusion validée et vérification du projet cible, exécuter le
    workflow Apply Supabase database migrations une première fois avec
    confirm_apply=false (valeur par défaut). Ce lancement vérifie les trois
