@@ -178,7 +178,7 @@ Deno.test("rejects missing webhook secrets without accessing persistence", async
 
 Deno.test("uses a deterministic PHP-compatible JSON serialization for HMAC", () => {
   const serialized = phpJsonEncode({ message: "café/été", value: 1 });
-  if (serialized !== '{"message":"caf\\u00e9\\/\\u00e9","value":1}') {
+  if (serialized !== '{"message":"caf\\u00e9\\/\\u00e9t\\u00e9","value":1}') {
     throw new Error("Unexpected canonical serialization: " + serialized);
   }
 });
