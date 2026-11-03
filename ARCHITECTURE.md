@@ -1,7 +1,7 @@
 # SHOPLINOUS GLOBAL v6 - Architecture definitive
 
 Evolution du SHOPLINOUS AI MANAGER existant vers une plateforme
-e-commerce internationale (Afrique, Europe, monde). Les 32 outils du
+e-commerce internationale (Afrique, Europe, monde). Les 33 outils du
 workflow (workflow/daily.py), les cinq modeles IA (ai_manager) et les
 integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 
