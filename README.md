@@ -74,3 +74,12 @@ Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les referencent
 - Wave Direct n'est propose que si l'adaptateur GeniusPay est connecte (cles API + secret webhook) et que le pays/devise sont CI/XOF. La reponse de GeniusPay doit confirmer la passerelle, le montant, la devise, la commande et l'environnement avant que l'URL soit retournee.
 - Le retour navigateur ne confirme jamais le paiement. Seul le webhook GeniusPay signe, horodate et lie a la reference, au montant, a la devise et a la commande peut faire passer cette commande a `payee`.
 - Le test technique Wave Direct a reussi en Sandbox. Cela ne valide pas encore les cles Live, le webhook de production ni la configuration du moyen de paiement dans Freewebstore. L'endpoint HTTPS recevant les webhooks et le branchement de l'interface de checkout doivent etre deployes avant toute commande client reelle.
+
+## Référentiel international mondial
+
+- `workflow/intl.py` construit le référentiel des **249 codes ISO 3166-1 alpha-2** avec `pycountry==24.6.1` et les noms localisés / devises de territoire avec `Babel==2.18.0` (données CLDR).
+- Les codes alpha-3, codes numériques, noms français/anglais, régions et devises ayant cours légal sont exposés par le module international. Les territoires à plusieurs devises n'en sélectionnent aucune automatiquement.
+- Le référentiel est distinct de l'ouverture commerciale : seuls les 29 pays de `VERIFIED_MARKETS` restent ouverts. Les autres sont enregistrés mais bloqués pour livraison, paiement et vente jusqu'à vérification indépendante.
+- Les prix d'annonces utilisent la devise de la destination. Toute conversion hors devise de base exige des taux explicites ; aucun taux, prix local ou moyen de paiement n'est inventé.
+- Les traductions de base sont présentes en français, anglais, espagnol, portugais et arabe. L'arabe est marqué RTL.
+- **Limites non levées par ce changement :** les 249 territoires ne sont pas 249 marchés vendables. La validation CJdropshipping reste à effectuer produit par produit et pays par pays ; la disponibilité des prestataires de paiement, les règles fiscales et les contrats marchands restent à confirmer avant ouverture. Les connecteurs sociaux demeurent désactivés tant qu'ils ne sont pas authentifiés.
