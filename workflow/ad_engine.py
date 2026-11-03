@@ -40,7 +40,7 @@ def score_produit(p: Produit) -> dict:
     if p.rentable: s += 30
     if p.nb_images >= 2: s += 20
     if p.pays_livrables: s += 10
-    eligible = (p.stock > 0 and p.rentable and p.nb_images >= 2 and p.pays_livrables)
+    eligible = bool(p.stock > 0 and p.rentable and p.nb_images >= 2 and p.pays_livrables)
     return {"sku": p.sku, "score": s, "eligible": eligible}
 
 
