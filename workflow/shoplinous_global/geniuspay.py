@@ -5,6 +5,10 @@
 - Checkout heberge : le client choisit son moyen de paiement.
 - Les retours navigateur ne confirment jamais un paiement.
 - Webhook HMAC-SHA256 + horodatage (fenetre de 5 minutes).
+- Montants (v5.11) : XOF en unites entieres (1 unite = 1 XOF, minimum 200) ;
+  EUR/USD saisis en unites majeures (24.90) et envoyes a l'API en unites
+  mineures (2490 centimes, minimum 200 centimes = 2.00). Aucune ambiguete :
+  la devise fixe l'unite, jamais l'appelant.
 """
 from __future__ import annotations
 
@@ -22,6 +26,7 @@ import httpx
 BASE_URL = "https://geniuspay.ci/api/v1/merchant"
 DELAI_WEBHOOK_SECONDES = 300
 DEVISES_API = {"XOF", "EUR", "USD"}
+DEVISES_DECIMALES = {"XOF"}
 EVENEMENTS_WEBHOOK = (
     "payment.success",
     "payment.failed",
@@ -218,20 +223,43 @@ class GeniusPayClient:
         if self.environment == "live" and not self.allow_live:
             raise GeniusPayConfigurationError("Paiements live non autorises")
 
-        try:
-            amount = Decimal(str(montant))
-        except (InvalidOperation, TypeError, ValueError):
-            raise ValueError("Montant invalide") from None
-        if not amount.is_finite() or amount < Decimal("200"):
-            raise ValueError("Montant minimum GeniusPay : 200")
-        if amount != amount.to_integral_value():
-            raise ValueError("Le montant GeniusPay doit etre un nombre entier")
         code_devise = str(devise).upper()
         if code_devise not in DEVISES_API:
             raise ValueError(
                 "Devise non autorisee par le checkout standard GeniusPay : "
                 + ", ".join(sorted(DEVISES_API))
             )
+        try:
+            amount = Decimal(str(montant))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValueError("Montant invalide") from None
+        if not amount.is_finite() or amount <= 0:
+            raise ValueError("Montant invalide")
+        if code_devise == "XOF":
+            # XOF : pas de decimale ; 1 unite API = 1 XOF ; minimum 200 XOF.
+            if amount != amount.to_integral_value():
+                raise ValueError(
+                    "Montant XOF invalide : un entier est requis (1 unite = 1 XOF)"
+                )
+            if amount < Decimal("200"):
+                raise ValueError("Montant minimum GeniusPay : 200 (XOF)")
+            amount_api = int(amount)
+        else:
+            # EUR/USD (v5.11) : saisie en unites majeures (24.90 euros),
+            # envoi API en unites mineures (2490 centimes) ; minimum 200
+            # centimes = 2.00. La conversion n'est jamais devinee par
+            # l'appelant : la devise fixe seule l'unite envoyee.
+            if -amount.normalize().as_tuple().exponent > 2:
+                raise ValueError(
+                    "Montant " + code_devise + " invalide : 2 decimales maximum"
+                    + " (ex. 24.90)"
+                )
+            if amount < Decimal("2.00"):
+                raise ValueError(
+                    "Montant minimum GeniusPay : 2.00 " + code_devise
+                    + " (200 centimes)"
+                )
+            amount_api = int((amount * 100).to_integral_value())
         methode = str(methode_paiement or "").strip().lower() or None
         if methode not in (None, "wave"):
             raise ValueError("Methode de paiement directe non prise en charge")
@@ -252,7 +280,7 @@ class GeniusPayClient:
                 if isinstance(value, str) and value.strip():
                     customer[key] = value.strip()
         payload = {
-            "amount": int(amount),
+            "amount": amount_api,
             "currency": code_devise,
             "description": (description or ("Commande " + str(commande)))[:500],
             "metadata": {"order_id": str(commande)},
@@ -323,7 +351,9 @@ class GeniusPayClient:
             "reference": reference,
             "checkout_url": checkout_url,
             "statut": str(data["status"]).lower(),
-            "montant": int(amount),
+            "montant": amount_api,
+            "montant_saisi": str(amount),
+            "unite_api": "centimes" if code_devise != "XOF" else "unites",
             "devise": code_devise,
             "environnement": response_env,
             "metadata": data.get("metadata") or {"order_id": str(commande)},
