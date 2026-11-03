@@ -258,8 +258,11 @@ Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux
    GENIUSPAY_WEBHOOK_SECRET. Ne jamais coller ces secrets dans le chat.
 2. Après fusion validée et vérification du projet cible, exécuter manuellement
    le workflow Apply Supabase database migrations et cocher confirm_apply.
-   Sans cette confirmation, le job ne démarre pas. Le workflow vérifie aussi
-   la présence des trois secrets Supabase avant toute connexion.
+   Sans cette confirmation, le job ne démarre pas. Le workflow vérifie la
+   présence des trois secrets Supabase, lie le projet et affiche un dry-run
+   des migrations avant leur application. Il utilise Supabase CLI v3.
+   Examiner le dry-run et le project-ref avant de considérer le déploiement
+   Sandbox comme validé.
 3. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
    sélectionner au minimum payment.success, payment.failed,
    payment.cancelled, payment.expired et payment.refunded, puis sauvegarder
