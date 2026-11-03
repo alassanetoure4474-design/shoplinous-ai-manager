@@ -85,7 +85,7 @@ create or replace function public.shoplinous_reserve_wave_payment(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
     v_order public.shoplinous_orders%rowtype;
@@ -207,7 +207,7 @@ create or replace function public.shoplinous_finalize_wave_checkout(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
     v_payment public.shoplinous_payments%rowtype;
@@ -290,7 +290,7 @@ create or replace function public.shoplinous_process_geniuspay_webhook(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
     v_payment public.shoplinous_payments%rowtype;
@@ -306,7 +306,7 @@ begin
        or p_order_number is null or length(trim(p_order_number)) = 0 then
         raise exception 'invalid_webhook_identifiers' using errcode = '22023';
     end if;
-    if lower(coalesce(p_environment, '')) not in ('sandbox', 'live')
+    if lower(coalesce(p_environment, '')) <> 'sandbox'
        or upper(coalesce(p_currency, '')) <> 'XOF'
        or p_amount is null or p_amount < 200
        or p_amount::text in ('NaN', 'Infinity', '-Infinity')
