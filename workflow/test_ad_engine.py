@@ -14,11 +14,17 @@ def test_referentiel_iso_mondial_complet():
     assert all(country.region != "Autre" for country in intl.COUNTRIES.values())
 
 
-def test_seuls_les_marches_verifies_sont_ouverts():
+def test_seuls_les_marches_avec_paiement_et_taxes_verifies_sont_ouverts():
     ouverts = [code for code, country in intl.COUNTRIES.items() if country.open_for_sale]
-    assert len(ouverts) == 29
-    assert set(ouverts) == set(intl.VERIFIED_MARKETS)
-    assert "MT" not in ouverts
+    assert ouverts == ["FR"]
+    assert set(intl.VERIFIED_MARKETS) == {
+        code for code, country in intl.COUNTRIES.items() if country.shippable
+    }
+    assert all(
+        not country.open_for_sale
+        for code, country in intl.COUNTRIES.items()
+        if code != "FR"
+    )
 
 
 @pytest.mark.parametrize(
@@ -131,7 +137,13 @@ def test_annonce_multilingue_et_marche_ferme():
         ad_engine.generer_annonce(product, "fr", "DE")
 
 
-def test_annonce_devise_locale_et_taux_obligatoire():
+def test_annonce_devise_locale_et_taux_obligatoire(monkeypatch):
+    # GB n'est pas encore un marché commercialement ouvert. On ouvre ses
+    # contrôles uniquement dans ce test pour isoler la validation du taux.
+    country = intl.get_country("GB")
+    monkeypatch.setattr(country, "shippable", True)
+    monkeypatch.setattr(country, "payment_available", True)
+    monkeypatch.setattr(country, "taxes_configured", True)
     product = ad_engine.Produit(
         "S1", "Wall art", 24.9, 7.75, 100, 5, ["GB"], devise_base="EUR"
     )
