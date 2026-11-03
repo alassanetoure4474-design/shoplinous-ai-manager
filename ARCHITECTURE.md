@@ -1,7 +1,7 @@
 # SHOPLINOUS GLOBAL v6 - Architecture definitive
 
 Evolution du SHOPLINOUS AI MANAGER existant vers une plateforme
-e-commerce internationale (Afrique, Europe, monde). Les 33 outils du
+e-commerce internationale (Afrique, Europe, monde). Les 32 outils du
 workflow (workflow/daily.py), les cinq modeles IA (ai_manager) et les
 integrations Freewebstore / CJdropshipping sont CONSERVES tels quels.
 
@@ -79,3 +79,8 @@ Securite publicitaire absolue :
 5. Le calendrier refuse tout canal non autorise (facebook, instagram,
    tiktok, google, pinterest : tous a False tant qu aucun connecteur
    n est active).
+
+
+### Workflow de recherche mondiale des fournisseurs
+
+`shoplinous_global_supplier_search` orchestre le taux USD/EUR horodaté, la recherche CJ, les variantes, le stock CN, la validation GET des images et le devis exact destination/quantité. Il applique le moteur de qualification commun et reste strictement en lecture seule.
