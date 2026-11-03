@@ -34,9 +34,41 @@ from typing import Awaitable, Callable, Optional
 
 from pydantic import BaseModel, Field
 
-import mistralai.workflows as workflows
-
 import httpx
+
+try:  # production : SDK Mistral Workflows reellement installe
+    import mistralai.workflows as workflows
+except ImportError:  # tests unitaires : shim minimal, aucune logique modifiee
+    class _RepliWorkflows:
+        """Shim hors-ligne pour les tests unitaires (SDK non installe).
+
+        Les decorateurs deviennent des identites : fonctions et classes
+        restent inchangees, seule la declaration Mistral est ignoree. En
+        production, le SDK reel est importe et les decorateurs s'appliquent.
+        """
+
+        class _FabriqueActivite:
+            def __call__(self, fonction):
+                return fonction
+
+        class _FabriqueWorkflow:
+            @staticmethod
+            def define(**kwargs):
+                def decorateur(cls):
+                    return cls
+                return decorateur
+
+            @staticmethod
+            def entrypoint(fonction):
+                return fonction
+
+        def activity(self, *args, **kwargs):
+            return self._FabriqueActivite()
+
+        workflow = _FabriqueWorkflow()
+
+    workflows = _RepliWorkflows()
+
 
 # ---------------------------------------------------------------- constantes
 DOMAINES_AUTORISES = (
