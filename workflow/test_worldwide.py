@@ -24,8 +24,8 @@ DEVISES_CIBLES = {"CI": ("XOF", 0), "FR": ("EUR", 2), "US": ("USD", 2),
 
 class TestReferentiel:
     def test_nb_pays_repertories(self):
-        assert len(world_countries.PAYS) == 253
-        assert len(world_countries.selecteur_mondial()) == 253
+        assert len(world_countries.PAYS) == 249
+        assert len(world_countries.selecteur_mondial()) == 249
 
     def test_pays_cibles_tous_repertories(self):
         for c in PAYS_CIBLES + ["AQ", "MT", "GB", "CH", "NO"]:
