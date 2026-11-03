@@ -146,18 +146,20 @@ export function createGeniusPayWebhookHandler(
     if (!signatureHeader || !timestampHeader || !eventHeader || !environmentHeader) {
       const allSignatureHeadersMissing =
         !signatureHeader && !timestampHeader && !eventHeader && !environmentHeader;
+      const dashboardTestEvent =
+        payloadEvent === "webhook.test" ||
+        payload.type === "webhook.test" ||
+        payload.event_type === "webhook.test" ||
+        payload.test === true;
       const validDashboardTest =
         allSignatureHeadersMissing &&
-        payloadEvent === "webhook.test" &&
-        payloadEnvironment === "sandbox" &&
-        typeof payload.id === "string" &&
-        payload.id.trim().length > 0 &&
-        Number.isSafeInteger(payloadTimestamp) &&
-        Math.abs(now - payloadTimestamp) <= WEBHOOK_WINDOW_SECONDS;
+        dashboardTestEvent &&
+        (!payloadEnvironment || payloadEnvironment === "sandbox");
 
-      // GeniusPay's dashboard tester can send a body-only webhook.test probe.
-      // This event is acknowledged without persistence; payment events still
-      // require all headers and a valid HMAC signature below.
+      // GeniusPay's dashboard tester sends a body-only test probe whose
+      // envelope may omit the optional id/timestamp fields or use "type".
+      // A Sandbox webhook.test probe has no payment side effects; all payment
+      // events still require every signature header and a valid HMAC below.
       if (validDashboardTest) {
         return jsonResponse(200, {
           received: true,
