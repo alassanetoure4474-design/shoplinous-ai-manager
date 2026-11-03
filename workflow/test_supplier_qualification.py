@@ -267,6 +267,47 @@ class TestRegistreEtGestionnaire:
         assert "aliexpress" not in registry.pour_pays("FR")
         assert registry.etat()["aliexpress"]["candidature_mondiale"] is False
 
+    def test_recherche_mondiale_interroge_un_fournisseur_us_pour_client_fr(self):
+        class Provider(adapter_test_base()):
+            nom = "provider_global"
+            connected = True
+            capacites = ("rechercher_offres",)
+            pays_expedition = ("US",)
+
+            def rechercher_offres(self, keyword, destination, quantity):
+                assert keyword == "storage"
+                assert destination == "FR"
+                assert quantity == 1
+                return [offer(origin="US", warehouse="US", supplier="ignored")]
+
+        registry = adapters.RegistreFournisseurs()
+        registry.enregistrer(Provider())
+        result = registry.rechercher_offres("storage", "FR", 1)
+        assert len(result["offres"]) == 1
+        assert result["offres"][0]["fournisseur"] == "provider_global"
+        assert result["offres"][0]["pays_fournisseur"] == "US"
+        assert result["erreurs"] == []
+
+    def test_gestionnaire_recherche_et_qualifie_les_offres_mondiales(self):
+        class Provider(adapter_test_base()):
+            nom = "provider_world"
+            connected = True
+            capacites = ("rechercher_offres",)
+            pays_expedition = ("ZA",)
+
+            def rechercher_offres(self, keyword, destination, quantity):
+                return [offer(origin="ZA", warehouse="ZA")]
+
+        registry = adapters.RegistreFournisseurs()
+        registry.enregistrer(Provider())
+        supplier_manager = manager.GestionnaireFournisseurs(registry)
+        report = supplier_manager.rechercher_et_qualifier(
+            "home organizer", "FR", 1, rates(), maintenant=NOW
+        )
+        assert report["nombre_conformes"] == 1
+        assert report["meilleure_offre"]["pays_fournisseur"] == "ZA"
+        assert report["fournisseurs_interroges"] == ["provider_world"]
+
     def test_import_csv_accepte_origine_iso_mondiale_sans_le_rendre_vendable(self):
         csv_data = (
             "nom_fournisseur,sku,nom_produit,prix_achat,devise,stock,"
