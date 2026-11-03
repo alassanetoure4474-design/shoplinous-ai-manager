@@ -190,3 +190,26 @@ class GestionnaireFournisseurs:
             item["fournisseur"] for item in discovery["offres"]
         })
         return result
+
+
+    async def rechercher_et_qualifier_async(
+        self, mot_cle, destination, quantite, taux_vers_eur, maintenant=None
+    ):
+        """Version asynchrone pour le workflow ; mêmes règles de qualification."""
+        if not hasattr(self.registre, "rechercher_offres_async"):
+            raise RuntimeError("registre sans recherche mondiale asynchrone")
+        discovery = await self.registre.rechercher_offres_async(
+            mot_cle, destination, quantite
+        )
+        result = self.evaluer_offres(
+            discovery["offres"], destination, quantite,
+            taux_vers_eur, maintenant
+        )
+        result["erreurs_connecteurs"] = discovery["erreurs"]
+        result["adaptateurs_sans_recherche"] = discovery[
+            "adaptateurs_sans_recherche"
+        ]
+        result["fournisseurs_interroges"] = sorted({
+            item["fournisseur"] for item in discovery["offres"]
+        })
+        return result
