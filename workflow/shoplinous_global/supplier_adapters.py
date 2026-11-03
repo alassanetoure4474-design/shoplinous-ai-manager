@@ -217,7 +217,7 @@ class AdaptateurCJ(AdaptateurFournisseur):
                         try:
                             shipping_cost = float(option.get("logisticPrice"))
                             aging = str(option.get("logisticAging") or "")
-                            match = re.fullmatch(r"\\s*(\\d+)\\s*-\\s*(\\d+)\\s*", aging)
+                            match = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", aging)
                             if match is None:
                                 continue
                             min_days, max_days = int(match.group(1)), int(match.group(2))
