@@ -197,6 +197,50 @@ Deno.test("rejects missing webhook secrets without accessing persistence", async
   if (called) throw new Error("Persistence must not be called without a webhook secret");
 });
 
+
+Deno.test("uses a Supabase sb_secret key only in the apikey header", async () => {
+  let capturedHeaders: Headers | undefined;
+  const result = await callSupabaseRpc(
+    "https://project.supabase.co",
+    "sb_secret_test_only",
+    "shoplinous_process_geniuspay_webhook",
+    { p_event_id: "evt_1" },
+    false,
+    async (_input, init) => {
+      capturedHeaders = new Headers(init?.headers);
+      return Response.json({ duplicate: false, payment_status: "succeeded" });
+    },
+  );
+  if (result.error || result.data?.payment_status !== "succeeded") {
+    throw new Error("Expected the mocked Supabase RPC response");
+  }
+  if (capturedHeaders?.get("apikey") !== "sb_secret_test_only") {
+    throw new Error("Supabase secret key was not sent in apikey");
+  }
+  if (capturedHeaders?.has("authorization")) {
+    throw new Error("A non-JWT Supabase secret key must not be sent as Bearer");
+  }
+});
+
+Deno.test("keeps the Bearer header for legacy service_role JWT keys", async () => {
+  let capturedHeaders: Headers | undefined;
+  const legacyJwt = "eyJhbGciOiJIUzI1NiJ9.legacy.signature";
+  await callSupabaseRpc(
+    "https://project.supabase.co",
+    legacyJwt,
+    "shoplinous_process_geniuspay_webhook",
+    { p_event_id: "evt_1" },
+    true,
+    async (_input, init) => {
+      capturedHeaders = new Headers(init?.headers);
+      return Response.json({ duplicate: false });
+    },
+  );
+  if (capturedHeaders?.get("authorization") !== "Bearer " + legacyJwt) {
+    throw new Error("Legacy service_role JWT lost its Bearer header");
+  }
+});
+
 Deno.test("uses a deterministic PHP-compatible JSON serialization for HMAC", () => {
   const serialized = phpJsonEncode({ message: "café/été", value: 1 });
   if (serialized !== '{"message":"caf\\u00e9\\/\\u00e9t\\u00e9","value":1}') {
