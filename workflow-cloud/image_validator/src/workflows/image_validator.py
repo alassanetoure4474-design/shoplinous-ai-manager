@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Optional
@@ -38,7 +39,10 @@ import httpx
 
 try:  # production : SDK Mistral Workflows reellement installe
     import mistralai.workflows as workflows
-except ImportError:  # tests unitaires : shim minimal, aucune logique modifiee
+except ImportError:
+    if os.environ.get("SHOPLINOUS_TEST_MODE") != "1":
+        raise RuntimeError("SDK mistralai-workflows absent : demarrage production refuse")
+    # Tests unitaires uniquement : shim explicite, jamais en production.
     class _RepliWorkflows:
         """Shim hors-ligne pour les tests unitaires (SDK non installe).
 
@@ -265,6 +269,13 @@ async def _verifier_une_image(
     u, motif = await _url_reseau_valide(u, resolveur)
     if u is None:
         return _erreur(url, motif)
+
+    # FAIL-CLOSED : la resolution DNS ne garantit pas que HTTPX se connectera
+    # a la meme IP (risque DNS rebinding/TOCTOU). Sans transport DNS pinne
+    # preservant TLS/SNI, aucune connexion de production n'est autorisee.
+    # Les transports injectes sont reserves aux tests unitaires (MockTransport).
+    if transport is None:
+        return _erreur(url, "Validation bloquee : transport reseau avec DNS pinning non configure")
 
     url_courante = u
     arguments_client: dict = {
