@@ -118,6 +118,8 @@ class TestStatutsMarche:
     def test_selecteur_explicite_pour_les_fermetures(self):
         sel = {e["code"]: e for e in world_countries.selecteur_mondial()}
         for c in PAYS_CIBLES:
+            if c == "FR":
+                continue  # FR : seul marche ouvert, teste ci-dessous
             assert sel[c]["ouvert_commande"] is False
             assert sel[c]["raisons_fermeture"]
         assert sel["FR"]["ouvert_commande"] is True
