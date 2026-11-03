@@ -26,4 +26,4 @@ jobs:
         run: deno check --no-lock supabase/functions/geniuspay-webhook/index.ts
 
       - name: Run GeniusPay webhook security tests
-        run: deno test --no-check supabase/functions/geniuspay-webhook/handler_test.ts
+        run: deno test --no-lock supabase/functions/geniuspay-webhook/handler_test.ts
