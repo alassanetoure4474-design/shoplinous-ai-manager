@@ -7,6 +7,7 @@ const ALLOWED_EVENTS = new Set([
   "payment.cancelled",
   "payment.expired",
   "payment.refunded",
+  "webhook.test",
 ]);
 
 export type WebhookRpcArgs = {
@@ -182,6 +183,12 @@ export function createGeniusPayWebhookHandler(
     }
     if (!signatureIsValid) {
       return jsonResponse(401, { error: "invalid_webhook_signature" });
+    }
+
+    // GeniusPay's dashboard/API test event proves delivery and HMAC only.
+    // It carries no payment transaction and must never mutate order state.
+    if (payloadEvent === "webhook.test") {
+      return jsonResponse(200, { received: true, test: true });
     }
 
     const data = payload.data;
