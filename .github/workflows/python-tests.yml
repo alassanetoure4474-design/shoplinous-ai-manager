@@ -7,7 +7,9 @@
 # workflow-cloud/image_validator/tests/ (le job "pytest" ci-dessus ne
 # couvre que le dossier workflow/). Une garde verifie que >= 20 tests
 # sont bien executes. Un smoke reseau reel (DNS pinning vers CJ) prouve
-# l'epinglage en production ; il est non bloquant (dependance externe).
+# l'epinglage en production ; il est non bloquant (dependance externe)
+# et publie son diagnostic en annotations PUBLIQUES (::error::) car les
+# logs CI exigent une connexion.
 name: Tests pytest workflow
 
 on:
@@ -96,7 +98,32 @@ jobs:
           SHOPLINOUS_TEST_MODE: "1"
           TEST_RESEAU_REEL: "1"
         continue-on-error: true
-        run: python -m pytest tests -m reseau_reel -v -s
+        run: |
+          set +e
+          echo "=== Diagnostic DNS brut du runner (hors httpx, 3 essais) ==="
+          python - <<'PY'
+          import socket, time, traceback
+          for essai in range(3):
+              try:
+                  infos = socket.getaddrinfo("cf.cjdropshipping.com", 443, proto=socket.IPPROTO_TCP)
+                  adresses = sorted({entree[4][0] for entree in infos})
+                  print("DNS brut OK essai " + str(essai + 1) + " : " + ",".join(adresses))
+                  break
+              except Exception:
+                  print("DNS brut echec essai " + str(essai + 1))
+                  if essai == 2:
+                      msg = traceback.format_exc().replace(chr(10), " | ")
+                      print("::error::SMOKE_REEL DNS brut du runner en echec : " + msg)
+                  time.sleep(2)
+          PY
+          python -m pytest tests -m reseau_reel -v -s 2>&1 | tee smoke_output.txt
+          code=${PIPESTATUS[0]}
+          echo "=== Publication du smoke en annotations publiques ==="
+          grep -E "FAILED|ERROR|Error|assert|Epingle|epinglee|Resolution|statut HTTP|gaierror" smoke_output.txt | while IFS= read -r ligne; do
+            echo "::error::SMOKE_REEL ${ligne}"
+          done
+          echo "SMOKE_REEL_EXIT=${code}"
+          exit "${code}"
       - name: Publier les echecs en annotations publiques
         if: failure()
         run: |
