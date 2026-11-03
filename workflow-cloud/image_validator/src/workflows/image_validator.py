@@ -6,14 +6,19 @@ n'est JAMAIS consideree comme validee sans preuve HTTP reelle.
 
 Securite :
 - protection SSRF renforcee : parsing URL robuste (httpx.URL), HTTPS obligatoire,
-  port 443 uniquement, identifiants refuses, liste blanche stricte de domaines,
-  resolution DNS verifiee : chaque adresse IP resolue doit etre publique
-  (adresses privees, locales, link-local, reservees, multicast refusees) ;
-- redirections suivies une par une (max 3), chaque saut revalide completement ;
+  port 443 uniquement, identifiants refuses, liste blanche stricte de domaines ;
+- DNS PINNING : resolution DNS unique par le backend epingle (_BackendEpingle).
+  L'IP validee (publique uniquement) est epinglee puis utilisee par la socket :
+  aucune seconde resolution DNS non controlee (anti-TOCTOU / DNS rebinding).
+  TLS, SNI et la verification du certificat restent geres par httpx/httpcore
+  avec le NOM DE DOMAINE d'origine (connect_sni_tls_stream herite tel quel) ;
+- redirections suivies une par une (max 3), chaque saut revalide completement
+  (statique + epinglage DNS du nouveau hote) ;
 - requete en STREAMING via client.stream("GET", ...) : chaque bloc du corps est
   controle avant de poursuivre la lecture, interruption immediate au-dela de
   20 Mo, reponse fermee proprement (redirection, erreur, limite depassee) ;
 - cadence GLOBALE maximale de 1 requete/s, verrouee entre executions concurrentes ;
+- FAIL-CLOSED conserve : sans IP publique validee epinglee, aucune connexion.
 
 LIMITE DOCUMENTEE (cache) : le cache est en memoire du processus worker. Il
 persiste entre les executions servies par le MEME processus (TTL 6 h) mais il
@@ -46,7 +51,7 @@ except ImportError:
     class _RepliWorkflows:
         """Shim hors-ligne pour les tests unitaires (SDK non installe).
 
-        Les decorateurs deviennent des identites : fonctions et classes
+        Les decorateurs deviennent des identites : les fonctions et classes
         restent inchangees, seule la declaration Mistral est ignoree. En
         production, le SDK reel est importe et les decorateurs s'appliquent.
         """
@@ -72,6 +77,12 @@ except ImportError:
         workflow = _FabriqueWorkflow()
 
     workflows = _RepliWorkflows()
+
+
+try:  # httpcore >= 1.0 (dependance d'httpx) : backend async public
+    from httpcore.backends.asyncio import AsyncIOBackend as _BackendAsynchrone
+except ImportError:  # httpcore < 1.0 : emplacement historique
+    from httpcore._backends.asyncio import AsyncIOBackend as _BackendAsynchrone
 
 
 # ---------------------------------------------------------------- constantes
@@ -205,32 +216,94 @@ async def _resoudre_dns(hote: str) -> list[str]:
     return sorted({entree[4][0].split("%")[0] for entree in infos})
 
 
-async def _url_reseau_valide(
-    u: httpx.URL, resolveur: Callable[[str], Awaitable[list[str]]]
-) -> tuple[Optional[httpx.URL], str]:
-    """Valide les adresses IP resolues du hote (anti-SSRF dynamique)."""
-    hote = (u.host or "").lower().strip(".")
-    try:
-        ipaddress.ip_address(hote)
-    except ValueError:
-        pass
-    else:
-        ok, motif = _adresse_ip_publique(hote)
-        if not ok:
-            return None, motif
-        return u, ""
+# ----------------------------------------------- epinglage DNS (DNS pinning)
+class ErreurEpingle(Exception):
+    """Echec d'epinglage DNS : aucune IP publique valide disponible."""
 
-    try:
-        adresses = await resolveur(hote)
-    except Exception:
-        return None, "Resolution DNS impossible"
-    if not adresses:
-        return None, "Aucune adresse resolue par le DNS"
-    for texte_ip in adresses:
-        ok, motif = _adresse_ip_publique(texte_ip)
-        if not ok:
-            return None, motif
-    return u, ""
+
+class _BackendEpingle(_BackendAsynchrone):
+    """Backend reseau httpcore avec epinglage DNS veritable.
+
+    - `epingler(hote)` resout UNE SEULE fois via le resolveur controle et
+      exige que TOUTES les adresses renvoyees soient publiques ; la premiere
+      adresse validee est memorisee (epinglee) pour ce hote.
+    - `connect_tcp` se connecte TOUJOURS a l'IP epinglee : aucune seconde
+      resolution DNS non controlee n'a lieu entre validation et connexion
+      (protection TOCTOU / DNS rebinding).
+    - TLS, SNI et la verification du certificat du NOM DE DOMAINE d'origine
+      restent geres par httpcore (`connect_sni_tls_stream` herite tel quel) :
+      seul le transport TCP est epingle.
+    - `connecteur_brut` injectable pour les tests unitaires : capture l'IP
+      cible de la socket sans creer de socket reelle.
+    """
+
+    def __init__(self, resolveur, connecteur_brut=None):
+        super().__init__()
+        self._resolveur = resolveur
+        self._connecteur_brut = connecteur_brut
+        self._ip_epinglees: dict[str, str] = {}
+
+    async def epingler(self, hote: str) -> str:
+        """Valide puis epingle l'adresse IP du hote (resolution unique)."""
+        hote = (hote or "").lower().strip(".")
+        if hote in self._ip_epinglees:
+            return self._ip_epinglees[hote]
+        try:
+            ipaddress.ip_address(hote)
+        except ValueError:
+            pass
+        else:
+            ok, motif = _adresse_ip_publique(hote)
+            if not ok:
+                raise ErreurEpingle(motif)
+            self._ip_epinglees[hote] = hote
+            return hote
+        try:
+            adresses = await self._resolveur(hote)
+        except Exception:
+            raise ErreurEpingle("Resolution DNS impossible")
+        if not adresses:
+            raise ErreurEpingle("Aucune adresse resolue par le DNS")
+        for texte_ip in adresses:
+            ok, motif = _adresse_ip_publique(texte_ip)
+            if not ok:
+                raise ErreurEpingle(motif)
+        ip_choisie = sorted(adresses)[0]
+        self._ip_epinglees[hote] = ip_choisie
+        return ip_choisie
+
+    async def connect_tcp(
+        self, host, port, timeout=None, local_address=None, socket_options=None
+    ):
+        hote = (host or "").lower().strip(".")
+        ip_epinglee = self._ip_epinglees.get(hote)
+        if ip_epinglee is None:
+            # Fail-closed : aucune connexion sans epinglage prealable
+            # (revalidation complete, jamais de resolution aveugle).
+            ip_epinglee = await self.epingler(hote)
+        if self._connecteur_brut is not None:
+            return await self._connecteur_brut(
+                ip_epinglee, port, timeout, local_address, socket_options
+            )
+        return await super().connect_tcp(
+            ip_epinglee, port,
+            timeout=timeout, local_address=local_address,
+            socket_options=socket_options,
+        )
+
+
+def _construire_transport_production(epingle: _BackendEpingle) -> httpx.AsyncBaseTransport:
+    """Transport HTTPX reel : IP epinglee + TLS/SNI/certificat du domaine d'origine.
+
+    `verify=True` (defaut) conserve la verification complete du certificat,
+    et httpcore utilise le nom de domaine d'origine pour le SNI : seul le
+    transport TCP est remplace par le backend epingle.
+    """
+    return httpx.AsyncHTTPTransport(
+        verify=True,
+        trust_env=False,
+        network_backend=epingle,
+    )
 
 
 # --------------------------------------------------------------- signature
@@ -251,6 +324,10 @@ async def _verifier_une_image(
 ) -> ResultatImage:
     """Verifie une image par un HTTP GET en STREAMING reellement emis.
 
+    DNS PINNING : le backend epingle resout et valide l'IP UNE SEULE fois,
+    puis la socket se connecte exactement a cette IP validee — aucune seconde
+    resolution DNS non controlee. TLS/SNI/certificat : nom de domaine d'origine.
+
     `client.stream("GET", ...)` : la reponse n'est jamais chargee entiere en
     memoire. Chaque bloc du corps est controle avant de poursuivre la
     lecture ; au-dela de TAILLE_MAX_OCTETS la lecture est interrompue
@@ -266,16 +343,18 @@ async def _verifier_une_image(
     u, motif = _url_statique_valide(url)
     if u is None:
         return _erreur(url, motif)
-    u, motif = await _url_reseau_valide(u, resolveur)
-    if u is None:
-        return _erreur(url, motif)
 
-    # FAIL-CLOSED : la resolution DNS ne garantit pas que HTTPX se connectera
-    # a la meme IP (risque DNS rebinding/TOCTOU). Sans transport DNS pinne
-    # preservant TLS/SNI, aucune connexion de production n'est autorisee.
-    # Les transports injectes sont reserves aux tests unitaires (MockTransport).
+    # Resolution unique : epinglage DNS du hote d'origine (IP publiques
+    # uniquement). FAIL-CLOSED : sans IP validee epinglee, aucune connexion.
+    epingle = _BackendEpingle(resolveur)
+    try:
+        await epingle.epingler((u.host or "").lower().strip("."))
+    except ErreurEpingle as exc:
+        return _erreur(url, str(exc))
+
     if transport is None:
-        return _erreur(url, "Validation bloquee : transport reseau avec DNS pinning non configure")
+        # PRODUCTION : transport reseau epingle (TLS/SNI/certificat d'origine).
+        transport = _construire_transport_production(epingle)
 
     url_courante = u
     arguments_client: dict = {
@@ -283,9 +362,8 @@ async def _verifier_une_image(
         "timeout": httpx.Timeout(DELAI_EXPIRATION_REQUETE_S),
         "headers": {"User-Agent": USER_AGENT, "Accept": "image/*,*/*;q=0.8"},
         "trust_env": False,
+        "transport": transport,
     }
-    if transport is not None:
-        arguments_client["transport"] = transport
 
     async with httpx.AsyncClient(**arguments_client) as client:
         for _ in range(REDIRECTIONS_MAX + 1):
@@ -316,13 +394,18 @@ async def _verifier_une_image(
                                 url_finale=str(url_courante), valide=False,
                                 motif_echec=f"Redirection vers destination interdite : {motif}",
                             )
-                        u2, motif = await _url_reseau_valide(u2, resolveur)
-                        if u2 is None:
+                        # Revalidation REELLE du saut : epinglage DNS du nouveau
+                        # hote (IP publiques uniquement) avant toute connexion.
+                        try:
+                            await epingle.epingler(
+                                (u2.host or "").lower().strip(".")
+                            )
+                        except ErreurEpingle as exc:
                             return ResultatImage(
                                 url=url, statut_http=statut,
                                 date_verification=_maintenant_utc(),
                                 url_finale=str(url_courante), valide=False,
-                                motif_echec=f"Redirection vers destination interdite : {motif}",
+                                motif_echec=f"Redirection vers destination interdite : {exc}",
                             )
                         url_courante = u2
                         continue  # fermeture propre via le gestionnaire de contexte
@@ -360,6 +443,8 @@ async def _verifier_une_image(
                             # le reste du corps n'est PAS telecharge.
                             await reponse.aclose()
                             break
+            except ErreurEpingle as exc:
+                return _erreur(url, f"Connexion bloquee (epinglage DNS) : {exc}")
             except httpx.TimeoutException:
                 return _erreur(
                     url,
@@ -468,8 +553,8 @@ async def verifier_images(urls: list[str]) -> dict:
     workflow_description=(
         "Effectue de veritables requetes HTTP GET sur les URL d'images produits "
         "(statut, Content-Type, taille, signature binaire), avec liste blanche "
-        "de domaines, protection SSRF, cadence globale 1 req/s et cache 6h. "
-        "Une image non verifiee est invalide."
+        "de domaines, DNS pinning, protection SSRF, cadence globale 1 req/s et "
+        "cache 6h. Une image non verifiee est invalide."
     ),
 )
 class ValidateurImagesWorkflow:
