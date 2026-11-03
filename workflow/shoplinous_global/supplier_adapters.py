@@ -18,6 +18,14 @@ class AdaptateurFournisseur:
         return {capability: getattr(self, capability, None)
                 for capability in self.capacites}
 
+    def rechercher_offres(self, mot_cle, destination, quantite):
+        """Retourne des offres au format canonique du moteur de qualification.
+
+        Un adaptateur concret doit appeler son API réelle et fournir les
+        preuves de stock, images, identité, conformité et devis de transport.
+        """
+        raise NotImplementedError("recherche normalisée non implémentée")
+
 
 class AdaptateurCJ(AdaptateurFournisseur):
     """Délègue aux outils CJ réels de daily.py, sans achat automatique."""
@@ -158,6 +166,55 @@ class RegistreFournisseurs:
             and (code in tuple(getattr(adapter, "pays_expedition", ()))
                  or "*" in tuple(getattr(adapter, "pays_expedition", ())))
         )
+
+    def rechercher_offres(self, mot_cle, destination, quantite):
+        """Interroge les adaptateurs actifs qui implémentent le contrat canonique.
+
+        Les pays d'expédition ne filtrent jamais les destinations. Chaque
+        offre renvoyée doit ensuite être qualifiée par le moteur commun.
+        """
+        from collections.abc import Mapping
+        from intl import get_country
+
+        get_country(destination)
+        if not isinstance(mot_cle, str) or not mot_cle.strip():
+            raise ValueError("mot-clé de recherche obligatoire")
+        if not isinstance(quantite, int) or isinstance(quantite, bool) or quantite < 1:
+            raise ValueError("quantité invalide")
+
+        offres, erreurs, ignores = [], [], []
+        for name, adapter in sorted(self.connectes().items()):
+            implementation = getattr(type(adapter), "rechercher_offres", None)
+            if implementation is AdaptateurFournisseur.rechercher_offres:
+                ignores.append({"fournisseur": name, "raison": "connecteur sans recherche normalisée"})
+                continue
+            try:
+                result = adapter.rechercher_offres(
+                    mot_cle.strip(), destination.upper(), quantite
+                )
+                if not isinstance(result, (list, tuple)):
+                    raise ValueError("le connecteur doit retourner une liste d'offres")
+                for offer in result:
+                    if not isinstance(offer, Mapping):
+                        raise ValueError("offre fournisseur non structurée")
+                    normalized = dict(offer)
+                    # Le fournisseur vient de l'adaptateur authentifié,
+                    # jamais d'une valeur arbitraire fournie dans le flux.
+                    normalized["fournisseur"] = name
+                    offres.append(normalized)
+            except Exception as exc:
+                erreurs.append({
+                    "fournisseur": name,
+                    "erreur": type(exc).__name__,
+                    "detail": str(exc)[:180],
+                })
+        return {
+            "destination": destination.upper(),
+            "quantite": quantite,
+            "offres": offres,
+            "erreurs": erreurs,
+            "adaptateurs_sans_recherche": ignores,
+        }
 
     def etat(self):
         return {
