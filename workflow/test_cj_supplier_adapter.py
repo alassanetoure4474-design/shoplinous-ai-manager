@@ -75,7 +75,7 @@ def fake_daily():
 
     fake = types.SimpleNamespace(
         BANNED_PATTERNS=re.compile(
-            r"(?i)\\b(battery|bluetooth|drone|knife|weapon)\\b"
+            r"(?i)\b(battery|bluetooth|drone|knife|weapon)\b"
         ),
         cj_search=cj_search,
         cj_variants=cj_variants,
