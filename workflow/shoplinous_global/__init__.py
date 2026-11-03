@@ -29,7 +29,7 @@ Modules (1 a 19) :
 """
 import importlib
 
-VERSION = "6.2"
+VERSION = "6.3"
 
 MODULES = [
     "market_manager", "country_manager", "currency_manager",
