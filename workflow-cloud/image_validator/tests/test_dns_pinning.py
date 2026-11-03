@@ -187,6 +187,19 @@ def test_redirection_reepingle_nouveau_hote(monkeypatch):
     assert IP_PRIVEE in resultat.motif_echec
 
 
+def test_transport_httpx_installe_backend_epingle_dans_pool():
+    """Le transport HTTPX de production doit réellement utiliser le backend
+    épinglé dans son pool, pas seulement tester le backend isolément."""
+    backend = iv._BackendEpingle(iv._resoudre_dns)
+    transport = iv._construire_transport_production(backend)
+    try:
+        pool = getattr(transport, "_pool", None)
+        assert pool is not None
+        assert getattr(pool, "_network_backend", None) is backend
+    finally:
+        asyncio.run(transport.aclose())
+
+
 # ---------------------------- preuve en reseau REEL (CI uniquement)
 @pytest.mark.reseau_reel
 @pytest.mark.skipif(
