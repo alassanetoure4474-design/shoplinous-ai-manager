@@ -184,3 +184,40 @@ def test_cj_adapter_rejects_invalid_quantity_before_any_api_call(monkeypatch):
 
     assert calls["stock"] == 0
     assert calls["freight"] == []
+
+
+
+def test_cj_adapter_async_entrypoint_works_inside_workflow_event_loop(monkeypatch):
+    install_fake_daily(monkeypatch)
+    registry = supplier_adapters.RegistreFournisseurs()
+
+    async def invoke():
+        result = await registry.rechercher_offres_async(
+            "home organizer", "FR", 2
+        )
+        assert result["erreurs"] == []
+        assert len(result["offres"]) == 1
+        assert result["offres"][0]["devis_livraison"]["quantite"] == 2
+
+    asyncio.run(invoke())
+
+
+def test_supplier_manager_async_path_keeps_unverified_offer_blocked(monkeypatch):
+    install_fake_daily(monkeypatch)
+    registry = supplier_adapters.RegistreFournisseurs()
+    manager = supplier_manager.GestionnaireFournisseurs(registry)
+    now = time.time()
+    rates = {
+        "USD": TauxHorodate(("USD", "EUR"), 0.92, horodatage=now - 5)
+    }
+
+    async def invoke():
+        report = await manager.rechercher_et_qualifier_async(
+            "home organizer", "FR", 2, rates, maintenant=now
+        )
+        assert report["nombre_offres"] == 1
+        assert report["nombre_conformes"] == 0
+        assert report["meilleure_offre"] is None
+        assert report["fournisseurs_interroges"] == ["cj"]
+
+    asyncio.run(invoke())
