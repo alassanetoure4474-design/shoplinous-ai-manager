@@ -77,8 +77,8 @@ Les secrets GitHub Actions ne sont transmis qu'aux workflows qui les referencent
 
 ## Référentiel international mondial
 
-- `workflow/iso_countries_data.py` embarque hors ligne un instantané des **249 codes ISO 3166-1 alpha-2**, avec codes alpha-3 et numériques, noms français/anglais, régions et devises ayant cours légal connues.
-- Le catalogue de devises est construit à partir des codes ISO 4217 associés à un territoire dans l'instantané CLDR du 03/11/2026. Les territoires à plusieurs devises n'en sélectionnent aucune automatiquement.
+- `workflow/intl.py` construit le référentiel des **249 codes ISO 3166-1 alpha-2** avec `pycountry==24.6.1` et les noms localisés / devises de territoire avec `Babel==2.18.0` (données CLDR).
+- Les codes alpha-3, codes numériques, noms français/anglais, régions et devises ayant cours légal sont exposés par le module international. Les territoires à plusieurs devises n'en sélectionnent aucune automatiquement.
 - Le référentiel est distinct de l'ouverture commerciale : seuls les 29 pays de `VERIFIED_MARKETS` restent ouverts. Les autres sont enregistrés mais bloqués pour livraison, paiement et vente jusqu'à vérification indépendante.
 - Les prix d'annonces utilisent la devise de la destination. Toute conversion hors devise de base exige des taux explicites ; aucun taux, prix local ou moyen de paiement n'est inventé.
 - Les traductions de base sont présentes en français, anglais, espagnol, portugais et arabe. L'arabe est marqué RTL.
