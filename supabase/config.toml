@@ -1,2 +1,5 @@
 
 project_id = "shoplinous-ai-manager"
+
+[functions.geniuspay-webhook]
+verify_jwt = false

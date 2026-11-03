@@ -125,7 +125,21 @@ docker run --env-file .env shoplinous.
 - Les paiements clients restent bloques par le module tant que les deux cles API et le secret webhook ne sont pas configures.
 - Le webhook doit etre expose sur une URL HTTPS publique, verifier HMAC-SHA256 + timestamp (fenetre 300 s), puis lier reference, commande, montant, devise et environnement. Une redirection navigateur ne confirme jamais un paiement.
 - La documentation GeniusPay indique que le secret webhook n'est fourni qu'a la creation du webhook : le sauvegarder immediatement dans `GENIUSPAY_WEBHOOK_SECRET`.
-- Ne pas enregistrer le webhook tant qu'un endpoint HTTPS reel n'est pas deploye. Le worker Mistral seul n'expose pas automatiquement une route HTTP de webhook.
+- Le point d'entrée de webhook doit être l'URL publique de la Supabase Edge Function :
+  https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/geniuspay-webhook.
+  Le secret GeniusPay n'étant retourné qu'à la création du webhook, créer
+  d'abord le webhook Sandbox en indiquant cette URL, puis enregistrer
+  immédiatement le secret retourné dans le secret GitHub
+  GENIUSPAY_WEBHOOK_SECRET. Déployer ensuite la fonction avec le workflow
+  manuel confirmé ; celui-ci injecte le secret dans Supabase avant le déploiement.
+  Si GeniusPay exige une validation HTTP préalable de l'URL lors de la création,
+  interrompre cette étape et faire confirmer la procédure par GeniusPay plutôt
+  que d'utiliser un endpoint temporaire non sécurisé.
+- Après déploiement, utiliser POST /webhooks/{id}/test. Le récepteur reconnaît
+  l'événement signé webhook.test et répond 200 sans toucher aux commandes ni
+  aux paiements. Ensuite, effectuer un paiement technique Sandbox et vérifier
+  son rapprochement en base.
+- Le worker Mistral seul n'expose pas automatiquement une route HTTP de webhook.
 - Ne jamais mettre les cles dans GitHub, dans le code, dans les captures ou dans les journaux. Les saisir uniquement dans les secrets de l'hebergeur qui executera le client et le receveur webhook.
 
 ## 7. Retour arriere
@@ -194,3 +208,110 @@ Aucune fusion vers main ni deploiement sans autorisation explicite.
 
 
 Etat d'activation Wave Direct : le routage technique est valide en Sandbox, mais cela ne constitue pas une mise en production. Le serveur qui execute les paiements doit avoir ses propres cles API et son secret webhook ; les secrets GitHub Actions ne sont pas automatiquement transmis au worker. Un endpoint HTTPS public de reception des webhooks et l'interface qui redirige le client vers `checkout_url` doivent etre deployes et testes en Sandbox avant toute activation Live ou utilisation par des clients. Aucun reglage de paiement Freewebstore n'est modifie par ces modules Python.
+
+
+## 10. Persistance Wave Direct et webhook HTTPS (PR #9)
+
+La migration supabase/migrations/20261102000000_create_persistent_payments.sql
+ajoute trois tables serveur :
+- shoplinous_orders : référence Freewebstore, pays, devise, montant et statut.
+- shoplinous_payments : réservation idempotente, référence GeniusPay, checkout_url,
+  environnement et statut.
+- geniuspay_webhook_events : identifiant d'événement unique, empreinte SHA-256
+  et données de rapprochement (aucun payload client complet n'est conservé).
+
+Les trois tables ont RLS activé et aucune politique navigateur. Les privilèges
+directs de lecture/écriture sont révoqués ; les changements passent par trois
+fonctions RPC SECURITY DEFINER réservées au rôle serveur service_role.
+Le montant doit être calculé par le backend à partir de la commande réelle
+Freewebstore. Ne jamais accepter un montant fourni uniquement par le navigateur.
+
+### Client Python serveur
+
+Le module workflow/shoplinous_global/supabase_store.py fournit :
+- SupabaseStore.from_env() : connexion HTTPS à Supabase avec une clé serveur.
+- reserver_paiement_wave() : réserve l'ordre et la tentative avant l'appel GeniusPay.
+- finaliser_checkout_wave() : sauvegarde la référence et l'URL Wave HTTPS.
+- WavePersistentPaymentService.initier() : orchestre réservation, checkout et finalisation.
+
+Variables nécessaires dans l'environnement serveur qui exécutera ce module :
+- SUPABASE_URL
+- SUPABASE_SERVICE_ROLE_KEY (ancien JWT serveur) ou SUPABASE_SECRET_KEYS.default
+  (nouvelle clé serveur `sb_secret_*` sur Edge Functions).
+  Les nouvelles clés `sb_secret_*` doivent être envoyées dans l'en-tête
+  `apikey` uniquement, sans `Authorization: Bearer`. Les anciennes clés
+  service_role JWT conservent les deux en-têtes.
+- GENIUSPAY_API_KEY
+- GENIUSPAY_API_SECRET
+- GENIUSPAY_ENVIRONMENT=sandbox
+
+Le service refuse tout environnement différent de sandbox. Une tentative restée
+en état creating après une réponse réseau ambiguë est bloquée : aucun deuxième
+POST /payments n'est envoyé automatiquement. Il faut rapprocher la référence
+dans le tableau de bord GeniusPay avant toute reprise.
+
+### Récepteur webhook Supabase Edge Function
+
+Fichier : supabase/functions/geniuspay-webhook/index.ts
+
+URL après déploiement :
+https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/geniuspay-webhook
+
+Le paramètre verify_jwt = false est limité à cette fonction car GeniusPay
+n'envoie pas de JWT Supabase. L'authentification est effectuée dans la fonction
+par HMAC-SHA256 avec le secret GeniusPay, comparaison en temps constant,
+fenêtre anti-rejeu de 300 secondes, vérification des headers/du payload et
+rapprochement atomique via RPC. Le récepteur n'accepte que les événements de
+paiement connus et ne marque une commande payée que pour payment.success
+avec statut completed et correspondance exacte référence/commande/montant/
+devise/environnement.
+
+Le secret GENIUSPAY_WEBHOOK_SECRET est injecté dans Supabase Edge Function
+Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux.
+
+### Déploiement manuel — à faire uniquement après configuration des secrets
+
+1. Configurer dans GitHub Actions : SUPABASE_ACCESS_TOKEN,
+   SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD et
+   GENIUSPAY_WEBHOOK_SECRET. Ne jamais coller ces secrets dans le chat.
+2. Après fusion validée et vérification du projet cible, exécuter manuellement
+   le workflow Apply Supabase database migrations et cocher confirm_apply.
+   Sans cette confirmation, le job ne démarre pas. Le workflow vérifie la
+   présence des trois secrets Supabase, cible explicitement le project-ref
+   et affiche un dry-run des migrations avant leur application. Il utilise
+   Supabase CLI v3.
+   Examiner le dry-run et le project-ref avant de considérer le déploiement
+   Sandbox comme validé.
+3. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
+   sélectionner au minimum payment.success, payment.failed,
+   payment.cancelled, payment.expired et payment.refunded, puis sauvegarder
+   immédiatement le secret retourné dans le secret GitHub
+   GENIUSPAY_WEBHOOK_SECRET.
+4. Exécuter manuellement Deploy GeniusPay webhook (manual) et cocher
+   confirm_deploy. Le workflow pousse le secret vers Supabase et déploie
+   uniquement la fonction geniuspay-webhook avec JWT désactivé.
+5. Tester d'abord avec un webhook Sandbox GeniusPay ; contrôler la réponse 200,
+   la déduplication et le changement de statut dans Supabase.
+
+Le workflow de déploiement est manuel et exige une case de confirmation.
+Aucun workflow CI ne lance une migration ou un déploiement Supabase.
+
+### Limites restantes avant paiement client réel
+
+- La migration et la fonction ne sont pas encore appliquées/déployées sur le vrai
+  projet Supabase.
+- Le point d'entrée de paiement n'est pas encore raccordé à l'interface de
+  commande Freewebstore. Le montant doit provenir d'une lecture serveur de la
+  commande et ses composants (lignes, taxes, frais et livraison) doivent être
+  rapprochés avant de créer le checkout.
+- WavePersistentPaymentService est un service backend ; il n'expose pas encore
+  une route publique d'initiation de paiement et n'est pas encore appelé par le
+  parcours réel Freewebstore.
+- Le raccordement de la boutique et les tests bout-en-bout nécessiteront Mistral
+  (accès Freewebstore) après validation et déploiement Sandbox.
+- Le mode Live reste bloqué.
+
+Références : GeniusPay Webhooks (https://geniuspay.ci/docs/api) ;
+Supabase Edge Function Secrets (https://supabase.com/docs/guides/functions/secrets) ;
+Supabase Function Configuration
+(https://supabase.com/docs/guides/functions/function-configuration).
