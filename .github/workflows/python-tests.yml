@@ -5,6 +5,8 @@
 name: Tests pytest workflow
 
 on:
+  workflow_dispatch:
+
   push:
     branches: [main, workflow-v5-fix1, workflow-v5-fix2, workflow-v5-fix3, workflow-v5-fix4, workflow-v5-fix5b, workflow-v5-fix6, workflow-v5-fix7, workflow-v5-fix8-ai-gateway, fix/dynamic-shipping-quantity, global-v6-platform, fix/payment-webhook-hardening-20261102, vibe/passation-v6, feat/worldwide-iso-internationalization]
   pull_request:
