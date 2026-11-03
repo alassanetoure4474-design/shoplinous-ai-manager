@@ -990,15 +990,20 @@ def stock_by_country(stock_payload: dict) -> dict:
         if len(country) != 2 or not country.isalpha():
             continue
         stock = 0
-        for field in ("storageNum", "totalInventoryNum"):
+        # Priorité observée : stock entrepôt, total, puis champs de secours.
+        for field in ("storageNum", "totalInventoryNum",
+                      "factoryInventoryNum", "cjInventoryNum"):
             value = entry.get(field)
-            if isinstance(value, int) and not isinstance(value, bool) and value > stock:
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
                 stock = value
-        for row in entry.get("stock") or []:
-            if isinstance(row, dict):
-                value = row.get("inventory")
-                if isinstance(value, int) and not isinstance(value, bool) and value > stock:
-                    stock = value
+                break
+        if stock == 0:
+            for row in entry.get("stock") or []:
+                if isinstance(row, dict):
+                    value = row.get("inventory")
+                    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                        stock = value
+                        break
         if stock > 0:
             result[country] = max(result.get(country, 0), stock)
     return result
