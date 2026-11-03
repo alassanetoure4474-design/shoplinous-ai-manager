@@ -256,8 +256,10 @@ Secrets. Il ne doit jamais être ajouté au dépôt, au frontend ou aux journaux
 1. Configurer dans GitHub Actions : SUPABASE_ACCESS_TOKEN,
    SUPABASE_PROJECT_ID, SUPABASE_DB_PASSWORD et
    GENIUSPAY_WEBHOOK_SECRET. Ne jamais coller ces secrets dans le chat.
-2. Exécuter manuellement le workflow Apply Supabase database migrations
-   pour appliquer la migration, après validation de la PR.
+2. Après fusion validée et vérification du projet cible, exécuter manuellement
+   le workflow Apply Supabase database migrations et cocher confirm_apply.
+   Sans cette confirmation, le job ne démarre pas. Le workflow vérifie aussi
+   la présence des trois secrets Supabase avant toute connexion.
 3. Créer le webhook dans le tableau de bord/API GeniusPay avec l'URL ci-dessus,
    sélectionner au minimum payment.success, payment.failed,
    payment.cancelled, payment.expired et payment.refunded, puis sauvegarder
