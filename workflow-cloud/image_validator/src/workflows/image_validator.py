@@ -35,6 +35,7 @@ import asyncio
 import importlib
 import ipaddress
 import os
+import socket
 import time
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Optional
@@ -241,9 +242,32 @@ def _adresse_ip_publique(texte_ip: str) -> tuple[bool, str]:
 
 
 async def _resoudre_dns(hote: str) -> list[str]:
-    """Resolveur DNS reel par defaut (injectable dans les tests)."""
-    infos = await asyncio.getaddrinfo(hote, PORT_AUTORISE)
-    return sorted({entree[4][0].split("%")[0] for entree in infos})
+    """Resolveur DNS reel par defaut (injectable dans les tests).
+
+    IPv4 uniquement (family=AF_INET) : le worker de production s'appuie sur
+    IPv4 ; on evite les adresses IPv6 non joignables sur certains hotes
+    d'execution. type/proto explicites (SOCK_STREAM/IPPROTO_TCP) : la
+    resolution se comporte exactement comme celle d'une connexion reelle.
+    3 tentatives espacees de 2 s : un echec DNS transitoire n'invalide pas
+    une image ; apres 3 echecs, echec explicite (fail-closed conserve).
+    """
+    derniere_exc: Optional[Exception] = None
+    for _essai in range(3):
+        try:
+            infos = await asyncio.getaddrinfo(
+                hote,
+                PORT_AUTORISE,
+                family=socket.AF_INET,
+                type=socket.SOCK_STREAM,
+                proto=socket.IPPROTO_TCP,
+            )
+            return sorted({entree[4][0].split("%")[0] for entree in infos})
+        except Exception as exc:
+            derniere_exc = exc
+            await asyncio.sleep(2)
+    raise OSError(
+        f"Resolution DNS IPv4 en echec apres 3 essais pour {hote} : {derniere_exc}"
+    )
 
 
 # ----------------------------------------------- epinglage DNS (DNS pinning)
@@ -290,14 +314,18 @@ class _BackendEpingle(_BackendAsynchrone):
             return hote
         try:
             adresses = await self._resolveur(hote)
-        except Exception:
-            raise ErreurEpingle("Resolution DNS impossible")
+        except Exception as exc:
+            raise ErreurEpingle(
+                f"Resolution DNS impossible : {type(exc).__name__} : {exc}"
+            )
         if not adresses:
             raise ErreurEpingle("Aucune adresse resolue par le DNS")
         for texte_ip in adresses:
             ok, motif = _adresse_ip_publique(texte_ip)
             if not ok:
-                raise ErreurEpingle(motif)
+                raise ErreurEpingle(
+                    f"{motif} ; adresses resolues pour {hote} : {adresses}"
+                )
         ip_choisie = sorted(adresses)[0]
         self._ip_epinglees[hote] = ip_choisie
         return ip_choisie
@@ -320,8 +348,8 @@ class _BackendEpingle(_BackendAsynchrone):
             timeout=timeout, local_address=local_address,
             socket_options=socket_options,
         )
-        # Défense supplémentaire : vérifier l'adresse distante réellement
-        # rapportée par la socket, pas seulement l'argument de connexion.
+        # Defense supplementaire : verifier l'adresse distante reellement
+        # rapportee par la socket, pas seulement l'argument de connexion.
         adresse_distante = stream.get_extra_info("server_addr")
         try:
             ip_reelle = ipaddress.ip_address(str(adresse_distante[0]).split("%")[0])
@@ -329,12 +357,12 @@ class _BackendEpingle(_BackendAsynchrone):
         except (TypeError, ValueError, IndexError):
             await stream.aclose()
             raise ErreurEpingle(
-                "Adresse distante de la socket indisponible : connexion refusée"
+                "Adresse distante de la socket indisponible : connexion refusee"
             )
         if ip_reelle != ip_attendue:
             await stream.aclose()
             raise ErreurEpingle(
-                f"IP socket inattendue ({ip_reelle}) ; IP épinglée ({ip_attendue}) requise"
+                f"IP socket inattendue ({ip_reelle}) ; IP epinglee ({ip_attendue}) requise"
             )
         return stream
 
@@ -348,10 +376,10 @@ def _construire_transport_production(epingle: _BackendEpingle) -> httpx.AsyncBas
     """
     # HTTPX 0.27/0.28 n'expose PAS network_backend dans le constructeur
     # public d'AsyncHTTPTransport. Son pool httpcore expose toutefois le
-    # backend réseau utilisé par toutes les connexions. On construit d'abord
-    # le transport HTTPX normal (contexte TLS vérifié, proxies env désactivés),
+    # backend reseau utilise par toutes les connexions. On construit d'abord
+    # le transport HTTPX normal (contexte TLS verifie, proxies env desactives),
     # puis on remplace explicitement le backend du pool. Si la structure
-    # interne attendue change dans une version future, on échoue fermé.
+    # interne attendue change dans une version future, on echoue fermé.
     transport = httpx.AsyncHTTPTransport(
         verify=True,
         trust_env=False,
@@ -359,13 +387,13 @@ def _construire_transport_production(epingle: _BackendEpingle) -> httpx.AsyncBas
     pool = getattr(transport, "_pool", None)
     if pool is None or not hasattr(pool, "_network_backend"):
         raise RuntimeError(
-            "HTTPX/httpcore incompatibles : backend réseau du pool inaccessible ; "
-            "connexion DNS non épinglée refusée"
+            "HTTPX/httpcore incompatibles : backend reseau du pool inaccessible ; "
+            "connexion DNS non epinglee refusee"
         )
     pool._network_backend = epingle
     if pool._network_backend is not epingle:
         raise RuntimeError(
-            "Échec d'installation du backend DNS épinglé ; connexion refusée"
+            "Echec d'installation du backend DNS epingle ; connexion refusee"
         )
     return transport
 
