@@ -162,6 +162,26 @@ BEGIN
         WHEN invalid_parameter_value THEN
             NULL;
     END;
+
+    -- The webhook RPC must independently reject Live as defense in depth.
+    BEGIN
+        PERFORM public.shoplinous_process_geniuspay_webhook(
+            'evt-migration-check-live',
+            NULL,
+            'GP-MIGRATION-CHECK-001',
+            'payment.success',
+            'live',
+            2500,
+            'XOF',
+            'FW-MIGRATION-CHECK-001',
+            'completed',
+            repeat('c', 64)
+        );
+        RAISE EXCEPTION 'Live webhook was accepted by the database';
+    EXCEPTION
+        WHEN invalid_parameter_value THEN
+            NULL;
+    END;
 END;
 $$;
 RESET ROLE;
