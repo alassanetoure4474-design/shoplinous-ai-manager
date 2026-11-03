@@ -213,15 +213,39 @@ class AdaptateurCJ(AdaptateurFournisseur):
                         continue
 
                     quoted_at = time.time()
+                    # CJ peut retourner un totalPostageFee distinct de
+                    # logisticPrice. Tant que leur relation n'est pas documentée,
+                    # un écart rend le devis ambigu et donc non vérifié.
+                    raw_total_postage = option.get("totalPostageFee")
+                    total_postage_fee = None
+                    if raw_total_postage not in (None, ""):
+                        try:
+                            total_postage_fee = float(raw_total_postage)
+                        except (TypeError, ValueError):
+                            total_postage_fee = float("nan")
+                    freight_mismatch = (
+                        total_postage_fee is not None
+                        and (
+                            not math.isfinite(total_postage_fee)
+                            or abs(total_postage_fee - shipping_cost) > 0.01
+                        )
+                    )
                     normalized_quotes.append({
                         "reference": (
                             f"CJ-LIVE-{vid}-{destination}-{quantite}-"
                             f"{int(quoted_at * 1000)}-{option_index}"
                         ),
-                        "verifie": True,
+                        "verifie": not freight_mismatch,
                         "destination": destination,
                         "quantite": quantite,
                         "cout": shipping_cost,
+                        "cout_logistique_cj": shipping_cost,
+                        "cout_total_postage_cj": total_postage_fee,
+                        "anomalie_tarif": (
+                            "totalPostageFee différent de logisticPrice : "
+                            "devis suspendu jusqu'à clarification"
+                            if freight_mismatch else None
+                        ),
                         "devise": self.DEVISE_CJ,
                         "delai_min_jours": min_days,
                         "delai_max_jours": max_days,
