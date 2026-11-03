@@ -174,7 +174,9 @@ class TestConstruireRapport:
 
     def test_rapport_agrege_les_alertes(self):
         ok = cw.controler_variante(ENTREE_OK, VARIANTE_CJ, 11347, 0.895)
-        ko = cw.controler_variante(ENTREE_OK, VARIANTE_CJ, 42, 0.895)
+        sans_stock_affiche = {k: v for k, v in ENTREE_OK.items()
+                              if k != "stock_affiche_fw"}
+        ko = cw.controler_variante(sans_stock_affiche, VARIANTE_CJ, 42, 0.895)
         rapport = cw.construire_rapport([ok, ko])
         assert rapport["statut"] == "alertes"
         assert rapport["nb_non_conformes"] == 1
@@ -214,7 +216,8 @@ class TestSurveillerCatalogue:
             return 11347
 
         verdicts, rapport = run(cw.surveiller_catalogue(
-            variants_fn, stock_fn, 0.895, VID_TABLE_REEL))
+            variants_fn, stock_fn, 0.895, VID_TABLE_REEL,
+            prix_fw={"CJJT205244501AZ": 24.9, "CJJT205244502BY": 24.9}))
         assert appels.count(("variants", "1797521453303214080")) == 1
         assert len([a for a in appels if a[0] == "stock"]) == 2
         assert rapport["nb_variantes"] == 2
@@ -263,7 +266,8 @@ class TestSurveillerCatalogue:
             return 1500
 
         verdicts, rapport = run(cw.surveiller_catalogue(
-            variants_fn, stock_fn, 0.895, table))
+            variants_fn, stock_fn, 0.895, table,
+            prix_fw={"SKU-A": 24.9, "SKU-B": 24.9}))
         codes = []
         for v in verdicts:
             codes.extend(a["code"] for a in v["alertes"])
