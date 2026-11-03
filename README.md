@@ -6,6 +6,8 @@ de la boutique Freewebstore avec assistance IA.
 
 ## Contenu
 
+- `workflow/shoplinous_global/supplier_qualification.py` : moteur de qualification mondiale des offres par destination et quantité exacte ; origine fournisseur/entrepôt sans liste blanche, mais preuve d'identité, conformité, stock, images, coûts, taux horodatés, devis réel, douane et marge x3 obligatoires. Les pistes CSV/manuelles ne sont jamais vendables sans vérification.
+- `workflow/shoplinous_global/supplier_adapters.py` : registre extensible ; tout adaptateur réellement connecté peut proposer des offres depuis n'importe quel pays, sous réserve de qualification.
 - `workflow/daily.py` : workflow quotidien Mistral Workflows (32 outils :
   15 activites + 17 fonctions publiques ; evaluation produits, table
   SKU->vid, analyse de commandes en lecture seule, controle d'integrite
