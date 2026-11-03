@@ -5,18 +5,30 @@ CJ (ou d'un autre fournisseur) est accessible et exploitable. Une URL HTTPS
 n'est JAMAIS consideree comme validee sans preuve HTTP reelle.
 
 Securite :
-- liste blanche stricte de domaines autorises (pas de redirection hors liste) ;
-- HTTPS obligatoire, aucune URL avec identifiants, aucun hote interne/prive ;
-- 1 requete par seconde maximum, cache avec TTL ;
-- lecture seule : aucun achat, aucune commande, aucun paiement, aucune ecriture.
+- protection SSRF renforcee : parsing URL robuste (httpx.URL), HTTPS obligatoire,
+  port 443 uniquement, identifiants refuses, liste blanche stricte de domaines,
+  resolution DNS verifiee : chaque adresse IP resolue doit etre publique
+  (adresses privees, locales, link-local, reservees, multicast refusees) ;
+- redirections suivies une par une (max 3), chaque saut revalide completement ;
+- telechargement en streaming avec interruption immediate au-dela de 20 Mo ;
+- cadence GLOBALE maximale de 1 requete/s, verrouee entre executions concurrentes ;
+
+LIMITE DOCUMENTEE (cache) : le cache est en memoire du processus worker. Il
+persiste entre les executions servies par le MEME processus (TTL 6 h) mais il
+n'est PAS partage entre plusieurs processus workers (scaling horizontal) ni
+persiste aux redemarrages. Aucun stockage partage (Supabase, KV) n'est
+disponible sans credentials : le remplacer si un stockage partage est configure.
+
+Lecture seule : aucun achat, aucune commande, aucun paiement, aucune ecriture.
 """
 
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,6 +43,7 @@ DOMAINES_AUTORISES = (
 )
 
 SCHEMA_OBLIGATOIRE = "https"
+PORT_AUTORISE = 443
 TAILLE_MIN_OCTETS = 1024
 TAILLE_MAX_OCTETS = 20 * 1024 * 1024
 DELAI_EXPIRATION_REQUETE_S = 15.0
@@ -44,20 +57,11 @@ USER_AGENT = (
 )
 
 _SIGNATURES = (
-    (b"\xff\xd8\xff", "image/jpeg"),
-    (b"\x89PNG\r\n\x1a\n", "image/png"),
-    (b"GIF87a", "image/gif"),
-    (b"GIF89a", "image/gif"),
-    (b"BM", "image/bmp"),
-)
-
-_HOTES_PRIVES = (
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-    "::1",
-    "169.254.169.254",
-    "metadata.google.internal",
+    ("\xff\xd8\xff", "image/jpeg"),
+    ("\x89PNG\r\n\x1a\n", "image/png"),
+    ("GIF87a", "image/gif"),
+    ("GIF89a", "image/gif"),
+    ("BM", "image/bmp"),
 )
 
 
@@ -94,26 +98,104 @@ def _erreur(url: str, motif: str) -> ResultatImage:
     )
 
 
-def _url_autorisee(url: str) -> tuple[bool, str]:
-    """Controles de securite statiques avant toute requete."""
-    if "://" not in url:
-        return False, "URL invalide : pas de schema"
-    schema, reste = url.split("://", 1)
-    if schema.lower() != SCHEMA_OBLIGATOIRE:
-        return False, f"Schema non autorise ({schema}) : HTTPS obligatoire"
-    hote_brut = reste.split("/", 1)[0]
-    if "@" in hote_brut:
-        return False, "Identifiants embarques dans l'URL : refuse"
-    hote = hote_brut.split(":")[0].strip().lower()
+# ------------------------------------------------- cadence globale 1 req/s
+_VERROU_CADENCE: asyncio.Lock = asyncio.Lock()
+_DERNIER_ENVOI: float = 0.0
+
+
+async def _attendre_tour() -> None:
+    """Garantit au plus INTERVALLE_REQ_S entre deux requetes reelles.
+
+    Le verrou est garde pendant l'attente : les executions concurrentes
+    servies par le meme processus worker sont serialisees sur une cadence
+    globale. Limite documentee : avec plusieurs processus workers
+    (scaling), chaque processus applique sa propre cadence de 1 req/s.
+    """
+    global _DERNIER_ENVOI
+    async with _VERROU_CADENCE:
+        maintenant = time.monotonic()
+        attente = _DERNIER_ENVOI + INTERVALLE_REQ_S - maintenant
+        if attente > 0:
+            await asyncio.sleep(attente)
+        _DERNIER_ENVOI = time.monotonic()
+
+
+# ------------------------------------------------------- protection SSRF
+def _url_statique_valide(url: str) -> tuple[Optional[httpx.URL], str]:
+    """Parsing robuste et controles statiques (schema, port, liste blanche)."""
+    try:
+        u = httpx.URL(url)
+    except Exception:
+        return None, "URL inparseable"
+    if u.scheme.lower() != SCHEMA_OBLIGATOIRE:
+        return None, f"Schema non autorise ({u.scheme}) : HTTPS obligatoire"
+    hote = (u.host or "").lower().strip(".")
     if not hote:
-        return False, "Hote vide"
-    if hote in _HOTES_PRIVES or hote.endswith(".local") or hote.endswith(".internal"):
-        return False, f"Hote interne non autorise ({hote})"
+        return None, "Hote absent"
+    if u.username or u.password or "@" in hote:
+        return None, "Identifiants embarques dans l'URL : refuses"
+    if u.port is not None and u.port != PORT_AUTORISE:
+        return None, f"Port non autorise ({u.port}) : {PORT_AUTORISE} uniquement"
+    if hote == "localhost" or hote.endswith(".local") or hote.endswith(".internal"):
+        return None, f"Hote interne non autorise ({hote})"
     if hote not in DOMAINES_AUTORISES:
-        return False, f"Domaine non autorise ({hote}) : hors liste blanche"
+        return None, f"Domaine non autorise ({hote}) : hors liste blanche"
+    return u, ""
+
+
+def _adresse_ip_publique(texte_ip: str) -> tuple[bool, str]:
+    try:
+        ip = ipaddress.ip_address(texte_ip)
+    except ValueError:
+        return False, f"Adresse IP invalide ({texte_ip})"
+    if (
+        not ip.is_global
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        return False, f"Adresse non publique refusee ({ip})"
     return True, ""
 
 
+async def _resoudre_dns(hote: str) -> list[str]:
+    """Resolveur DNS reel par defaut (injectable dans les tests)."""
+    infos = await asyncio.getaddrinfo(hote, PORT_AUTORISE)
+    return sorted({entree[4][0].split("%")[0] for entree in infos})
+
+
+async def _url_reseau_valide(
+    u: httpx.URL, resolveur: Callable[[str], Awaitable[list[str]]]
+) -> tuple[Optional[httpx.URL], str]:
+    """Valide les adresses IP resolues du hote (anti-SSRF dynamique)."""
+    hote = (u.host or "").lower().strip(".")
+    try:
+        ipaddress.ip_address(hote)
+    except ValueError:
+        pass
+    else:
+        ok, motif = _adresse_ip_publique(hote)
+        if not ok:
+            return None, motif
+        return u, ""
+
+    try:
+        adresses = await resolveur(hote)
+    except Exception:
+        return None, "Resolution DNS impossible"
+    if not adresses:
+        return None, "Aucune adresse resolue par le DNS"
+    for texte_ip in adresses:
+        ok, motif = _adresse_ip_publique(texte_ip)
+        if not ok:
+            return None, motif
+    return u, ""
+
+
+# --------------------------------------------------------------- signature
 def _signature_binaire_valide(donnees: bytes) -> Optional[str]:
     if donnees[:4] == b"RIFF" and donnees[8:12] == b"WEBP":
         return "image/webp"
@@ -123,24 +205,45 @@ def _signature_binaire_valide(donnees: bytes) -> Optional[str]:
     return None
 
 
-async def _verifier_une_image(url: str) -> ResultatImage:
-    ok, motif = _url_autorisee(url)
-    if not ok:
+# ------------------------------------------------------------- verification
+async def _verifier_une_image(
+    url: str,
+    transport: Optional[httpx.AsyncBaseTransport] = None,
+    resolveur: Optional[Callable[[str], Awaitable[list[str]]]] = None,
+) -> ResultatImage:
+    """Verifie une image par un HTTP GET en streaming reelement emis.
+
+    ``transport`` et ``resolveur`` sont injectables pour les tests unitaires.
+    """
+    if resolveur is None:
+        resolveur = _resoudre_dns
+
+    u, motif = _url_statique_valide(url)
+    if u is None:
+        return _erreur(url, motif)
+    u, motif = await _url_reseau_valide(u, resolveur)
+    if u is None:
         return _erreur(url, motif)
 
-    url_courante = url
-    async with httpx.AsyncClient(
-        follow_redirects=False,
-        timeout=httpx.Timeout(DELAI_EXPIRATION_REQUETE_S),
-        headers={"User-Agent": USER_AGENT, "Accept": "image/*,*/*;q=0.8"},
-        trust_env=False,
-    ) as client:
+    url_courante = u
+    arguments_client: dict = {
+        "follow_redirects": False,
+        "timeout": httpx.Timeout(DELAI_EXPIRATION_REQUETE_S),
+        "headers": {"User-Agent": USER_AGENT, "Accept": "image/*,*/*;q=0.8"},
+        "trust_env": False,
+    }
+    if transport is not None:
+        arguments_client["transport"] = transport
+
+    async with httpx.AsyncClient(**arguments_client) as client:
         for _ in range(REDIRECTIONS_MAX + 1):
+            await _attendre_tour()
             try:
                 reponse = await client.get(url_courante)
             except httpx.TimeoutException:
                 return _erreur(
-                    url, f"Delai d'attente depasse (> {DELAI_EXPIRATION_REQUETE_S}s)"
+                    url,
+                    f"Delai d'attente depasse (> {DELAI_EXPIRATION_REQUETE_S}s)",
                 )
             except httpx.ConnectError as exc:
                 return _erreur(url, f"Erreur reseau (connexion) : {type(exc).__name__}")
@@ -153,37 +256,39 @@ async def _verifier_une_image(url: str) -> ResultatImage:
                 cible = reponse.headers.get("location", "")
                 if not cible:
                     return ResultatImage(
-                        url=url,
-                        statut_http=statut,
+                        url=url, statut_http=statut,
                         date_verification=_maintenant_utc(),
-                        url_finale=url_courante,
-                        valide=False,
+                        url_finale=str(url_courante), valide=False,
                         motif_echec=f"Redirection {statut} sans cible",
                     )
-                suivante = str(httpx.URL(url_courante).join(cible))
-                ok, motif = _url_autorisee(suivante)
-                if not ok:
+                suivante = httpx.URL(url_courante).join(cible)
+                u2, motif = _url_statique_valide(str(suivante))
+                if u2 is None:
                     return ResultatImage(
-                        url=url,
-                        statut_http=statut,
+                        url=url, statut_http=statut,
                         date_verification=_maintenant_utc(),
-                        url_finale=url_courante,
-                        valide=False,
+                        url_finale=str(url_courante), valide=False,
                         motif_echec=f"Redirection vers destination interdite : {motif}",
                     )
-                url_courante = suivante
-                await asyncio.sleep(INTERVALLE_REQ_S)
+                u2, motif = await _url_reseau_valide(u2, resolveur)
+                if u2 is None:
+                    return ResultatImage(
+                        url=url, statut_http=statut,
+                        date_verification=_maintenant_utc(),
+                        url_finale=str(url_courante), valide=False,
+                        motif_echec=f"Redirection vers destination interdite : {motif}",
+                    )
+                url_courante = u2
                 continue
 
             if statut != 200:
                 return ResultatImage(
-                    url=url,
-                    statut_http=statut,
+                    url=url, statut_http=statut,
                     date_verification=_maintenant_utc(),
-                    url_finale=url_courante,
-                    valide=False,
+                    url_finale=str(url_courante), valide=False,
                     motif_echec=f"Statut HTTP {statut} != 200",
                 )
+
 
             type_mime = (
                 (reponse.headers.get("content-type") or "")
@@ -193,39 +298,36 @@ async def _verifier_une_image(url: str) -> ResultatImage:
             )
             if not type_mime.startswith("image/"):
                 return ResultatImage(
-                    url=url,
-                    statut_http=statut,
-                    type_mime=type_mime or None,
+                    url=url, statut_http=statut, type_mime=type_mime or None,
                     date_verification=_maintenant_utc(),
-                    url_finale=url_courante,
-                    valide=False,
+                    url_finale=str(url_courante), valide=False,
                     motif_echec=f"Content-Type non image ({type_mime or 'absent'})",
                 )
 
+            # Telechargement en STREAMING avec interruption immediate > 20 Mo
             octets = b""
+            trop_grand = False
             async for morceau in reponse.aiter_bytes():
                 octets += morceau
                 if len(octets) > TAILLE_MAX_OCTETS:
-                    return ResultatImage(
-                        url=url,
-                        statut_http=statut,
-                        type_mime=type_mime,
-                        taille_octets=len(octets),
-                        date_verification=_maintenant_utc(),
-                        url_finale=url_courante,
-                        valide=False,
-                        motif_echec=f"Contenu plus grand que {TAILLE_MAX_OCTETS} octets",
-                    )
+                    trop_grand = True
+                    break  # interruption immediate : le corps n'est pas lu en entier
+
+            if trop_grand:
+                return ResultatImage(
+                    url=url, statut_http=statut, type_mime=type_mime,
+                    taille_octets=len(octets),
+                    date_verification=_maintenant_utc(),
+                    url_finale=str(url_courante), valide=False,
+                    motif_echec=f"Contenu plus grand que {TAILLE_MAX_OCTETS} octets",
+                )
 
             if len(octets) < TAILLE_MIN_OCTETS:
                 return ResultatImage(
-                    url=url,
-                    statut_http=statut,
-                    type_mime=type_mime,
+                    url=url, statut_http=statut, type_mime=type_mime,
                     taille_octets=len(octets),
                     date_verification=_maintenant_utc(),
-                    url_finale=url_courante,
-                    valide=False,
+                    url_finale=str(url_courante), valide=False,
                     motif_echec=(
                         f"Contenu trop petit ({len(octets)} octets < {TAILLE_MIN_OCTETS})"
                     ),
@@ -234,13 +336,10 @@ async def _verifier_une_image(url: str) -> ResultatImage:
             mime_binaire = _signature_binaire_valide(octets)
             if mime_binaire is None:
                 return ResultatImage(
-                    url=url,
-                    statut_http=statut,
-                    type_mime=type_mime,
+                    url=url, statut_http=statut, type_mime=type_mime,
                     taille_octets=len(octets),
                     date_verification=_maintenant_utc(),
-                    url_finale=url_courante,
-                    valide=False,
+                    url_finale=str(url_courante), valide=False,
                     motif_echec="Donnees binaires invalides : signature d'image inconnue",
                 )
 
@@ -252,20 +351,18 @@ async def _verifier_une_image(url: str) -> ResultatImage:
             )
 
             return ResultatImage(
-                url=url,
-                statut_http=statut,
-                type_mime=mime_final,
+                url=url, statut_http=statut, type_mime=mime_final,
                 taille_octets=len(octets),
                 date_verification=_maintenant_utc(),
-                url_finale=url_courante,
-                valide=True,
-                motif_echec=None,
+                url_finale=str(url_courante), valide=True, motif_echec=None,
             )
 
     return _erreur(url, f"Trop de redirections (>{REDIRECTIONS_MAX})")
 
 
 # ------------------------------------------------------------------ activite
+# LIMITE DOCUMENTEE : cache en memoire du processus worker (TTL 6 h).
+# Non partage entre plusieurs processus workers, non persiste aux redemarrages.
 _CACHE: dict = {}
 
 
@@ -281,10 +378,14 @@ def _cache_frais(url: str) -> Optional[ResultatImage]:
 
 
 @workflows.activity()
-async def verifier_images(urls: list[str]) -> list[dict]:
-    """Verifie chaque URL par un veritable HTTP GET, cadence 1 req/s, avec cache."""
+async def verifier_images(urls: list[str]) -> dict:
+    """Verifie chaque URL par un veritable HTTP GET, cadence globale 1 req/s.
+
+    Les horodatages sont calcules dans l'activite (jamais dans le workflow),
+    pour respecter la contrainte de determinisme du SDK.
+    """
     resultats: list[dict] = []
-    for index, url in enumerate(urls):
+    for url in urls:
         en_cache = _cache_frais(url)
         if en_cache is not None:
             resultats.append(en_cache.model_dump())
@@ -294,9 +395,13 @@ async def verifier_images(urls: list[str]) -> list[dict]:
         _CACHE[url] = (time.time(), resultat)
         resultats.append(resultat.model_dump())
 
-        if index < len(urls) - 1:
-            await asyncio.sleep(INTERVALLE_REQ_S)
-    return resultats
+    validees = sum(1 for r in resultats if r.get("valide"))
+    return {
+        "resultats": resultats,
+        "validees": validees,
+        "rejetees": len(resultats) - validees,
+        "date_rapport": _maintenant_utc(),
+    }
 
 
 # ------------------------------------------------------------------ workflow
@@ -305,18 +410,14 @@ async def verifier_images(urls: list[str]) -> list[dict]:
     workflow_display_name="SHOPLINOUS — Validateur HTTP GET d'images produits",
     workflow_description=(
         "Effectue de veritables requetes HTTP GET sur les URL d'images produits "
-        "(statut, Content-Type, taille, signature binaire), avec liste blanche de "
-        "domaines, cadence 1 req/s et cache 6h. Une image non verifiee est invalide."
+        "(statut, Content-Type, taille, signature binaire), avec liste blanche "
+        "de domaines, protection SSRF, cadence globale 1 req/s et cache 6h. "
+        "Une image non verifiee est invalide."
     ),
 )
 class ValidateurImagesWorkflow:
     @workflows.workflow.entrypoint
     async def run(self, input: EntreeValidateur) -> dict:
-        resultats = await verifier_images(input.urls)
-        validees = sum(1 for r in resultats if r.get("valide"))
-        return {
-            "resultats": resultats,
-            "validees": validees,
-            "rejetees": len(resultats) - validees,
-            "date_rapport": _maintenant_utc(),
-        }
+        # Aucune horloge ni aleatoire ici : le rapport horodate vient de
+        # l'activite, conformement a la regle de determinisme du SDK.
+        return await verifier_images(input.urls)
