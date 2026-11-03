@@ -164,3 +164,29 @@ class GestionnaireFournisseurs:
             offres, destination, quantite, taux_vers_eur, maintenant
         )
         return result["meilleure_offre"]
+
+    def rechercher_et_qualifier(self, mot_cle, destination, quantite,
+                                taux_vers_eur, maintenant=None):
+        """Recherche tous les fournisseurs API actifs, puis qualifie leurs offres.
+
+        Les connecteurs sans API active sont ignorés et signalés. Les offres
+        récupérées sont contrôlées avec exactement les mêmes règles,
+        indépendamment du pays d'origine du fournisseur ou de l'entrepôt.
+        """
+        if not hasattr(self.registre, "rechercher_offres"):
+            raise RuntimeError("registre sans recherche mondiale normalisée")
+        discovery = self.registre.rechercher_offres(
+            mot_cle, destination, quantite
+        )
+        result = self.evaluer_offres(
+            discovery["offres"], destination, quantite,
+            taux_vers_eur, maintenant
+        )
+        result["erreurs_connecteurs"] = discovery["erreurs"]
+        result["adaptateurs_sans_recherche"] = discovery[
+            "adaptateurs_sans_recherche"
+        ]
+        result["fournisseurs_interroges"] = sorted({
+            item["fournisseur"] for item in discovery["offres"]
+        })
+        return result
