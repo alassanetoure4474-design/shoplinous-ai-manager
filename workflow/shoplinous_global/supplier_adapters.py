@@ -44,7 +44,9 @@ class AdaptateurCJ(AdaptateurFournisseur):
         "produits_recherche", "variantes", "detail", "stock", "fret",
         "rechercher_offres",
     )
-    pays_expedition = ("CN",)
+    # Les origines sont dynamiques : uniquement les entrepôts où la variante
+    # possède un stock positif confirmé par get_cj_variant_stock.
+    pays_expedition = ()
 
     # Entité juridique indiquée dans les conditions officielles de CJ.
     PREUVE_IDENTITE = "https://cjdropshipping.com/user-agreement/en"
@@ -100,8 +102,8 @@ class AdaptateurCJ(AdaptateurFournisseur):
     async def _rechercher_offres_async(self, daily, mot_cle, destination, quantite):
         """Transforme les réponses CJ réelles en offres normalisées.
 
-        L'entrepôt et le point de départ du devis sont CN, conformément aux
-        requêtes CJ existantes (startCountryCode=CN) et au stock CN vérifié.
+        Chaque origine provient du stock réel de la variante. Le devis est
+        demandé séparément par origine avec startCountryCode ISO2 confirmé.
         La destination et la quantité sont toujours celles de l'appel.
         Une durée de validité de 15 minutes est une politique locale de fraîcheur
         SHOPLINOUS, pas une durée annoncée par CJ.
@@ -187,109 +189,127 @@ class AdaptateurCJ(AdaptateurFournisseur):
                 vid = str(vid)
 
                 stock_payload = await daily.cj_stock(vid)
-                stock = daily.cn_stock_of(stock_payload)
+                # Compatibilité de tests anciens : en production, daily expose
+                # stock_by_country() et retourne toutes les origines réelles.
+                if hasattr(daily, "stock_by_country"):
+                    warehouse_stocks = daily.stock_by_country(stock_payload)
+                else:
+                    cn_stock = daily.cn_stock_of(stock_payload)
+                    warehouse_stocks = {"CN": cn_stock} if cn_stock > 0 else {}
                 stock_checked_at = time.time()
 
-                freight_payload = await daily.cj_freight(
-                    vid, destination, quantity=quantite
-                )
-                freight_options = freight_payload.get("data")
-                if not isinstance(freight_options, list):
-                    raise RuntimeError("CJ fret : options de transport inattendues")
-
-                normalized_quotes = []
-                for option_index, option in enumerate(freight_options):
-                    if not isinstance(option, dict):
+                for origin, stock in sorted(warehouse_stocks.items()):
+                    if not isinstance(origin, str) or len(origin) != 2 or stock <= 0:
                         continue
-                    try:
-                        shipping_cost = float(option.get("logisticPrice"))
-                        aging = str(option.get("logisticAging") or "")
-                        match = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", aging)
-                        if match is None:
-                            continue
-                        min_days, max_days = int(match.group(1)), int(match.group(2))
-                        if shipping_cost < 0 or min_days < 1 or max_days < min_days:
-                            continue
-                    except (TypeError, ValueError):
-                        continue
-
-                    quoted_at = time.time()
-                    # CJ peut retourner un totalPostageFee distinct de
-                    # logisticPrice. Tant que leur relation n'est pas documentée,
-                    # un écart rend le devis ambigu et donc non vérifié.
-                    raw_total_postage = option.get("totalPostageFee")
-                    total_postage_fee = None
-                    if raw_total_postage not in (None, ""):
-                        try:
-                            total_postage_fee = float(raw_total_postage)
-                        except (TypeError, ValueError):
-                            total_postage_fee = float("nan")
-                    freight_mismatch = (
-                        total_postage_fee is None
-                        or not math.isfinite(total_postage_fee)
-                        or abs(total_postage_fee - shipping_cost) > 0.01
+                    freight_payload = await daily.cj_freight(
+                        vid, destination, quantity=quantite,
+                        **({"start_country_code": origin}
+                           if hasattr(daily, "stock_by_country") else {})
                     )
-                    normalized_quotes.append({
-                        "reference": (
-                            f"CJ-LIVE-{vid}-{destination}-{quantite}-"
-                            f"{int(quoted_at * 1000)}-{option_index}"
-                        ),
-                        "verifie": not freight_mismatch,
-                        "destination": destination,
-                        "quantite": quantite,
-                        "cout": shipping_cost,
-                        "cout_logistique_cj": shipping_cost,
-                        "cout_total_postage_cj": total_postage_fee,
-                        "anomalie_tarif": (
-                            "totalPostageFee différent de logisticPrice : "
-                            "devis suspendu jusqu'à clarification"
-                            if freight_mismatch else None
-                        ),
-                        "devise": self.DEVISE_CJ,
-                        "delai_min_jours": min_days,
-                        "delai_max_jours": max_days,
-                        # CJ n'a pas fourni de preuve structurée de levée des
-                        # restrictions douanières dans les réponses observées.
-                        "restrictions_ok": False,
-                        "verifie_le": quoted_at,
-                        "expire_le": quoted_at + self.VALIDITE_INTERNE_DEVIS_SECONDES,
-                        "validite_interne_secondes": self.VALIDITE_INTERNE_DEVIS_SECONDES,
-                    })
+                    freight_options = freight_payload.get("data")
+                    if not isinstance(freight_options, list):
+                        raise RuntimeError("CJ fret : options de transport inattendues")
 
-                # Même si aucune option de fret n'est retournée, conserver la
-                # candidature permet au moteur de signaler le devis manquant.
-                quote_rows = normalized_quotes or [None]
-                for quote in quote_rows:
-                    offers.append({
-                        "fournisseur": self.nom,
-                        "pays_fournisseur": "CN",
-                        "pays_entrepot": "CN",
-                        "sku": sku,
-                        "nom_produit": product_name,
-                        "prix_achat": purchase_price,
-                        "devise_achat": self.DEVISE_CJ,
-                        "stock": stock,
-                        "stock_verifie": True,
-                        "preuve_stock": f"CJ stock/queryById vid={vid} pays=CN",
-                        "stock_verifie_le": stock_checked_at,
-                        "images_validees": len(valid_images),
-                        "images_verifiees_le": images_checked_at,
-                        "preuve_images": (
-                            f"GET CJ images validées pid={product_id} vid={vid}"
-                            if valid_images else ""
-                        ),
-                        "images_urls_verifiees": list(valid_images),
-                        # L'entité légale est identifiée par les conditions
-                        # officielles et l'API CJ est authentifiée par daily.py.
-                        "fournisseur_verifie": True,
-                        "preuve_fournisseur": self.PREUVE_IDENTITE,
-                        "entite_juridique_fournisseur": self.FOURNISSEUR_LEGAL,
-                        # Les réponses API examinées ne fournissent pas de
-                        # certificats/rapports de conformité produit.
-                        "conformite_verifiee": False,
-                        "preuve_conformite": "",
-                        "devis_livraison": quote,
-                    })
+                    normalized_quotes = []
+                    for option_index, option in enumerate(freight_options):
+                        if not isinstance(option, dict):
+                            continue
+                        try:
+                            shipping_cost = float(option.get("logisticPrice"))
+                            aging = str(option.get("logisticAging") or "")
+                            match = re.fullmatch(r"\\s*(\\d+)\\s*-\\s*(\\d+)\\s*", aging)
+                            if match is None:
+                                continue
+                            min_days, max_days = int(match.group(1)), int(match.group(2))
+                            if shipping_cost < 0 or min_days < 1 or max_days < min_days:
+                                continue
+                        except (TypeError, ValueError):
+                            continue
+
+                        quoted_at = time.time()
+                        raw_total_postage = option.get("totalPostageFee")
+                        total_postage_fee = None
+                        if raw_total_postage not in (None, ""):
+                            try:
+                                total_postage_fee = float(raw_total_postage)
+                            except (TypeError, ValueError):
+                                total_postage_fee = float("nan")
+                        freight_mismatch = (
+                            total_postage_fee is None
+                            or not math.isfinite(total_postage_fee)
+                            or abs(total_postage_fee - shipping_cost) > 0.01
+                        )
+                        # Pour le coût rendu, retenir le montant le plus élevé.
+                        # La divergence maintient toutefois le devis non vérifié.
+                        conservative_cost = max(
+                            shipping_cost,
+                            total_postage_fee if total_postage_fee is not None
+                            and math.isfinite(total_postage_fee) else shipping_cost
+                        )
+                        normalized_quotes.append({
+                            "reference": (
+                                f"CJ-LIVE-{vid}-{origin}-{destination}-{quantite}-"
+                                f"{int(quoted_at * 1000)}-{option_index}"
+                            ),
+                            "verifie": not freight_mismatch,
+                            "destination": destination,
+                            "origine": origin,
+                            "quantite": quantite,
+                            "cout": conservative_cost,
+                            "cout_logistique_cj": shipping_cost,
+                            "cout_total_postage_cj": total_postage_fee,
+                            "cout_qualification_cj": conservative_cost,
+                            "anomalie_tarif": (
+                                "totalPostageFee différent de logisticPrice : "
+                                "devis suspendu jusqu'à clarification"
+                                if freight_mismatch else None
+                            ),
+                            "motif_anomalie_tarif": (
+                                "surcout_destination_a_expliquer"
+                                if freight_mismatch and total_postage_fee is not None
+                                and total_postage_fee > shipping_cost
+                                else "divergence_tarif_non_expliquee"
+                                if freight_mismatch else None
+                            ),
+                            "devise": self.DEVISE_CJ,
+                            "delai_min_jours": min_days,
+                            "delai_max_jours": max_days,
+                            "restrictions_ok": False,
+                            "verifie_le": quoted_at,
+                            "expire_le": quoted_at + self.VALIDITE_INTERNE_DEVIS_SECONDES,
+                            "validite_interne_secondes": self.VALIDITE_INTERNE_DEVIS_SECONDES,
+                        })
+
+                    quote_rows = normalized_quotes or [None]
+                    for quote in quote_rows:
+                        offers.append({
+                            "fournisseur": self.nom,
+                            "pays_fournisseur": "CN",
+                            "pays_entrepot": origin,
+                            "sku": sku,
+                            "nom_produit": product_name,
+                            "prix_achat": purchase_price,
+                            "devise_achat": self.DEVISE_CJ,
+                            "stock": stock,
+                            "stock_verifie": True,
+                            "preuve_stock": (
+                                f"CJ stock/queryById vid={vid} pays={origin}"
+                            ),
+                            "stock_verifie_le": stock_checked_at,
+                            "images_validees": len(valid_images),
+                            "images_verifiees_le": images_checked_at,
+                            "preuve_images": (
+                                f"GET CJ images validées pid={product_id} vid={vid}"
+                                if valid_images else ""
+                            ),
+                            "images_urls_verifiees": list(valid_images),
+                            "fournisseur_verifie": True,
+                            "preuve_fournisseur": self.PREUVE_IDENTITE,
+                            "entite_juridique_fournisseur": self.FOURNISSEUR_LEGAL,
+                            "conformite_verifiee": False,
+                            "preuve_conformite": "",
+                            "devis_livraison": quote,
+                        })
         return offers
 
 
