@@ -18,10 +18,15 @@ consideree comme validee sans preuve HTTP reelle.
    persiste aux redemarrages. Aucun stockage partage (Supabase, KV) n'est
    disponible sans credentials ; remplacer `_CACHE` par un backend partage si
    un stockage est configure.
-4. **SSRF renforce** : parsing `httpx.URL` (HTTPS et port 443 uniquement,
-   identifiants refuses, liste blanche stricte de domaines), resolution DNS
-   verifiee — toute IP non globale/privee/locale/reservee est refusee —
-   redirections (max 3) revalidees a chaque saut (statique + reseau).
+4. **SSRF — FAIL-CLOSED** : HTTPS, port 443, liste blanche, identifiants refuses
+   et resolution DNS sont controles. Toutefois, HTTPX peut refaire une resolution
+   DNS au moment de la connexion : l'adresse validee n'est donc pas encore
+   epinglee a la socket (risque DNS rebinding/TOCTOU). En consequence, le code
+   refuse toute connexion reseau de production tant qu'un transport DNS pinne
+   conservant TLS/SNI n'est pas disponible. Aucune image ne peut etre validee
+   en production dans cet etat. Les transports injectes servent uniquement aux
+   tests MockTransport. Les redirections sont revalidees mais restent bloquees
+   en production par la meme protection fail-closed.
 
 ## Determinisme SDK Workflows
 
@@ -40,7 +45,15 @@ Couverture : URL statiques (schema, port, liste blanche, identifiants),
 SSRF (IP privees, DNS echoue), streaming > taille max, redirections (autorisee,
 interdite, boucle), MIME incoherent, Content-Type non image, cadence globale
 concurrente, cache TTL. Aucun reseau reel (httpx.MockTransport + resolveur DNS
-factice injectes).
+factice injectes). Un test confirme que l'appel de production sans transport
+DNS pinne est refuse.
+
+## Etat de mise en service
+
+Le worker ne demarre pas si le SDK Mistral Workflows reel est absent. Le shim
+est reserve aux tests (`SHOPLINOUS_TEST_MODE=1`). Le validateur reste volontairement
+bloque en production jusqu'a l'implementation et aux tests d'un transport DNS
+pinne. Ne pas fusionner ni qualifier de produits tant que ce point n'est pas leve.
 
 ## Securite
 
