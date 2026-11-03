@@ -488,6 +488,36 @@ async def check_image(url: str) -> dict:
         return {"url": url, "bytes": len(content), "mime": content_type}
 
 
+@workflows.activity(start_to_close_timeout=timedelta(minutes=10), retry_policy_max_attempts=1)
+async def rechercher_fournisseurs_mondiaux(
+        mot_cle: str, destination: str, quantite: int) -> dict:
+    """Recherche et qualifie les fournisseurs mondiaux, sans achat ni publication."""
+    from shoplinous_global.supplier_adapters import RegistreFournisseurs
+    from shoplinous_global.supplier_manager import GestionnaireFournisseurs
+    from shoplinous_global.exchange_rate_manager import TauxHorodate
+
+    if not isinstance(quantite, int) or isinstance(quantite, bool) or quantite < 1:
+        raise ValueError("quantité entière positive obligatoire")
+    if not isinstance(destination, str) or len(destination.strip()) != 2:
+        raise ValueError("destination ISO-2 obligatoire")
+
+    try:
+        rate = await usd_eur_rate()
+    except Exception as exc:
+        raise EvaluationSuspended(
+            "recherche mondiale suspendue : taux USD/EUR indisponible"
+        ) from exc
+
+    now = time.time()
+    rates = {
+        "USD": TauxHorodate(("USD", "EUR"), rate, horodatage=now)
+    }
+    manager = GestionnaireFournisseurs(RegistreFournisseurs())
+    return await manager.rechercher_et_qualifier_async(
+        mot_cle, destination.strip().upper(), quantite, rates, maintenant=now
+    )
+
+
 @workflows.activity(start_to_close_timeout=timedelta(minutes=3), retry_policy_max_attempts=3)
 async def fw_list_all_products() -> list:
     """Catalogue COMPLET Freewebstore avec pagination verifiee."""
