@@ -119,7 +119,7 @@ jobs:
           python -m pytest tests -m reseau_reel -v -s 2>&1 | tee smoke_output.txt
           code=${PIPESTATUS[0]}
           echo "=== Publication du smoke en annotations publiques ==="
-          grep -E "FAILED|ERROR|Error|assert|Epingle|epinglee|Resolution|statut HTTP|gaierror" smoke_output.txt | while IFS= read -r ligne; do
+          grep -E "FAILED|ERROR|Error|assert|Epingle|epinglee|Resolution|statut HTTP|gaierror|Traceback|impossible|refusee|essai|PINNING" smoke_output.txt | while IFS= read -r ligne; do
             echo "::error::SMOKE_REEL ${ligne}"
           done
           echo "SMOKE_REEL_EXIT=${code}"

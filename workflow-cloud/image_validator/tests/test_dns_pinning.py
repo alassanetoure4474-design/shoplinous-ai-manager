@@ -7,7 +7,9 @@ Prouve que :
    lieu, le resolveur n'est appele qu'une seule fois ;
 3. une IP privee/locale/reservee est refusee AVANT toute tentative de
    connexion (fail-closed) ;
-4. en production reelle (marqueur reseau_reel, CI) : TLS + SNI + verification
+4. le transport HTTPX de production installe REELLEMENT le backend epingle
+   dans le pool httpcore (integration, pas seulement test isole) ;
+5. en production reelle (marqueur reseau_reel, CI) : TLS + SNI + verification
    du certificat fonctionnent sur l'IP epinglee pour le domaine d'origine.
 """
 
@@ -188,8 +190,8 @@ def test_redirection_reepingle_nouveau_hote(monkeypatch):
 
 
 def test_transport_httpx_installe_backend_epingle_dans_pool():
-    """Le transport HTTPX de production doit réellement utiliser le backend
-    épinglé dans son pool, pas seulement tester le backend isolément."""
+    """Le transport HTTPX de production doit reellement utiliser le backend
+    epingle dans son pool, pas seulement tester le backend isole."""
     backend = iv._BackendEpingle(iv._resoudre_dns)
     transport = iv._construire_transport_production(backend)
     try:
@@ -208,9 +210,16 @@ def test_transport_httpx_installe_backend_epingle_dans_pool():
 )
 def test_reel_epingle_cj_tls_sni_certificat():
     """Preuve de bout en bout vers CJ : resolution+validation+epinglage,
-    socket sur l'IP epinglee, TLS/SNI/certificat verifies pour le domaine
-    d'origine. Toute reponse HTTP valide (statut quelconque) prouve que la
-    chaine TLS a reussi sur l'IP epinglee."""
+    socket sur l'IP epinglee (verifiee cote backend), TLS/SNI/certificat
+    verifies pour le domaine d'origine. Toute reponse HTTP valide (statut
+    quelconque) prouve que la chaine TLS a reussi sur l'IP epinglee.
+
+    3 essais (DNS ou reseau transitoire) ; en cas d'echec, l'exception
+    EXACTE (type + message + traceback) est publiee en annotation publique
+    (::error::) car les logs CI exigent une connexion.
+    """
+    import time as _time
+    import traceback as _tb
 
     async def go():
         epingle = iv._BackendEpingle(iv._resoudre_dns)
@@ -221,12 +230,30 @@ def test_reel_epingle_cj_tls_sni_certificat():
             reponse = await client.get("https://cf.cjdropshipping.com/")
         return epingle, reponse
 
-    epingle, reponse = asyncio.run(go())
-    ip_epinglee = epingle._ip_epinglees.get("cf.cjdropshipping.com")
-    assert ip_epinglee, "Aucune IP epinglee"
-    assert ipaddress.ip_address(ip_epinglee).is_global, (
-        f"IP epinglee non publique : {ip_epinglee}"
+    derniere = None
+    for essai in range(3):
+        try:
+            epingle, reponse = asyncio.run(go())
+            ip_epinglee = epingle._ip_epinglees.get("cf.cjdropshipping.com")
+            assert ip_epinglee, "Aucune IP epinglee"
+            assert ipaddress.ip_address(ip_epinglee).is_global, (
+                f"IP epinglee non publique : {ip_epinglee}"
+            )
+            assert isinstance(reponse.status_code, int) and reponse.status_code > 0
+            print(
+                f"DNS PINNING REEL : IP epinglee={ip_epinglee} "
+                f"statut HTTP={reponse.status_code} TLS+SNI+certificat OK"
+            )
+            return
+        except Exception as exc:
+            derniere = exc
+            print(
+                f"::error::SMOKE_REEL essai {essai + 1}/3 echoue : "
+                f"{type(exc).__name__} : {exc}"
+            )
+            _tb.print_exc()
+            _time.sleep(3)
+    raise AssertionError(
+        f"Preuve reseau reel CJ impossible apres 3 essais : "
+        f"{type(derniere).__name__} : {derniere}"
     )
-    assert isinstance(reponse.status_code, int) and reponse.status_code > 0
-    print(f"DNS PINNING REEL : IP epinglee={ip_epinglee} "
-          f"statut HTTP={reponse.status_code} TLS+SNI+certificat OK")
