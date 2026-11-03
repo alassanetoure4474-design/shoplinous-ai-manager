@@ -315,11 +315,28 @@ class _BackendEpingle(_BackendAsynchrone):
             return await self._connecteur_brut(
                 ip_epinglee, port, timeout, local_address, socket_options
             )
-        return await super().connect_tcp(
+        stream = await super().connect_tcp(
             ip_epinglee, port,
             timeout=timeout, local_address=local_address,
             socket_options=socket_options,
         )
+        # Défense supplémentaire : vérifier l'adresse distante réellement
+        # rapportée par la socket, pas seulement l'argument de connexion.
+        adresse_distante = stream.get_extra_info("server_addr")
+        try:
+            ip_reelle = ipaddress.ip_address(str(adresse_distante[0]).split("%")[0])
+            ip_attendue = ipaddress.ip_address(ip_epinglee)
+        except (TypeError, ValueError, IndexError):
+            await stream.aclose()
+            raise ErreurEpingle(
+                "Adresse distante de la socket indisponible : connexion refusée"
+            )
+        if ip_reelle != ip_attendue:
+            await stream.aclose()
+            raise ErreurEpingle(
+                f"IP socket inattendue ({ip_reelle}) ; IP épinglée ({ip_attendue}) requise"
+            )
+        return stream
 
 
 def _construire_transport_production(epingle: _BackendEpingle) -> httpx.AsyncBaseTransport:
