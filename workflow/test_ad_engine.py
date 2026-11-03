@@ -78,7 +78,7 @@ def test_annonce_exige_un_taux_pour_une_devise_differente(monkeypatch):
     ad = ad_engine.generer_annonce(
         product, "en", "US", taux={"EUR": 1.0, "USD": 1.1})
     assert ad["devise"] == "USD"
-    assert "$" in ad["accroche"]
+    assert "$27.50" in ad["accroche"]
 
 
 def test_campagne_payante_budget_zero():

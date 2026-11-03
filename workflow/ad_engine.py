@@ -88,7 +88,7 @@ MODELES_ANNONCES = {
 }
 
 
-def _prix_localise(p: Produit, devise_cible: str, taux: dict | None) -> str:
+def _prix_localise(p: Produit, devise_cible: str, taux: dict | None, lang: str) -> str:
     if p.devise_prix not in CURRENCIES:
         raise ValueError("Devise source du produit inconnue : " + p.devise_prix)
     if devise_cible not in CURRENCIES:
@@ -101,7 +101,7 @@ def _prix_localise(p: Produit, devise_cible: str, taux: dict | None) -> str:
                 + p.devise_prix + "->" + devise_cible
             )
         montant = convert(montant, p.devise_prix, devise_cible, taux)
-    return format_price(montant, devise_cible)
+    return format_price(montant, devise_cible, lang)
 
 
 def generer_annonce(
@@ -123,7 +123,7 @@ def generer_annonce(
         raise ValueError("Aucune devise locale commerciale identifiee : " + pays)
 
     model = MODELES_ANNONCES[lang]
-    price = _prix_localise(p, country.currency, taux)
+    price = _prix_localise(p, country.currency, taux, lang)
     return {
         "sku": p.sku,
         "lang": lang,
