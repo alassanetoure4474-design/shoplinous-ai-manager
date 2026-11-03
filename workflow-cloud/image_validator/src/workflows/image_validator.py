@@ -30,6 +30,7 @@ Lecture seule : aucun achat, aucune commande, aucun paiement, aucune ecriture.
 """
 
 from __future__ import annotations
+
 import asyncio
 import importlib
 import ipaddress
@@ -41,6 +42,43 @@ from typing import Awaitable, Callable, Optional
 from pydantic import BaseModel, Field
 
 import httpx
+
+try:  # production : SDK Mistral Workflows reellement installe
+    import mistralai.workflows as workflows
+except ImportError:
+    if os.environ.get("SHOPLINOUS_TEST_MODE") != "1":
+        raise RuntimeError("SDK mistralai-workflows absent : demarrage production refuse")
+    # Tests unitaires uniquement : shim explicite, jamais en production.
+    class _RepliWorkflows:
+        """Shim hors-ligne pour les tests unitaires (SDK non installe).
+
+        Les decorateurs deviennent des identites : les fonctions et classes
+        restent inchangees, seule la declaration Mistral est ignoree. En
+        production, le SDK reel est importe et les decorateurs s'appliquent.
+        """
+
+        class _FabriqueActivite:
+            def __call__(self, fonction):
+                return fonction
+
+        class _FabriqueWorkflow:
+            @staticmethod
+            def define(**kwargs):
+                def decorateur(cls):
+                    return cls
+                return decorateur
+
+            @staticmethod
+            def entrypoint(fonction):
+                return fonction
+
+        def activity(self, *args, **kwargs):
+            return self._FabriqueActivite()
+
+        workflow = _FabriqueWorkflow()
+
+    workflows = _RepliWorkflows()
+
 
 def _charger_classe_backend_asynchrone():
     """Charge la classe de backend reseau asynchrone d'httpcore, quel que
