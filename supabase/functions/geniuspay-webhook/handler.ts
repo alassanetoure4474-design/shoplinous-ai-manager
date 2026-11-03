@@ -78,10 +78,11 @@ export function phpJsonEncode(value: unknown): string {
     throw new Error("Webhook payload cannot be serialized");
   }
   return compact
-    .replace(/\\//g, "\\\\/")
-    .replace(/[\\u007f-\\uffff]/g, (character) =>
-      "\\\\u" + character.charCodeAt(0).toString(16).padStart(4, "0")
+    .replace(/\//g, "\\/")
+    .replace(/[\u007f-\uffff]/g, (character) =>
+      "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0")
     );
+
 }
 
 async function sha256Hex(value: string): Promise<string> {
