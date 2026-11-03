@@ -68,11 +68,8 @@ class SupabaseStore:
             try:
                 named_keys = json.loads(encoded_keys) if encoded_keys else {}
                 if isinstance(named_keys, dict):
-                    service_key = named_keys.get("default") or next(
-                        (value for value in named_keys.values()
-                         if isinstance(value, str)),
-                        "",
-                    )
+                    default_key = named_keys.get("default")
+                    service_key = default_key if isinstance(default_key, str) else ""
             except (TypeError, ValueError):
                 service_key = ""
         return cls(
@@ -86,10 +83,14 @@ class SupabaseStore:
             raise ValueError("Nom de fonction RPC invalide")
         headers = {
             "apikey": self._service_key,
-            "Authorization": "Bearer " + self._service_key,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        # New Supabase sb_secret_* keys are API keys, not JWTs. Supabase
+        # explicitly requires them on apikey only; legacy service_role JWTs
+        # still use both apikey and Authorization.
+        if not self._service_key.startswith("sb_secret_"):
+            headers["Authorization"] = "Bearer " + self._service_key
         try:
             with httpx.Client(
                 timeout=self.timeout,
