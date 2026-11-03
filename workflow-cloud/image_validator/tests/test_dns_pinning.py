@@ -257,3 +257,77 @@ def test_reel_epingle_cj_tls_sni_certificat():
         f"Preuve reseau reel CJ impossible apres 3 essais : "
         f"{type(derniere).__name__} : {derniere}"
     )
+
+
+# ---------------- preuve fonctionnelle end-to-end (CI uniquement)
+URLS_IMAGES_CJ_REELLES = [
+    # Images produits CJ REELLES issues de sources publiques officielles
+    # (exemples de la documentation API CJDropshipping et dedepots publics) :
+    # aucune URL n'est inventee ici.
+    "https://cf.cjdropshipping.com/17177184/2406070111370327000.jpg",
+    "https://cf.cjdropshipping.com/17177184/2406070111380321900.jpg",
+    "https://cf.cjdropshipping.com/17177184/2406070111380323400.jpg",
+    "https://cf.cjdropshipping.com/17177184/2406070111380324800.jpg",
+    "https://cf.cjdropshipping.com/6e8c1a72-dbc7-4cce-8e6a-9e98f7fa4fed.jpg",
+]
+
+
+@pytest.mark.reseau_reel
+@pytest.mark.skipif(
+    os.environ.get("TEST_RESEAU_REEL") != "1",
+    reason="test reseau reel : activer avec TEST_RESEAU_REEL=1 (CI)",
+)
+def test_reel_validation_complete_image_cj():
+    """Preuve fonctionnelle END-TO-END exigeant valide=True.
+
+    Une veritable image produit CJ passe par la fonction REELLE de
+    validation (`_verifier_une_image`, chemin de production : transport
+    HTTPX epingle construit par `_construire_transport_production` +
+    DNS pinning + TLS/SNI/certificat du domaine d'origine). valide=True
+    exige deja internement : statut HTTP 200, Content-Type image/*,
+    signature binaire reelle valide et taille >= 1024 octets.
+
+    Les preuves (statut, type, taille, verdict) sont publiees dans les
+    logs CI et remontees en annotations publiques par le grep du workflow.
+    """
+    import time as _time
+    import traceback as _tb
+
+    derniere_echec = None
+    for passe in range(2):
+        for url in URLS_IMAGES_CJ_REELLES:
+            try:
+                resultat = asyncio.run(iv._verifier_une_image(url))
+                print(
+                    f"VALIDATION_REELLE passe={passe + 1} url={url} "
+                    f"statut={resultat.statut_http} type={resultat.type_mime} "
+                    f"taille={resultat.taille_octets} valide={resultat.valide} "
+                    f"motif={resultat.motif_echec}"
+                )
+                assert isinstance(resultat.statut_http, int)
+                assert resultat.statut_http == 200, (
+                    f"statut {resultat.statut_http} != 200 : {resultat.motif_echec}"
+                )
+                assert (resultat.type_mime or "").startswith("image/")
+                assert resultat.taille_octets >= 1024
+                assert resultat.valide is True
+                print(
+                    "PREUVE_FINALE : image CJ reelle validee par la fonction "
+                    f"reelle de validation (valide=True, {resultat.taille_octets} "
+                    f"octets, {resultat.type_mime}, statut {resultat.statut_http})"
+                )
+                return
+            except AssertionError:
+                raise
+            except Exception as exc:
+                derniere_echec = f"{url} -> {type(exc).__name__} : {exc}"
+                print(
+                    f"VALIDATION_REELLE exception passe={passe + 1} url={url} : "
+                    f"{type(exc).__name__} : {exc}"
+                )
+                _tb.print_exc()
+        _time.sleep(3)
+    raise AssertionError(
+        "Aucune image produit CJ reelle n'a ete validee end-to-end : "
+        f"{derniere_echec}"
+    )
