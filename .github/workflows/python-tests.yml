@@ -70,12 +70,10 @@ jobs:
         run: python -m pip install --upgrade pip
 
       - name: Installer les dependances (runtime requirements.txt)
-        run: pip install -r re
-quirements.txt
+        run: pip install -r requirements.txt
 
       - name: Installer les dependances tests (requirements-dev.txt)
-        run: pip inst
-all -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Executer la suite pytest COMPLETE (decouverte automatique)
         run: |
