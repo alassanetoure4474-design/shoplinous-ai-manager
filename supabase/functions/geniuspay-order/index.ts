@@ -530,8 +530,8 @@ async function handleStart(req: StartRequest): Promise<Response> {
       p_checkout_url: checkout.checkout_url,
       p_environment: "sandbox",
     });
-  } catch (_) {
-    return json({ error: "checkout_finalization_failed" }, 503);
+  } catch (err) {
+    return json({ error: "checkout_finalization_failed", detail: err instanceof SupabaseRpcError ? err.message.slice(0, 160) : String(err).slice(0, 120) }, 503);
   }
 
   if (simulated) {

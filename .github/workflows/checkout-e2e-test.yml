@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Installer httpx
+        run: python3 -m pip install --quiet httpx
+
       - name: Diagnostic compte GeniusPay (lecture seule)
         env:
           GENIUSPAY_API_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
@@ -42,9 +45,6 @@ jobs:
           curl -fsSL https://github.com/supabase/cli/releases/download/v2.121.0/supabase_linux_amd64.tar.gz -o /tmp/sb.tar.gz
           tar -xzf /tmp/sb.tar.gz -C /usr/local/bin supabase
           supabase --version
-
-      - name: Installer httpx
-        run: python3 -m pip install --quiet httpx
 
       - name: Synchroniser le webhook et son secret
         env:
