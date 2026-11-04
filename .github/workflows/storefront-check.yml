@@ -56,6 +56,7 @@ jobs:
               "catalogue.html": "catalogue",
               "produit.html": "produit",
               "panier.html": "panier",
+              "favoris.html": "favoris",
           }
           for filename, page in expected.items():
               parser = PageCheck()
@@ -63,6 +64,26 @@ jobs:
               assert parser.shop_page == page, f"{filename}: data-shop-page missing"
               assert parser.has_styles, f"{filename}: shop.css missing"
               assert parser.has_script, f"{filename}: shop.js missing"
+          editorial = [
+              "a-propos.html",
+              "contact.html",
+              "faq.html",
+              "blog.html",
+              "livraison.html",
+              "cgv.html",
+              "confidentialite.html",
+              "remboursement.html",
+              "commande.html",
+              "connexion.html",
+              "compte.html",
+          ]
+          for filename in editorial:
+              text = (Path("storefront") / filename).read_text(encoding="utf-8")
+              assert 'lang="fr"' in text, f"{filename}: lang=fr missing"
+              assert 'name="description"' in text, f"{filename}: meta description missing"
+              assert "shop.css" in text, f"{filename}: shop.css missing"
+              assert "pages.css" in text, f"{filename}: pages.css missing"
+              assert "contact.html" in text, f"{filename}: contact link missing"
           config = Path("storefront/config.js").read_text(encoding="utf-8")
           assert "service_role" not in config, "A service role key must never be put in browser config"
           home = Path("storefront/index.html").read_text(encoding="utf-8")
@@ -72,6 +93,11 @@ jobs:
           assert Path("storefront/animations.js").exists(), "Animation controller missing"
           assert Path("storefront/assets/logo-animated.svg").exists(), "Animated logo SVG missing"
           assert Path("storefront/assets/hero-motion.svg").exists(), "Animated hero SVG missing"
+          assert Path("storefront/pages.css").exists(), "Editorial page styles missing"
+          shopjs = Path("storefront/shop.js").read_text(encoding="utf-8")
+          assert "shoplinous_favs_v1" in shopjs, "Favorites storage missing from shop.js"
+          assert "renderFavs" in shopjs, "Favorites renderer missing from shop.js"
+          assert "checkout.disabled=true" in shopjs.replace(" ", "") or "checkout.disabled = true" in shopjs, "Checkout must stay disabled until server-side payment is validated"
           migration = Path("supabase/migrations/20261104000500_storefront_public_catalog.sql")
           assert migration.exists(), "Public catalogue migration missing"
           print("STOREFRONT_STATIC_CHECKS_OK")

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<meta name="description" content="Finalisez votre commande SHOPLINOUS AFRICA : vérification du panier, paiement GeniusPay sécurisé et confirmation par le serveur.">
+<meta property="og:title" content="Commande | SHOPLINOUS AFRICA">
+<meta property="og:description" content="Finalisez votre commande SHOPLINOUS AFRICA : vérification du panier, paiement GeniusPay sécurisé et confirmation par le serveur.">
+<meta property="og:type" content="website">
+<title>Commande | SHOPLINOUS AFRICA</title>
+<link rel="stylesheet" href="shop.css"><link rel="stylesheet" href="pages.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="topline">Découvrez plus. Vivez mieux.</div>
+<header>
+<nav class="nav" aria-label="Navigation principale">
+<a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+<div class="navlinks" id="navlinks">
+<a href="index.html">Accueil</a>
+<a href="catalogue.html">Catalogue</a>
+<a href="favoris.html">Favoris</a>
+<a href="panier.html">Mon panier</a>
+<a href="contact.html">Contact</a>
+</div>
+<a class="nav-cta" href="panier.html">Mon panier ↗</a>
+<button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+</nav>
+</header>
+<main class="shop-wrap"><div class="page-hero"><div class="shop-eyebrow">Passer commande</div><h1>Votre commande, en toute sécurité</h1><p class="shop-muted">Le parcours de commande est activé uniquement après la mise en service du serveur de commande et du paiement en environnement de test.</p></div>
+<div class="page-prose">
+<h2>Le parcours prévu</h2>
+<ul>
+<li><strong>1. Récapitulatif</strong> : votre panier, votre adresse et les frais de livraison réels calculés pour votre pays.</li>
+<li><strong>2. Paiement GeniusPay</strong> : Wave, Orange Money / MTN Mobile Money ou carte, selon les moyens réellement activés pour votre pays.</li>
+<li><strong>3. Vérification serveur</strong> : la notification de paiement est contrôlée (signature, montant, devise, référence).</li>
+<li><strong>4. Confirmation</strong> : votre commande est confirmée, transmise au fournisseur et suivie jusqu'à votre adresse.</li>
+</ul>
+<div class="disabled-note">La commande en ligne n'est pas encore activée. Le bouton de paiement restera désactivé jusqu'à la validation complète du parcours en environnement de test (Sandbox) — aucun paiement réel ne peut être déclenché depuis cette page.</div>
+<div class="form-static">
+<button class="btn-pill" type="button" disabled>Passer au paiement</button>
+<p class="note">Une commande n'est considérée comme payée qu'après vérification par notre serveur. Le bouton de paiement sera activé après validation du serveur de commande et des paiements en mode test.</p>
+</div>
+</div></main>
+<footer><div class="footer-inner">
+<div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div>
+<div class="footer-cols">
+<div><a href="catalogue.html">Catalogue</a><a href="favoris.html">Favoris</a><a href="panier.html">Panier</a><a href="blog.html">Blog</a></div>
+<div><a href="a-propos.html">À propos</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a></div>
+<div><a href="cgv.html">CGV</a><a href="confidentialite.html">Confidentialité</a><a href="livraison.html">Livraison</a><a href="remboursement.html">Remboursements</a></div>
+</div>
+<div><p>© <span id="year"></span> SHOPLINOUS AFRICA — Abidjan, Côte d'Ivoire.</p></div>
+</div></footer>
+<script>
+const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

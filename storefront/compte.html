@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<meta name="description" content="Créez votre compte client SHOPLINOUS AFRICA : commandes, suivi de livraison, adresses et favoris.">
+<meta property="og:title" content="Créer un compte | SHOPLINOUS AFRICA">
+<meta property="og:description" content="Créez votre compte client SHOPLINOUS AFRICA : commandes, suivi de livraison, adresses et favoris.">
+<meta property="og:type" content="website">
+<title>Créer un compte | SHOPLINOUS AFRICA</title>
+<link rel="stylesheet" href="shop.css"><link rel="stylesheet" href="pages.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="topline">Découvrez plus. Vivez mieux.</div>
+<header>
+<nav class="nav" aria-label="Navigation principale">
+<a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+<div class="navlinks" id="navlinks">
+<a href="index.html">Accueil</a>
+<a href="catalogue.html">Catalogue</a>
+<a href="favoris.html">Favoris</a>
+<a href="panier.html">Mon panier</a>
+<a href="contact.html">Contact</a>
+</div>
+<a class="nav-cta" href="panier.html">Mon panier ↗</a>
+<button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+</nav>
+</header>
+<main class="shop-wrap"><div class="page-hero"><div class="shop-eyebrow">Espace client</div><h1>Créer mon compte</h1><p class="shop-muted">Un compte pour suivre vos commandes, vos colis et vos coups de cœur.</p></div>
+<div class="page-prose">
+<form class="form-static" aria-label="Formulaire de création de compte">
+<label for="s-nom">Nom complet</label><input id="s-nom" type="text" autocomplete="name" required>
+<label for="s-email">Adresse e-mail</label><input id="s-email" type="email" autocomplete="email" required>
+<label for="s-pass">Mot de passe</label><input id="s-pass" type="password" autocomplete="new-password" required>
+<button class="btn-pill" type="submit" disabled>Créer mon compte</button>
+</form>
+<div class="disabled-note">La création de compte sera activée avec l'authentification sécurisée de la plateforme. Aucune donnée saisie ici n'est transmise tant que le service n'est pas activé.</div>
+<h2>Ce que permettra votre espace client</h2>
+<ul>
+<li>Consulter l'historique et le suivi de vos commandes.</li>
+<li>Enregistrer vos adresses de livraison.</li>
+<li>Retrouver vos favoris sur tous vos appareils.</li>
+<li>Télécharger vos justificatifs et contacter le service client.</li>
+</ul>
+</div></main>
+<footer><div class="footer-inner">
+<div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div>
+<div class="footer-cols">
+<div><a href="catalogue.html">Catalogue</a><a href="favoris.html">Favoris</a><a href="panier.html">Panier</a><a href="blog.html">Blog</a></div>
+<div><a href="a-propos.html">À propos</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a></div>
+<div><a href="cgv.html">CGV</a><a href="confidentialite.html">Confidentialité</a><a href="livraison.html">Livraison</a><a href="remboursement.html">Remboursements</a></div>
+</div>
+<div><p>© <span id="year"></span> SHOPLINOUS AFRICA — Abidjan, Côte d'Ivoire.</p></div>
+</div></footer>
+<script>
+const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

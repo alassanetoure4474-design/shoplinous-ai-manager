@@ -6,6 +6,7 @@
   const cfg = window.SHOPLINOUS_CONFIG || {};
   const fields = "id,slug,market_code,name,short_description,description,category_slug,price,currency,image_urls,published_at";
   const cartKey = "shoplinous_cart_v1";
+  const favKey = "shoplinous_favs_v1";
   const marketKey = "shoplinous_market_v1";
   const getMarket = () => { try { return localStorage.getItem(marketKey) || "CI"; } catch (_) { return "CI"; } };
   const setMarket = value => { try { localStorage.setItem(marketKey, value); } catch (_) {} };
@@ -27,7 +28,7 @@
     try { return new Intl.NumberFormat("fr-FR", {style:"currency",currency}).format(Number(amount)); }
     catch (_) { return Number(amount).toFixed(2) + " " + currency; }
   };
-  const imageUrl = (urls) => Array.isArray(urls) ? urls.find(u => typeof u === "string" && /^https:\/\//i.test(u)) : null;
+  const imageUrl = (urls) => Array.isArray(urls) ? urls.find(u => typeof u === "string" && /^https:///i.test(u)) : null;
   const getCart = () => {
     try {
       const value = JSON.parse(localStorage.getItem(cartKey) || "[]");
@@ -35,11 +36,18 @@
     } catch (_) { return []; }
   };
   const saveCart = (items) => { try { localStorage.setItem(cartKey, JSON.stringify(items)); } catch (_) {} };
+  const getFavs = () => {
+    try {
+      const value = JSON.parse(localStorage.getItem(favKey) || "[]");
+      return Array.isArray(value) ? value.filter(x => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)) : [];
+    } catch (_) { return []; }
+  };
+  const saveFavs = (ids) => { try { localStorage.setItem(favKey, JSON.stringify(ids)); } catch (_) {} };
   const api = async (query) => {
-    if (!/^https:\/\//i.test(cfg.supabaseUrl || "") || !(cfg.supabaseAnonKey || "").trim()) {
+    if (!/^https:///i.test(cfg.supabaseUrl || "") || !(cfg.supabaseAnonKey || "").trim()) {
       throw new Error("catalogue_not_configured");
     }
-    const base = cfg.supabaseUrl.replace(/\/$/, "");
+    const base = cfg.supabaseUrl.replace(//$/, "");
     const response = await fetch(base + "/rest/v1/storefront_products?" + query, {
       headers: { apikey: cfg.supabaseAnonKey, accept: "application/json" }
     });
@@ -101,7 +109,7 @@
       const rows = await api("select="+encodeURIComponent(fields)+"&slug=eq."+encodeURIComponent(slug)+"&market_code=eq."+encodeURIComponent(market)+"&limit=1");
       const p=rows[0]; if(!p){message("Produit indisponible","Cette référence n'est plus publiée ou ses vérifications doivent être renouvelées.");return;}
       const wrap=el("div","shop-product"),gallery=el("div","shop-gallery"),detail=el("div","shop-detail");
-      const urls=(p.image_urls||[]).filter(u=>typeof u==="string"&&/^https:\/\//i.test(u));
+      const urls=(p.image_urls||[]).filter(u=>typeof u==="string"&&/^https:///i.test(u));
       const main=el("img");main.src=urls[0]||"";main.alt=p.name;main.loading="eager";gallery.append(main);
       if(urls.length>1){const thumbs=el("div","shop-thumbs");urls.forEach((u,i)=>{const b=el("button");b.type="button";b.setAttribute("aria-label","Voir image "+(i+1));const im=el("img");im.src=u;im.alt="";b.append(im);b.addEventListener("click",()=>{main.src=u;});thumbs.append(b);});gallery.append(thumbs);}
       detail.append(link("catalogue.html","← Retour au catalogue","shop-breadcrumb"));
@@ -121,9 +129,50 @@
         if(existing)existing.qty=Math.min(5,existing.qty+n);else cart.push({id:p.id,slug:p.slug,market:p.market_code,qty:n});
         saveCart(cart);add.textContent="Ajouté au panier ✓";setTimeout(()=>{add.textContent="Ajouter au panier";},1600);
       });
-      detail.append(qtyWrap,add,el("p","shop-footer-note","L'ajout au panier ne réserve pas le stock et ne déclenche aucun paiement."));
+      const favBtn=el("button","shop-action","Ajouter aux favoris ♡");favBtn.type="button";
+      const syncFav=()=>{const on=getFavs().includes(p.id);favBtn.textContent=on?"Retirer des favoris ♥":"Ajouter aux favoris ♡";favBtn.setAttribute("aria-pressed",String(on));};
+      favBtn.addEventListener("click",()=>{
+        const favs=getFavs();const i=favs.indexOf(p.id);
+        if(i>=0)favs.splice(i,1);else favs.push(p.id);
+        saveFavs(favs);syncFav();
+      });
+      syncFav();
+      detail.append(qtyWrap,add,favBtn,el("p","shop-footer-note","L'ajout au panier ne réserve pas le stock et ne déclenche aucun paiement. Les favoris restent enregistrés dans ce navigateur."));
       wrap.append(gallery,detail);root.replaceChildren(wrap);
     } catch (_) { message("Fiche produit indisponible","La connexion au catalogue n'est pas encore configurée ou la référence n'est plus publiée."); }
+  };
+  const renderFavs = async () => {
+    const favs = getFavs();
+    if (!favs.length) {
+      message("Aucun favori pour le moment","Ajoutez vos coups de cœur depuis les fiches produit : le bouton « Ajouter aux favoris » y est disponible.");
+      root.append(link("catalogue.html","Découvrir le catalogue ↗","shop-link"));
+      return;
+    }
+    try {
+      const rows = await api("select="+encodeURIComponent(fields)+"&id=in.("+favs.join(",")+")");
+      const heading=el("div","shop-heading");
+      const left=el("div");
+      left.append(el("div","shop-eyebrow","Vos coups de cœur"),el("h1","","Mes favoris"),el("p","shop-muted","Seuls les produits encore publiés et vérifiés sont affichés. Les autres sont retirés de la liste."));
+      heading.append(left);
+      const grid=el("div","shop-grid");
+      rows.forEach(p=>{
+        const card=makeCard(p);
+        const remove=el("button","shop-link","Retirer des favoris");
+        remove.type="button";
+        remove.addEventListener("click",()=>{saveFavs(getFavs().filter(id=>id!==p.id));renderFavs();});
+        if(card.querySelector(".shop-card-body"))card.querySelector(".shop-card-body").append(remove);
+        grid.append(card);
+      });
+      saveFavs(rows.map(p=>p.id));
+      if(!rows.length){
+        message("Favoris à actualiser","Les références enregistrées ne sont plus publiées. Parcourez le catalogue pour retrouver vos découvertes.");
+        root.append(link("catalogue.html","Découvrir le catalogue ↗","shop-link"));
+        return;
+      }
+      root.replaceChildren(heading,grid);
+    } catch (_) {
+      message("Favoris indisponibles","La connexion au catalogue n'est pas encore configurée. Vos favoris restent enregistrés dans ce navigateur et seront visibles dès l'ouverture du catalogue.");
+    }
   };
   const renderCart = async () => {
     const cart=getCart();
@@ -159,5 +208,6 @@
   };
   if(page==="catalogue") renderCatalog();
   else if(page==="produit") renderProduct();
+  else if(page==="favoris") renderFavs();
   else if(page==="panier") renderCart();
 })();
