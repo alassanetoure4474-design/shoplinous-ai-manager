@@ -28,7 +28,7 @@
     try { return new Intl.NumberFormat("fr-FR", {style:"currency",currency}).format(Number(amount)); }
     catch (_) { return Number(amount).toFixed(2) + " " + currency; }
   };
-  const imageUrl = (urls) => Array.isArray(urls) ? urls.find(u => typeof u === "string" && /^https:///i.test(u)) : null;
+  const imageUrl = (urls) => Array.isArray(urls) ? urls.find(u => typeof u === "string" && /^https:\/\//i.test(u)) : null;
   const getCart = () => {
     try {
       const value = JSON.parse(localStorage.getItem(cartKey) || "[]");
@@ -44,10 +44,10 @@
   };
   const saveFavs = (ids) => { try { localStorage.setItem(favKey, JSON.stringify(ids)); } catch (_) {} };
   const api = async (query) => {
-    if (!/^https:///i.test(cfg.supabaseUrl || "") || !(cfg.supabaseAnonKey || "").trim()) {
+    if (!/^https:\/\//i.test(cfg.supabaseUrl || "") || !(cfg.supabaseAnonKey || "").trim()) {
       throw new Error("catalogue_not_configured");
     }
-    const base = cfg.supabaseUrl.replace(//$/, "");
+    const base = cfg.supabaseUrl.replace(/\/$/, "");
     const response = await fetch(base + "/rest/v1/storefront_products?" + query, {
       headers: { apikey: cfg.supabaseAnonKey, accept: "application/json" }
     });
@@ -109,7 +109,7 @@
       const rows = await api("select="+encodeURIComponent(fields)+"&slug=eq."+encodeURIComponent(slug)+"&market_code=eq."+encodeURIComponent(market)+"&limit=1");
       const p=rows[0]; if(!p){message("Produit indisponible","Cette référence n'est plus publiée ou ses vérifications doivent être renouvelées.");return;}
       const wrap=el("div","shop-product"),gallery=el("div","shop-gallery"),detail=el("div","shop-detail");
-      const urls=(p.image_urls||[]).filter(u=>typeof u==="string"&&/^https:///i.test(u));
+      const urls=(p.image_urls||[]).filter(u=>typeof u==="string"&&/^https:\/\//i.test(u));
       const main=el("img");main.src=urls[0]||"";main.alt=p.name;main.loading="eager";gallery.append(main);
       if(urls.length>1){const thumbs=el("div","shop-thumbs");urls.forEach((u,i)=>{const b=el("button");b.type="button";b.setAttribute("aria-label","Voir image "+(i+1));const im=el("img");im.src=u;im.alt="";b.append(im);b.addEventListener("click",()=>{main.src=u;});thumbs.append(b);});gallery.append(thumbs);}
       detail.append(link("catalogue.html","← Retour au catalogue","shop-breadcrumb"));
