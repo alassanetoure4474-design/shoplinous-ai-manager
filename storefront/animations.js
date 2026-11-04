@@ -34,6 +34,7 @@
     reset.addEventListener("click", () => { current = 0; render(); });
     render();
   }
+  document.documentElement.classList.add("motion-ready");
   const revealItems = document.querySelectorAll("[data-reveal]");
   if (reduceMotion || !("IntersectionObserver" in window)) {
     revealItems.forEach(item => item.classList.add("is-visible"));
