@@ -105,6 +105,28 @@ jobs:
             echo "::notice::Migration $version appliquee via API Management"
           done
 
+      - name: Verifier les RPC du checkout en base
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          set +e
+          API="https://api.supabase.com/api/v1/projects/$PROJECT_ID/database/query"
+          payload=$(jq -n --arg q "select proname from pg_proc where proname in ('shoplinous_reserve_payment','shoplinous_finalize_checkout','shoplinous_order_status','shoplinous_process_geniuspay_webhook')" '{query:$q}')
+          http=$(curl -s -o /tmp/rpc.json -w "%{http_code}" -X POST "$API" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+          cat /tmp/rpc.json
+          echo ""
+          count=$(grep -o "shoplinous_[a-z_]*" /tmp/rpc.json | sort -u | wc -l)
+          echo "RPC trouves : $count"
+          if [ "$http" != "200" ] || [ "$count" -lt 4 ]; then
+            echo "::error::RPC checkout manquants (code=$http, count=$count)"
+            exit 1
+          fi
+          echo "::notice::Les 4 RPC du checkout existent en base"
+
       - name: Deployer la fonction geniuspay-order
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
