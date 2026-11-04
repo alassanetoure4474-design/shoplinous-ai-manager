@@ -1,0 +1,22 @@
+[project]
+name = "shoplinous-image-validator"
+version = "0.3.1"
+description = "Validateur HTTP GET reel des images produits SHOPLINOUS (CJ + autres fournisseurs) avec DNS pinning"
+requires-python = ">=3.12"
+dependencies = [
+    "mistralai-workflows>=3.10",
+    "httpx>=0.27,<1.0",
+    "httpcore>=1.0,<2.0",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "reseau_reel: test avec reseau sortant reel (CI, TEST_RESEAU_REEL=1)",
+]
