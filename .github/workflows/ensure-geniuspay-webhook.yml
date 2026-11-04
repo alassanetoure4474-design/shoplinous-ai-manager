@@ -46,42 +46,43 @@ jobs:
 
       - name: Creer le webhook vers l'Edge Function (diagnostic complet)
         id: webhooks
-        run: python3 - <<'PY'
-import os, sys
-sys.path.insert(0, "workflow")
-import httpx
-from shoplinous_global.geniuspay import GeniusPayClient
-
-url = "https://giarkrdmwfrlagkqnkvi.supabase.co/functions/v1/geniuspay-webhook"
-try:
-    client = GeniusPayClient.from_env()
-    print("environnement: " + client.environment)
-    print("api_configured: " + str(client.api_configured))
-    headers = client._headers()
-    try:
-        resp = httpx.get(client.base_url + "/webhooks", headers=headers, timeout=20.0)
-        print("GET /webhooks -> HTTP " + str(resp.status_code))
-        print("  corps: " + resp.text[:300].replace(chr(10), " "))
-    except Exception as exc:
-        print("GET /webhooks -> " + type(exc).__name__)
-    data = client.creer_webhook(url=url, nom="SHOPLINOUS Edge Function webhook")
-    secret = str(data["secret"])
-    webhook_id = str(data.get("id") or data.get("webhook_id") or "")
-    print("::add-mask::" + secret)
-    if not webhook_id:
-        print("::error::Webhook cree sans identifiant ; test impossible")
-        raise SystemExit(1)
-    print("Webhook cree vers l'Edge Function (id " + webhook_id + ", secret masque).")
-except SystemExit:
-    raise
-except BaseException as exc:
-    print("::error::ETAPE_WEBHOOKS_ECHEC " + type(exc).__name__ + ": " + str(exc)[:300])
-    raise SystemExit(1)
-
-with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
-    output.write("GP_WEBHOOK_ID=" + webhook_id + chr(10))
-    output.write("GP_NEW_SECRET=" + secret + chr(10))
-PY
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "workflow")
+          import httpx
+          from shoplinous_global.geniuspay import GeniusPayClient
+          
+          url = "https://giarkrdmwfrlagkqnkvi.supabase.co/functions/v1/geniuspay-webhook"
+          try:
+              client = GeniusPayClient.from_env()
+              print("environnement: " + client.environment)
+              print("api_configured: " + str(client.api_configured))
+              headers = client._headers()
+              try:
+                  resp = httpx.get(client.base_url + "/webhooks", headers=headers, timeout=20.0)
+                  print("GET /webhooks -> HTTP " + str(resp.status_code))
+                  print("  corps: " + resp.text[:300].replace(chr(10), " "))
+              except Exception as exc:
+                  print("GET /webhooks -> " + type(exc).__name__)
+              data = client.creer_webhook(url=url, nom="SHOPLINOUS Edge Function webhook")
+              secret = str(data["secret"])
+              webhook_id = str(data.get("id") or data.get("webhook_id") or "")
+              print("::add-mask::" + secret)
+              if not webhook_id:
+                  print("::error::Webhook cree sans identifiant ; test impossible")
+                  raise SystemExit(1)
+              print("Webhook cree vers l'Edge Function (id " + webhook_id + ", secret masque).")
+          except SystemExit:
+              raise
+          except BaseException as exc:
+              print("::error::ETAPE_WEBHOOKS_ECHEC " + type(exc).__name__ + ": " + str(exc)[:300])
+              raise SystemExit(1)
+          
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write("GP_WEBHOOK_ID=" + webhook_id + chr(10))
+              output.write("GP_NEW_SECRET=" + secret + chr(10))
+          PY
 
       - name: Pousser le secret du webhook vers Supabase
         if: env.GP_NEW_SECRET != ''
@@ -89,18 +90,19 @@ PY
 
       - name: Envoyer un evenement webhook.test signe a l'Edge Function
         if: env.GP_WEBHOOK_ID != ''
-        run: python3 - <<'PY'
-import os, sys
-sys.path.insert(0, "workflow")
-import httpx
-from shoplinous_global.geniuspay import GeniusPayClient
-client = GeniusPayClient.from_env()
-webhook_id = os.environ["GP_WEBHOOK_ID"]
-with httpx.Client(timeout=20.0) as http:
-    resp = http.post(client.base_url + "/webhooks/" + webhook_id + "/test", headers=client._headers())
-print("HTTP " + str(resp.status_code) + " pour POST /webhooks/.../test")
-if resp.status_code < 200 or resp.status_code >= 300:
-    print("::error::TEST_WEBHOOK_REFUSE HTTP " + str(resp.status_code))
-    raise SystemExit(1)
-print("WEBHOOK_TEST_E2E_OK : evenement webhook.test signe envoye vers l'Edge Function Supabase.")
-PY
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "workflow")
+          import httpx
+          from shoplinous_global.geniuspay import GeniusPayClient
+          client = GeniusPayClient.from_env()
+          webhook_id = os.environ["GP_WEBHOOK_ID"]
+          with httpx.Client(timeout=20.0) as http:
+              resp = http.post(client.base_url + "/webhooks/" + webhook_id + "/test", headers=client._headers())
+          print("HTTP " + str(resp.status_code) + " pour POST /webhooks/.../test")
+          if resp.status_code < 200 or resp.status_code >= 300:
+              print("::error::TEST_WEBHOOK_REFUSE HTTP " + str(resp.status_code))
+              raise SystemExit(1)
+          print("WEBHOOK_TEST_E2E_OK : evenement webhook.test signe envoye vers l'Edge Function Supabase.")
+          PY
