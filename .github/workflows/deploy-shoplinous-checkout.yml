@@ -73,20 +73,23 @@ jobs:
         env:
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
-          set -e
+          set +e
           FUNC="https://$PROJECT_ID.supabase.co/functions/v1/db-migrate"
           run_sql() {
             payload=$(jq -n --arg t "$MIGRATE_TOKEN" --arg q "$1" '{token:$t, sql:$q}')
             curl -s -o /tmp/q.json -w "%{http_code}" -X POST "$FUNC" -H "content-type: application/json" -d "$payload"
           }
-          http=$(run_sql "select version from supabase_migrations.schema_migrations") || true
+          http=$(run_sql "select version from supabase_migrations.schema_migrations")
+          echo "Historique : HTTP $http"
+          echo "Corps : $(head -c 300 /tmp/q.json)"
           applied=""
           if grep -q '"ok": *true' /tmp/q.json; then
-            applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u || true)
+            applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u)
+            echo "Migrations deja appliquees : $applied"
           else
-            echo "::notice::Historique absent ou illisible : $(head -c 200 /tmp/q.json)"
+            echo "::notice::Historique absent ou illisible, toutes les migrations seront tentees"
           fi
-          echo "Migrations deja appliquees : $(echo $applied | tr '\n' ' ')"
+          fail=0
           for f in supabase/migrations/*.sql; do
             version=$(basename "$f" .sql)
             if echo "$applied" | grep -q "$version"; then
@@ -96,17 +99,20 @@ jobs:
             echo "Application de $version ..."
             sql=$(cat "$f")
             http=$(run_sql "$sql")
+            echo "Migration $version : HTTP $http"
+            echo "Corps : $(head -c 400 /tmp/q.json)"
             if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
-              echo "::error::Migration $version (HTTP $http) : $(head -c 400 /tmp/q.json)"
-              exit 1
+              echo "::error::Migration $version echouee (HTTP $http)"
+              fail=1
+              break
             fi
-            echo "Reponse: $(head -c 200 /tmp/q.json)"
             http=$(run_sql "insert into supabase_migrations.schema_migrations (version, statements) values ('$version', 1) on conflict (version) do nothing")
             if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
               echo "::notice::Historique indisponible pour $version (non bloquant)"
             fi
             echo "::notice::Migration $version appliquee via db-migrate"
           done
+          exit $fail
 
       - name: Verifier les RPC du checkout en base
         env:
