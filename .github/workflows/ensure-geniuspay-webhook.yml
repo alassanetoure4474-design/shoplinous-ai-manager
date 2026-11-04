@@ -43,19 +43,17 @@ jobs:
             echo "::error::Projet Supabase inattendu"; exit 1
           fi
 
-      - name: Creer le webhook vers l'Edge Function (idempotent, listing tolere)
+      - name: Creer le webhook vers l'Edge Function (listing tolere)
         id: webhooks
         shell: python
         run: |
-          import os, sys, json
+          import os, sys
           sys.path.insert(0, "workflow")
           from shoplinous_global.geniuspay import GeniusPayClient, GeniusPayError
 
           client = GeniusPayClient.from_env()
           url = "https://giarkrdmwfrlagkqnkvi.supabase.co/functions/v1/geniuspay-webhook"
 
-          # 1) Lister les webhooks existants en lecture seule, sans faire
-          # echouer le job si l'endpoint de liste n'est pas disponible.
           nb_webhooks = -1
           deja_present = False
           try:
@@ -72,13 +70,9 @@ jobs:
                   for it in items
               )
           except GeniusPayError as exc:
-              print("Listing /webhooks non disponible (" + str(exc) + ") ; poursuite.")
-          print("Webhooks existants connus : " + str(nb_webhooks)
-                + " ; deja_presents_vers_edge=" + str(deja_present))
+              print("Listing /webhooks non disponible ; poursuite.")
+          print("Webhooks connus : " + str(nb_webhooks) + "; deja_presents_vers_edge=" + str(deja_present))
 
-          # 2) Creer systematiquement un webhook a jour vers l'Edge Function
-          # (POST /webhooks, eprouve en sandbox) ; son secret devient la
-          # reference injectee dans Supabase, garantissant la coherence.
           data = client.creer_webhook(url=url, nom="SHOPLINOUS Edge Function webhook")
           secret = str(data["secret"])
           webhook_id = str(data.get("id") or data.get("webhook_id") or "")
@@ -89,10 +83,8 @@ jobs:
           print("Webhook cree vers l'Edge Function (id note, secret masque).")
 
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
-              output.write("GP_WEBHOOK_ID=" + webhook_id + "
-")
-              output.write("GP_NEW_SECRET=" + secret + "
-")
+              output.write("GP_WEBHOOK_ID=" + webhook_id + "\\n".replace("\\\\", "\\"))
+              output.write("GP_NEW_SECRET=" + secret + chr(10))
 
       - name: Pousser le secret du webhook vers Supabase
         if: env.GP_NEW_SECRET != ''
@@ -114,4 +106,4 @@ jobs:
           if resp.status_code < 200 or resp.status_code >= 300:
               print("::error::TEST_WEBHOOK_REFUSE HTTP " + str(resp.status_code))
               raise SystemExit(1)
-          print("WEBHOOK_TEST_E2E_OK : evenement webhook.test signe envoye par GeniusPay vers l'Edge Function Supabase.")
+          print("WEBHOOK_TEST_E2E_OK : evenement webhook.test signe envoye vers l'Edge Function Supabase.")
