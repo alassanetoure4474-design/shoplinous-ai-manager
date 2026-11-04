@@ -23,20 +23,21 @@ jobs:
           GENIUSPAY_ENVIRONMENT: sandbox
         run: |
           python3 - <<'PY'
-          import sys, json, traceback, urllib.request
+          import sys, json, traceback
           try:
               sys.path.insert(0, "workflow")
+              import httpx
               from shoplinous_global.geniuspay import GeniusPayClient
               client = GeniusPayClient.from_env()
-              req = urllib.request.Request(client.base_url + "/account")
-              for k, v in client._headers().items():
-                  req.add_header(k, v)
-              with urllib.request.urlopen(req, timeout=20) as resp:
-                  body = json.loads(resp.read().decode())
-                  data = body.get("data", body)
-                  print("::notice::COMPTE " + json.dumps(data, default=str)[:700])
+              compte = client.tester_connexion()
+              print("::notice::COMPTE " + json.dumps(compte, default=str)[:700])
           except Exception:
-              print("::warning::COMPTE diagnostic indisponible : " + traceback.format_exc()[:500].replace(chr(10), " | "))
+              print("::warning::COMPTE indisponible : " + traceback.format_exc()[:400].replace(chr(10), " | "))
+          try:
+              mm = client.fournisseurs_mobile_money()
+              print("::notice::MOBILE_MONEY " + json.dumps(mm, default=str)[:700])
+          except Exception:
+              print("::warning::MOBILE_MONEY indisponible : " + traceback.format_exc()[:400].replace(chr(10), " | "))
           PY
 
       - name: Installer la CLI Supabase
