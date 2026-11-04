@@ -79,12 +79,10 @@ jobs:
           code=$?
           echo "$output"
           if [ $code -ne 0 ]; then
-            output=$(supabase db push 2>&1)
-            code=$?
-            echo "$output"
-          fi
-          if [ $code -ne 0 ]; then
-            echo "::error::db push code=$code"
+            debut="${output:0:450}"
+            findel="${output: -450}"
+            echo "::error::db push code=$code debut: $debut"
+            echo "::error::db push fin: $findel"
             exit 1
           fi
           echo "::notice::Migrations appliquees"
