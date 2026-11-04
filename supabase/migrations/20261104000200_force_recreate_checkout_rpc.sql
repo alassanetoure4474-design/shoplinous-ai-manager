@@ -1,6 +1,9 @@
 -- Reconstruction idempotente du schema checkout : les RPC du
 -- 20261104000000 n'existaient pas en base (historique faux). Ce script
 -- re-applique contraintes + fonctions de facon re-executable.
+-- NOTE : la regex d'URL accepte aussi le domaine apex geniuspay.ci
+-- (aligne sur 20261104000300) pour eviter toute fenetre transitoire de
+-- regression lors des re-executions concurrentes de ce script.
 
 -- 1. Contraintes shoplinous_payments (drop-all puis re-add).
 do $$
@@ -235,7 +238,7 @@ begin
         raise exception 'invalid_checkout_reference' using errcode = '22023';
     end if;
     if p_checkout_url is null
-       or p_checkout_url !~ '^https://([a-z0-9-]+[.])+(geniuspay[.]ci|wave[.]com)(/|[$]|[?])' then
+       or p_checkout_url !~ '^https://([a-z0-9-]+[.])*(geniuspay[.]ci|wave[.]com)(/|[$]|[?])' then
         raise exception 'invalid_checkout_url' using errcode = '22023';
     end if;
     if lower(coalesce(p_environment, '')) <> 'sandbox' then
