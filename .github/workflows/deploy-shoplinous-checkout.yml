@@ -28,6 +28,9 @@ jobs:
           FW_KEY: ${{ secrets.FREEWEBSTORE_API_KEY }}
         run: |
           set +e
+          MIGRATE_TOKEN=$(openssl rand -hex 24)
+          echo "::add-mask::$MIGRATE_TOKEN"
+          echo "MIGRATE_TOKEN=$MIGRATE_TOKEN" >> "$GITHUB_ENV"
           args=""
           args="$args GENIUSPAY_API_KEY=${{ secrets.GENIUSPAY_API_KEY }}"
           args="$args GENIUSPAY_API_SECRET=${{ secrets.GENIUSPAY_API_SECRET }}"
@@ -35,96 +38,87 @@ jobs:
           args="$args GENIUSPAY_API_BASE=https://geniuspay.ci/api/v1/merchant"
           args="$args FREEWEBSTORE_API_BASE=https://api.freewebstore.com"
           args="$args GENIUSPAY_TEST_MODE=true"
+          args="$args DB_MIGRATE_TOKEN=$MIGRATE_TOKEN"
           if [ -n "$FW_KEY" ]; then
             args="$args FREEWEBSTORE_API_KEY=$FW_KEY"
             echo "::notice::FREEWEBSTORE_API_KEY pousse vers Supabase"
           else
             echo "::warning::Secret FREEWEBSTORE_API_KEY absent : le mode commandes Freewebstore reelles renverra 503 jusqu'a son ajout."
           fi
-          echo "Nombre de secrets a pousser : $(echo $args | wc -w)"
-          ver=$(supabase --version 2>&1)
-          echo "::notice::CLI $ver"
           out1=$(supabase secrets set $args --project-ref "$PROJECT_ID" 2>&1)
           c1=$?
           echo "$out1"
-          if [ $c1 -eq 0 ]; then
-            echo "::notice::secrets pousses (project-ref)"
-          else
-            out2=$(supabase secrets set $args --remote="$PROJECT_ID" 2>&1)
-            c2=$?
-            echo "$out2"
-            if [ $c2 -eq 0 ]; then
-              echo "::notice::secrets pousses (--remote)"
-            else
-              out3=$(supabase secrets set $args 2>&1)
-              c3=$?
-              echo "$out3"
-              if [ $c3 -eq 0 ]; then
-                echo "::notice::secrets pousses (env SUPABASE_PROJECT_ID)"
-              else
-                echo "::error::secrets set echoue avec les 3 syntaxes. v1: ${out1:0:200} | v2: ${out2:0:200} | v3: ${out3:0:200}"
-                exit 1
-              fi
-            fi
+          if [ $c1 -ne 0 ]; then
+            echo "::error::secrets set echoue"
+            exit 1
           fi
+          echo "::notice::secrets pousses (project-ref)"
 
-      - name: Appliquer les migrations via l'API Management (HTTPS)
+      - name: Deployer la fonction temporaire db-migrate
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           set +e
-          API="https://api.supabase.com/v1/projects/$PROJECT_ID/database/query"
-          AUTH="Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
-          CT="Content-Type: application/json"
-          req() {
-            payload=$(jq -n --arg q "$1" '{query:$q}')
-            curl -s -o /tmp/q.json -w "%{http_code}" -X POST "$API" -H "$AUTH" -H "$CT" -d "$payload"
+          output=$(supabase functions deploy db-migrate --no-verify-jwt --project-ref "$PROJECT_ID" 2>&1)
+          code=$?
+          echo "$output"
+          if [ $code -ne 0 ]; then
+            echo "::error::deploiement db-migrate code=$code"
+            exit 1
+          fi
+          echo "::notice::db-migrate deployee"
+
+      - name: Appliquer les migrations via db-migrate
+        env:
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          set -e
+          FUNC="https://$PROJECT_ID.supabase.co/functions/v1/db-migrate"
+          run_sql() {
+            payload=$(jq -n --arg t "$MIGRATE_TOKEN" --arg q "$1" '{token:$t, sql:$q}')
+            curl -s -o /tmp/q.json -w "%{http_code}" -X POST "$FUNC" -H "content-type: application/json" -d "$payload"
           }
-          http=$(req "select version from supabase_migrations.schema_migrations")
-          applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u)
-          echo "Migrations deja appliquees: $(echo $applied | tr '\n' ' ')"
+          http=$(run_sql "select version from supabase_migrations.schema_migrations" || true)
+          applied=""
+          if grep -q '"ok": *true' /tmp/q.json; then
+            applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u)
+          else
+            echo "::notice::Historique absent ou illisible : $(head -c 200 /tmp/q.json)"
+          fi
+          echo "Migrations deja appliquees : $(echo $applied | tr '\n' ' ')"
           for f in supabase/migrations/*.sql; do
             version=$(basename "$f" .sql)
             if echo "$applied" | grep -q "$version"; then
-              echo "Deja appliquee: $version"
+              echo "Deja appliquee : $version"
               continue
             fi
             echo "Application de $version ..."
             sql=$(cat "$f")
-            http=$(req "$sql")
-            if [ "$http" != "200" ]; then
-              echo "::error::Migration $version code=$http: $(head -c 400 /tmp/q.json)"
-              exit 1
-            fi
-            if grep -q '"error"' /tmp/q.json 2>/dev/null; then
-              echo "::error::Migration $version erreur SQL: $(head -c 400 /tmp/q.json)"
+            http=$(run_sql "$sql")
+            if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
+              echo "::error::Migration $version (HTTP $http) : $(head -c 400 /tmp/q.json)"
               exit 1
             fi
             echo "Reponse: $(head -c 200 /tmp/q.json)"
-            http=$(req "insert into supabase_migrations.schema_migrations (version, statements) values ('$version', 1) on conflict (version) do nothing")
-            if [ "$http" != "200" ]; then
-              echo "::error::Historique $version code=$http"
-              exit 1
+            http=$(run_sql "insert into supabase_migrations.schema_migrations (version, statements) values ('$version', 1) on conflict (version) do nothing")
+            if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
+              echo "::notice::Historique indisponible pour $version (non bloquant)"
             fi
-            echo "::notice::Migration $version appliquee via API Management"
+            echo "::notice::Migration $version appliquee via db-migrate"
           done
 
       - name: Verifier les RPC du checkout en base
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
-          set +e
-          API="https://api.supabase.com/v1/projects/$PROJECT_ID/database/query"
-          payload=$(jq -n --arg q "select proname from pg_proc where proname in ('shoplinous_reserve_payment','shoplinous_finalize_checkout','shoplinous_order_status','shoplinous_process_geniuspay_webhook')" '{query:$q}')
-          http=$(curl -s -o /tmp/rpc.json -w "%{http_code}" -X POST "$API" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$payload")
+          set -e
+          FUNC="https://$PROJECT_ID.supabase.co/functions/v1/db-migrate"
+          payload=$(jq -n --arg t "$MIGRATE_TOKEN" --arg q "select proname from pg_proc where proname in ('shoplinous_reserve_payment','shoplinous_finalize_checkout','shoplinous_order_status','shoplinous_process_geniuspay_webhook')" '{token:$t, sql:$q}')
+          http=$(curl -s -o /tmp/rpc.json -w "%{http_code}" -X POST "$FUNC" -H "content-type: application/json" -d "$payload")
           cat /tmp/rpc.json
           echo ""
-          count=$(grep -o "shoplinous_[a-z_]*" /tmp/rpc.json | sort -u | wc -l)
+          count=$(grep -o 'shoplinous_[a-z_]*' /tmp/rpc.json | sort -u | wc -l)
           echo "RPC trouves : $count"
           if [ "$http" != "200" ] || [ "$count" -lt 4 ]; then
             echo "::error::RPC checkout manquants (code=$http, count=$count)"
@@ -135,18 +129,12 @@ jobs:
       - name: Deployer la fonction geniuspay-order
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           set +e
           output=$(supabase functions deploy geniuspay-order --no-verify-jwt --project-ref "$PROJECT_ID" 2>&1)
           code=$?
           echo "$output"
-          if [ $code -ne 0 ]; then
-            output=$(supabase functions deploy geniuspay-order --no-verify-jwt 2>&1)
-            code=$?
-            echo "$output"
-          fi
           if [ $code -ne 0 ]; then
             echo "::error::functions deploy code=$code"
             exit 1
@@ -167,3 +155,13 @@ jobs:
             exit 1
           fi
           echo "::notice::geniuspay-order joignable (HTTP $code)"
+
+      - name: Desactiver le token db-migrate
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          supabase secrets set "DB_MIGRATE_TOKEN=desactive" --project-ref "$PROJECT_ID" >/dev/null 2>&1 \
+            && echo "::notice::Token db-migrate desactive" \
+            || echo "::warning::Token db-migrate non desactive (a faire manuellement)"
