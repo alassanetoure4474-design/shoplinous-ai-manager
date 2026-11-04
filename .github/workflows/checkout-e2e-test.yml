@@ -20,20 +20,20 @@ jobs:
           GENIUSPAY_ENVIRONMENT: sandbox
         run: |
           python3 - <<'PY'
-          import os, sys, json
+          import os, sys, json, urllib.request
           sys.path.insert(0, "workflow")
-          import httpx
           from shoplinous_global.geniuspay import GeniusPayClient
           client = GeniusPayClient.from_env()
-          headers = client._headers()
-          resp = httpx.get(client.base_url + "/account", headers=headers, timeout=20.0)
-          print("GET /account HTTP " + str(resp.status_code))
+          req = urllib.request.Request(client.base_url + "/account")
+          for k, v in client._headers().items():
+              req.add_header(k, v)
           try:
-              body = resp.json()
-              data = body.get("data", body)
-              print("::notice::COMPTE " + json.dumps(data, default=str)[:700])
-          except ValueError:
-              print("::notice::COMPTE non JSON " + resp.text[:400])
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  body = json.loads(resp.read().decode())
+                  data = body.get("data", body)
+                  print("::notice::COMPTE " + json.dumps(data, default=str)[:700])
+          except Exception as e:
+              print("::notice::COMPTE erreur " + type(e).__name__ + " " + str(e)[:300])
           PY
 
       - name: Installer la CLI Supabase
