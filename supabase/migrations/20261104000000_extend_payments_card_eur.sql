@@ -36,9 +36,8 @@ alter table public.shoplinous_payments
         check (length(idempotency_key) between 8 and 128);
 
 -- 2. Reservation generique : EUR/carte (marche europeen) ou XOF/wave (CI).
---    Le montant COMMANDE est exprime en unites majeures (24.90 EUR, 200 XOF) ;
---    le montant PAIEMENT stocke est l'unite API GeniusPay (centimes EUR,
---    unites XOF) : c'est exactement le montant que le webhook deveinedra.
+--    Montant COMMANDE = unites majeures (24.90 EUR, 200 XOF) ; montant
+--    PAIEMENT stocke = unite API GeniusPay (centimes EUR, unites XOF).
 create or replace function public.shoplinous_reserve_payment(
     p_order_number text,
     p_country text,
@@ -211,7 +210,7 @@ begin
         raise exception 'invalid_checkout_reference' using errcode = '22023';
     end if;
     if p_checkout_url is null
-       or p_checkout_url !~ '^https://([a-z0-9-]+\\.)+(geniuspay\\.ci|wave\\.com)(/|$|\\?)' then
+       or p_checkout_url !~ '^https://([a-z0-9-]+[.])+(geniuspay[.]ci|wave[.]com)(/|[$]|[?])' then
         raise exception 'invalid_checkout_url' using errcode = '22023';
     end if;
     if lower(coalesce(p_environment, '')) <> 'sandbox' then
@@ -312,9 +311,6 @@ end;
 $$;
 
 -- 5. Webhook generique : XOF (unites entieres) ou EUR (centimes entiers).
---    Memes garanties que la version Wave : idempotence par event_id,
---    rejet des montants/devises/references incoherents, jamais de
---    retrogradage d'un paiement succeeded.
 create or replace function public.shoplinous_process_geniuspay_webhook(
     p_event_id text,
     p_delivery_id text,
