@@ -22,7 +22,7 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...CORS_HEADERS, "content-type": "application/json" },
   });
-};
+}
 
 function sha256Hex(value: string): Promise<string> {
   const data = new TextEncoder().encode(value);
@@ -30,7 +30,7 @@ function sha256Hex(value: string): Promise<string> {
     return Array.from(new Uint8Array(buf))
       .map((b) => b.toString(16).padStart(2, "0")).join("");
   });
-};
+}
 
 interface SupabaseCredentials {
   url: string;
@@ -53,7 +53,7 @@ function getSupabaseCredentials(): SupabaseCredentials | null {
     return { url, key: secret, authHeader: "apikey" };
   }
   return legacy ? { url, key: legacy, authHeader: "apikey" } : null;
-};
+}
 
 async function callSupabaseRpc(
   creds: SupabaseCredentials,
@@ -65,8 +65,6 @@ async function callSupabaseRpc(
     apikey: creds.key,
   };
   if (creds.authHeader === "bearer") {
-    headers.authorization = "Bearer " + creds.key;
-  } else {
     headers.authorization = "Bearer " + creds.key;
   }
   const resp = await fetch(
@@ -91,7 +89,7 @@ async function callSupabaseRpc(
     throw new SupabaseRpcError(500, "Reponse RPC invalide");
   }
   return parsed as Record<string, unknown>;
-};
+}
 
 class SupabaseRpcError extends Error {
   status: number;
@@ -99,7 +97,7 @@ class SupabaseRpcError extends Error {
     super(message);
     this.status = status;
   }
-};
+}
 
 interface FwOrder {
   id: string;
@@ -273,18 +271,13 @@ async function createGeniuspayCheckout(
     throw new GeniuspayError("geniuspay_unexpected_environment", environment);
   }
   if (method === "wave") {
-    const gateway = typeof data.gateway === "string" ? data.gateway
-      : (typeof (data.payment_method as Record<string, unknown> | undefined)?.
-          !== "undefined"
-        ? String((data.payment_method as Record<string, unknown>).gateway)
-        : null);
+    const gateway = typeof data.gateway === "string" ? data.gateway : null;
     if (gateway && gateway !== "wave") {
       throw new GeniuspayError("geniuspay_wave_gateway_mismatch", gateway);
     }
     const echoAmount = typeof data.amount === "number" ? data.amount : null;
     if (echoAmount !== null && echoAmount !== amountApi) {
-      throw new GeniuspayError("geniuspay_amount_mismatch",
-        String(echoAmount));
+      throw new GeniuspayError("geniuspay_amount_mismatch", String(echoAmount));
     }
   }
   return { reference, checkout_url: checkoutUrl };
@@ -321,7 +314,7 @@ function parseStartRequest(url: URL, bodyJson: unknown): StartRequest | null {
     ? src.email.trim().toLowerCase()
     : "";
   if (!orderNumber || orderNumber.length > 120) return null;
-  if (!email || !/^[^@s]+@[^@s]+.[^@s]+$/.test(email)) return null;
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return null;
   const amount = typeof src.amount === "number" ? src.amount : undefined;
   const currency = typeof src.currency === "string"
     ? src.currency.toUpperCase()
@@ -352,7 +345,7 @@ async function handleStart(req: StartRequest): Promise<Response> {
       method = "card";
       country = (req.country || "FR").toUpperCase();
       if (!(amountMajor >= 2 && amountMajor <= 1000000) ||
-          Math.round(amountMajor * 100) !== amountMajor * 100) {
+          Math.abs(Math.round(amountMajor * 100) - amountMajor * 100) >= 1e-6) {
         return json({ error: "invalid_test_amount" }, 400);
       }
     } else if (currency === "XOF") {
@@ -543,7 +536,11 @@ Deno.serve(async (request: Request) => {
     return handleStatus(orderNumber.trim());
   }
   if (request.method === "GET") {
-    return handleStart(parseStartRequest(url, null)!);
+    const parsed = parseStartRequest(url, null);
+    if (!parsed) {
+      return json({ error: "invalid_request" }, 400);
+    }
+    return handleStart(parsed);
   }
   if (request.method === "POST") {
     let body: unknown = null;
