@@ -31,9 +31,9 @@ jobs:
           try:
               body = resp.json()
               data = body.get("data", body)
-              print(json.dumps(data, indent=2, default=str)[:2000])
+              print("::notice::COMPTE " + json.dumps(data, default=str)[:700])
           except ValueError:
-              print(resp.text[:500])
+              print("::notice::COMPTE non JSON " + resp.text[:400])
           PY
 
       - name: Installer la CLI Supabase
