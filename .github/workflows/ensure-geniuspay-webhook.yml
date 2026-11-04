@@ -1,0 +1,111 @@
+# Garantit qu'UN webhook GeniusPay Sandbox pointe vers l'Edge Function
+# Supabase, et que Supabase valide avec LE secret de CE webhook.
+# One-shot : declenche uniquement par le fichier marqueur WEBHOOK_NOW.
+name: Ensure GeniusPay webhook URL (one-shot)
+
+on:
+  push:
+    branches: [main]
+    paths: ["WEBHOOK_NOW"]
+
+permissions:
+  contents: read
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+      GENIUSPAY_API_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
+      GENIUSPAY_API_SECRET: ${{ secrets.GENIUSPAY_API_SECRET }}
+      GENIUSPAY_ENVIRONMENT: sandbox
+      GENIUSPAY_ALLOW_LIVE: "false"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 3.0.0
+
+      - name: Verifier cles et projet
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN absent"; exit 1; }
+          test -n "$GENIUSPAY_API_KEY" || { echo "::error::GENIUSPAY_API_KEY absent"; exit 1; }
+          test -n "$GENIUSPAY_API_SECRET" || { echo "::error::GENIUSPAY_API_SECRET absent"; exit 1; }
+          if [[ "$SUPABASE_PROJECT_ID" != "giarkrdmwfrlagkqnkvi" ]]; then
+            echo "::error::Projet Supabase inattendu"; exit 1
+          fi
+
+      - name: Lister les webhooks ; creer celui de l'Edge Function si absent
+        id: webhooks
+        shell: python
+        run: |
+          import os, sys, json
+          sys.path.insert(0, "workflow")
+          from shoplinous_global.geniuspay import GeniusPayClient
+
+          client = GeniusPayClient.from_env()
+          url = "https://giarkrdmwfrlagkqnkvi.supabase.co/functions/v1/geniuspay-webhook"
+
+          # 1) lister les webhooks existants (lecture seule)
+          result = client._request("GET", "/webhooks")
+          items = result.get("data")
+          if isinstance(items, dict):
+              items = items.get("webhooks") or items.get("data") or []
+          if not isinstance(items, list):
+              items = []
+          urls = []
+          for it in items:
+              if isinstance(it, dict):
+                  u = str(it.get("url") or it.get("endpoint") or "")
+                  if u:
+                      urls.append(u)
+          exists = any(u.rstrip("/") == url.rstrip("/") for u in urls)
+          print("Webhooks existants : " + str(len(urls)))
+
+          webhook_id = ""
+          secret = ""
+          if exists:
+              print("Webhook vers l'Edge Function DEJA present (" + str(len(urls)) + " webhooks).")
+              found = [it for it in items if isinstance(it, dict) and str(it.get("url") or it.get("endpoint") or "").rstrip("/") == url.rstrip("/")][0]
+              webhook_id = str(found.get("id") or found.get("webhook_id") or "")
+          else:
+              data = client.creer_webhook(url=url, nom="SHOPLINOUS Edge Function webhook")
+              secret = str(data["secret"])
+              webhook_id = str(data.get("id") or data.get("webhook_id") or "")
+              print("Webhook cree vers l'Edge Function (id note, secret masque).")
+              print("::add-mask::" + secret)
+              print("::error::GENIUSPAY_WEBHOOK_SUPABASE_CREATED id=" + (webhook_id or "?") + " (information, aucune erreur)")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write("GP_WEBHOOK_ID=" + (webhook_id or "none") + "\n")
+              if secret:
+                  output.write("GP_NEW_SECRET=" + secret + "\n")
+
+      - name: Pousser le secret du webhook vers Supabase si nouveau webhook
+        if: env.GP_NEW_SECRET != ''
+        run: supabase secrets set "GENIUSPAY_WEBHOOK_SECRET=$GP_NEW_SECRET" --yes --remote="$SUPABASE_PROJECT_ID"
+
+      - name: Envoyer un evenement webhook.test signe a l'Edge Function
+        if: env.GP_WEBHOOK_ID != 'none'
+        shell: python
+        run: |
+          import os, sys, json
+          import httpx
+          sys.path.insert(0, "workflow")
+          from shoplinous_global.geniuspay import GeniusPayClient
+          client = GeniusPayClient.from_env()
+          webhook_id = os.environ["GP_WEBHOOK_ID"]
+          with httpx.Client(timeout=20.0) as http:
+              resp = http.post(client.base_url + "/webhooks/" + webhook_id + "/test", headers=client._headers())
+          print("HTTP " + str(resp.status_code) + " pour POST /webhooks/" + webhook_id + "/test")
+          if resp.status_code < 200 or resp.status_code >= 300:
+              print("::error::TEST_WEBHOOK_REFUSE HTTP " + str(resp.status_code))
+              raise SystemExit(1)
+          print("Evenement webhook.test signe envoye par GeniusPay vers l'Edge Function.")
