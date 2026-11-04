@@ -102,7 +102,7 @@ jobs:
             echo "Migration $version : HTTP $http"
             echo "Corps : $(head -c 400 /tmp/q.json)"
             if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
-              echo "::error::Migration $version echouee (HTTP $http)"
+              echo "::error::Migration $version echouee (HTTP $http) : $(head -c 350 /tmp/q.json)"
               fail=1
               break
             fi
