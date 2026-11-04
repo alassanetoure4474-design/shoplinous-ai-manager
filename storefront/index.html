@@ -1,129 +1,58 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#10251f">
-  <meta name="description" content="SHOPLINOUS AFRICA — une sélection de produits utiles, soigneusement étudiés pour votre quotidien.">
-  <meta property="og:title" content="SHOPLINOUS AFRICA — Découvrez mieux. Vivez mieux.">
-  <meta property="og:description" content="Une nouvelle façon de découvrir des produits utiles pour le quotidien.">
-  <title>SHOPLINOUS AFRICA — Découvrez mieux. Vivez mieux.</title>
-  <style>
-    :root{--ink:#14251f;--muted:#66756e;--paper:#fbfaf6;--green:#173d31;--lime:#d6f36a;--line:#e7e9df;--white:#fff;--gold:#c69b57}
-    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit;text-decoration:none}button{font:inherit}
-    .topline{background:var(--green);color:#edf4e8;text-align:center;padding:9px 14px;font-size:11px;letter-spacing:.13em;text-transform:uppercase}
-    header{position:sticky;top:0;z-index:10;background:rgba(251,250,246,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-    .nav{max-width:1200px;margin:auto;padding:17px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px}
-    .brand{font-weight:900;font-size:21px;letter-spacing:.09em;white-space:nowrap}.brand span{color:#78933b}.navlinks{display:flex;align-items:center;gap:30px;font-size:13px;color:#526159}.navlinks a:hover{color:var(--green)}
-    .nav-cta,.button{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:13px 21px;background:var(--green);color:white;font-size:13px;font-weight:700;border:1px solid var(--green);transition:.2s}.nav-cta:hover,.button:hover{background:#245443;transform:translateY(-1px)}
-    .menu{display:none;border:1px solid var(--line);background:white;border-radius:50%;width:42px;height:42px;font-size:20px}
-    .hero{max-width:1200px;margin:0 auto;padding:64px 28px 54px;display:grid;grid-template-columns:1.05fr .95fr;gap:46px;align-items:center;min-height:590px}
-    .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#71834b;font-weight:800;display:flex;align-items:center;gap:10px}.eyebrow:before{content:"";width:27px;height:1px;background:#9aaf68}
-    h1{font-family:Georgia,"Times New Roman",serif;font-weight:500;font-size:clamp(48px,6vw,78px);line-height:.99;letter-spacing:-.045em;margin:23px 0 22px;max-width:630px}
-    h1 em{font-style:italic;color:#78933b}.hero-copy{max-width:480px;color:var(--muted);font-size:16px;line-height:1.8}.hero-actions{display:flex;align-items:center;gap:20px;margin-top:30px}.text-link{font-size:13px;font-weight:700;border-bottom:1px solid #a8b39f;padding-bottom:5px}
-    .hero-note{font-size:11px;color:#87928b;margin-top:30px;letter-spacing:.04em}
-    .visual{position:relative;min-height:460px;border-radius:5px 110px 5px 5px;overflow:hidden;background:linear-gradient(145deg,#dfe8d4,#b7c9a7 52%,#718c70)}
-    .visual:before{content:"";position:absolute;width:340px;height:340px;border:1px solid rgba(255,255,255,.55);border-radius:50%;right:-40px;top:36px}
-    .visual:after{content:"";position:absolute;width:240px;height:240px;border:1px solid rgba(255,255,255,.45);border-radius:50%;right:10px;top:86px}
-    .sun{position:absolute;width:180px;height:180px;border-radius:50%;background:#f3e5bc;right:85px;top:65px;box-shadow:0 0 70px rgba(255,255,255,.3)}
-    .arch{position:absolute;bottom:-72px;left:50%;transform:translateX(-50%);width:270px;height:390px;border-radius:150px 150px 0 0;background:linear-gradient(90deg,#294d3c,#466b4f 55%,#203e32);box-shadow:24px 18px 50px rgba(24,53,39,.2)}
-    .arch:before{content:"";position:absolute;inset:35px 35px 0;border:1px solid rgba(255,255,255,.3);border-bottom:0;border-radius:130px 130px 0 0}
-    .leaf{position:absolute;width:130px;height:54px;background:#78966d;border-radius:100% 0 100% 0;transform:rotate(-35deg);left:13%;bottom:100px;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
-    .leaf.two{left:auto;right:8%;bottom:165px;transform:rotate(35deg) scale(.8);background:#91a77b}
-    .visual-label{position:absolute;left:25px;bottom:25px;color:white;font-family:Georgia,serif;font-size:19px;z-index:2}
-    .section{padding:78px 28px;max-width:1200px;margin:auto}.section-head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:30px}.section-kicker{font-size:10px;letter-spacing:.18em;color:#83916d;text-transform:uppercase;font-weight:800}.section h2{font:500 clamp(32px,4vw,48px)/1.1 Georgia,serif;letter-spacing:-.03em;margin:12px 0 0}.section-intro{max-width:390px;color:var(--muted);font-size:13px;line-height:1.7}
-    .categories{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.category{min-height:205px;padding:22px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line);background:#f3f2eb;transition:.2s}.category:nth-child(2){background:#e9eee5}.category:nth-child(3){background:#eee8dc}.category:nth-child(4){background:#e8ece8}.category:hover{transform:translateY(-4px);border-color:#bdc8b2}.category-icon{font-size:27px}.category strong{font:500 22px Georgia,serif}.category small{color:var(--muted);font-size:11px;margin-top:6px}
-    .catalogue{background:#f0f1e9;padding:78px 0}.catalogue-inner{max-width:1200px;margin:auto;padding:0 28px}.empty-catalogue{border:1px dashed #b8c2b1;background:rgba(255,255,255,.45);padding:42px 24px;text-align:center}.empty-catalogue .symbol{font:42px Georgia,serif;color:#81936c}.empty-catalogue h3{font:500 27px Georgia,serif;margin:12px 0}.empty-catalogue p{font-size:13px;line-height:1.7;color:var(--muted);max-width:490px;margin:0 auto 22px}
-    .promise{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:28px}.promise article{background:var(--paper);padding:28px}.promise b{display:block;font:500 21px Georgia,serif;margin:0 0 9px}.promise p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
-    .about{display:grid;grid-template-columns:.8fr 1.2fr;gap:65px;align-items:center}.about-mark{background:var(--green);color:#eff4e7;min-height:290px;padding:35px;display:flex;flex-direction:column;justify-content:space-between}.about-mark strong{font-size:12px;letter-spacing:.16em}.about-mark span{font:italic 43px/1.1 Georgia,serif}.about-copy p{color:var(--muted);font-size:14px;line-height:1.9}
-    .newsletter{background:#e6ebdd;padding:58px 28px;text-align:center}.newsletter h2{font:500 38px Georgia,serif;margin:0 0 12px}.newsletter p{color:var(--muted);font-size:13px;margin:0 auto 22px;max-width:480px}.contact-link{display:inline-block;border-bottom:1px solid #87977a;padding-bottom:5px;font-weight:700;font-size:13px}
-    footer{background:#12271f;color:#eaf0e5;padding:40px 28px}.footer-inner{max-width:1200px;margin:auto;display:flex;justify-content:space-between;gap:25px;align-items:center}.footer-brand{font-size:17px;font-weight:900;letter-spacing:.1em}.footer-brand span{color:var(--lime)}footer p{color:#aebbb1;font-size:11px;line-height:1.7}footer a{font-size:11px;color:#d8e3d7}
-    @media(max-width:760px){.nav{padding:13px 18px}.navlinks{display:none;position:absolute;top:66px;left:0;right:0;background:var(--paper);padding:20px;flex-direction:column;align-items:flex-start;border-bottom:1px solid var(--line)}.navlinks.open{display:flex}.nav-cta{display:none}.menu{display:block}.hero{padding:43px 18px 30px;grid-template-columns:1fr;gap:30px;min-height:auto}.hero h1{font-size:53px}.hero-copy{font-size:14px}.visual{min-height:340px;border-top-right-radius:75px}.sun{width:135px;height:135px;right:55px}.arch{width:220px;height:310px}.section{padding:57px 18px}.section-head{display:block}.section-intro{margin-top:14px}.categories{grid-template-columns:repeat(2,1fr);gap:9px}.category{min-height:160px;padding:16px}.category strong{font-size:19px}.catalogue{padding:58px 0}.catalogue-inner{padding:0 18px}.promise{grid-template-columns:1fr}.promise article{padding:22px}.about{grid-template-columns:1fr;gap:25px}.about-mark{min-height:220px}.about-mark span{font-size:38px}.newsletter{padding:48px 20px}.newsletter h2{font-size:32px}.footer-inner{display:block}.footer-inner>div+div{margin-top:18px}}
-    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important}}
-  </style>
-  <link rel="stylesheet" href="shop.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10110f"><meta name="description" content="SHOPLINOUS AFRICA — des découvertes qui font bouger le quotidien.">
+<meta property="og:title" content="SHOPLINOUS AFRICA — Move with discovery"><meta property="og:description" content="Le quotidien mérite mieux. Explorez un nouvel univers.">
+<title>SHOPLINOUS AFRICA — Move with discovery</title>
+<style>
+:root{--bg:#10110f;--ink:#f4f1e9;--muted:#a3a49a;--lime:#d9ff43;--orange:#ff6845;--blue:#8b9cff;--line:#34362f;--display:Impact,'Arial Narrow',system-ui,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;background:var(--bg)}body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;overflow-x:hidden}a{color:inherit;text-decoration:none}button{font:inherit}::selection{background:var(--lime);color:#111}
+.cursor-glow{position:fixed;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle,#d9ff4318,transparent 68%);pointer-events:none;z-index:0;left:50%;top:20%;transform:translate(-50%,-50%)}
+.site-header{height:78px;padding:0 5vw;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff18;position:relative;z-index:5;background:#10110fe8;backdrop-filter:blur(16px)}
+.logo{display:flex;align-items:center;gap:11px;font-size:15px;font-weight:950;letter-spacing:.12em}.logo-mark{width:34px;height:34px;border:1px solid var(--lime);border-radius:50%;display:grid;place-items:center;color:var(--lime);font-size:22px;animation:orbit 14s linear infinite}.logo small{display:block;color:var(--lime);font-size:9px;letter-spacing:.34em;margin-top:3px}
+.nav{display:flex;align-items:center;gap:30px;color:#c3c4b9;font-size:11px;text-transform:uppercase;letter-spacing:.12em}.nav a{transition:color .2s}.nav a:hover{color:var(--lime)}.header-cta{border:1px solid #ffffff60;border-radius:99px;padding:12px 18px;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.hero{min-height:690px;padding:78px 5vw 55px;position:relative;isolation:isolate;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.hero:before{content:"";position:absolute;width:min(65vw,820px);aspect-ratio:1;border:1px solid #ffffff13;border-radius:50%;right:-12%;top:-18%;z-index:-2;animation:slowspin 45s linear infinite}.hero:after{content:"";position:absolute;width:min(46vw,580px);aspect-ratio:1;border:1px solid #d9ff4328;border-radius:50%;right:-1%;top:-1%;z-index:-2}
+.hero-kicker,.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.28em;color:var(--lime);font-weight:800;display:flex;align-items:center;gap:12px}.hero-kicker:before{content:"";height:1px;width:35px;background:var(--lime)}
+.hero h1{font-family:var(--display);font-weight:900;text-transform:uppercase;letter-spacing:-.055em;line-height:.78;font-size:clamp(78px,13.5vw,190px);margin:34px 0 20px;max-width:1100px;position:relative;z-index:1}.hero h1 .line2{display:block;color:transparent;-webkit-text-stroke:1.5px var(--ink);margin-left:9vw}.hero h1 .line3{display:block;color:var(--lime);margin-left:22vw}
+.hero-bottom{display:flex;align-items:end;justify-content:space-between;gap:30px;margin-top:35px;max-width:980px}.hero-copy{max-width:340px;color:#b6b7ac;font-size:14px;line-height:1.8}.hero-actions{display:flex;gap:13px;align-items:center;flex-wrap:wrap}.pill{display:inline-flex;align-items:center;gap:12px;border-radius:99px;background:var(--lime);color:#111;padding:16px 22px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;transition:transform .25s,box-shadow .25s}.pill:hover{transform:translateY(-4px);box-shadow:0 12px 35px #d9ff4330}.round-arrow{width:28px;height:28px;background:#111;border-radius:50%;display:grid;place-items:center;color:var(--lime);font-size:15px}
+.hero-orb{position:absolute;width:clamp(180px,27vw,390px);aspect-ratio:1;border-radius:50%;right:7%;top:17%;z-index:-1;background:radial-gradient(circle at 32% 28%,#f7ffb2 0 3%,#d9ff43 10%,#9bb51e 35%,#27320b 66%,#10110f 72%);box-shadow:inset -25px -28px 55px #0009,0 0 90px #d9ff4318;animation:float 7s ease-in-out infinite}.hero-orb:before,.hero-orb:after{content:"";position:absolute;border:1px solid #d9ff4360;border-radius:50%;inset:-13%;transform:rotate(-24deg) scaleY(.32)}.hero-orb:after{inset:-23%;transform:rotate(35deg) scaleY(.23);border-color:#ff68456e}
+.side-note{position:absolute;right:4.7%;bottom:58px;writing-mode:vertical-rl;color:#797b70;font-size:9px;letter-spacing:.24em;text-transform:uppercase}
+.marquee{overflow:hidden;background:var(--lime);color:#111;transform:rotate(-1.5deg) scale(1.03);padding:15px 0;position:relative;z-index:2}.marquee-track{display:flex;white-space:nowrap;width:max-content;animation:marquee 26s linear infinite;font-family:var(--display);font-size:clamp(25px,4vw,48px);font-weight:900;text-transform:uppercase;letter-spacing:.03em}.marquee-track span{padding:0 25px}.marquee-track i{font-style:normal;color:#ff6845}
+.section{padding:125px 5vw;position:relative}.section-top{display:flex;justify-content:space-between;align-items:end;gap:30px;margin-bottom:52px}.eyebrow{color:var(--orange)}.section-title{font-family:var(--display);font-size:clamp(48px,8vw,105px);text-transform:uppercase;line-height:.85;letter-spacing:-.045em;margin:18px 0 0}.section-title span{color:var(--lime)}.section-desc{max-width:300px;color:var(--muted);font-size:13px;line-height:1.8}
+.universe-grid{display:grid;grid-template-columns:1.1fr .9fr 1fr;gap:13px}.universe{min-height:330px;padding:25px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;border:1px solid #ffffff20;background:#1a1c18;isolation:isolate;transition:transform .45s,border-color .3s}.universe:hover{transform:translateY(-9px) rotate(-.5deg);border-color:var(--lime)}.universe:nth-child(2){background:#272018}.universe:nth-child(3){background:#171b27}.universe:nth-child(4){grid-column:2/4;min-height:245px;background:#20251a}
+.universe .number{font-size:10px;letter-spacing:.2em;color:#a8aa9e}.universe h3{font-family:var(--display);font-size:clamp(30px,4vw,53px);line-height:.9;text-transform:uppercase;margin:0;max-width:240px;position:relative;z-index:2}.universe .symbol{position:absolute;right:5%;top:13%;font-size:clamp(100px,16vw,190px);font-weight:900;color:#d9ff4317;line-height:1;transition:transform .7s,color .4s}.universe:hover .symbol{transform:rotate(22deg) scale(1.12);color:#d9ff4335}.universe .explore{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--lime)}
+.feature{padding:0 5vw 120px}.feature-panel{background:var(--orange);color:#111;min-height:420px;padding:55px;position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:30px}.feature-panel:after{content:"✳";position:absolute;right:3%;top:-28%;font-size:clamp(280px,45vw,570px);line-height:1;color:#ffffff20;animation:slowspin 60s linear infinite}.feature-copy{max-width:540px;position:relative;z-index:1}.feature-copy .eyebrow{color:#292019}.feature-copy h2{font-family:var(--display);font-size:clamp(50px,7vw,88px);line-height:.83;text-transform:uppercase;margin:20px 0;letter-spacing:-.04em}.feature-copy p{max-width:400px;font-size:13px;line-height:1.8;color:#35271f}.feature-stamp{position:relative;z-index:1;border:1px solid #111;border-radius:50%;width:180px;height:180px;display:grid;place-items:center;text-align:center;font-family:var(--display);font-size:22px;text-transform:uppercase;transform:rotate(12deg);animation:float 5s ease-in-out infinite}
+.catalogue{background:#171914;padding:110px 5vw}.catalogue .section-top{margin-bottom:35px}.catalogue-shell{border-top:1px solid #ffffff30;border-bottom:1px solid #ffffff30;padding:32px 0;display:grid;grid-template-columns:1fr auto;gap:25px;align-items:center}.catalogue-shell h3{font:900 clamp(28px,4vw,48px)/.95 var(--display);text-transform:uppercase;margin:0 0 10px}.catalogue-shell p{font-size:12px;color:var(--muted);line-height:1.7;max-width:480px;margin:0}.catalogue-tag{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--lime);border:1px solid #d9ff4360;border-radius:99px;padding:12px 16px;white-space:nowrap}
+.payment-section{background:var(--lime);color:#111;padding:105px 5vw}.payment-section .eyebrow{color:#4b5a10}.payment-section h2{font:900 clamp(45px,7vw,85px)/.85 var(--display);text-transform:uppercase;letter-spacing:-.04em;max-width:800px;margin:20px 0}.payment-intro{max-width:500px;font-size:13px;line-height:1.8;color:#38421e}.payment-flow{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:40px}.flow-steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:10px}.flow-step{border:1px solid #10110f60;padding:20px;min-height:110px;display:flex;flex-direction:column;justify-content:space-between;transition:all .3s}.flow-step span{font-size:10px;letter-spacing:.2em}.flow-step b{font:900 22px var(--display);text-transform:uppercase}.flow-step.is-current{background:#111;color:var(--lime);transform:translateY(-4px)}.flow-step.is-complete{background:#c5e83b}.flow-detail{background:#f7f6eb;padding:28px;display:flex;flex-direction:column;justify-content:center;min-height:230px}.flow-status{font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:900;color:#62731c}.flow-detail h3{font:900 30px var(--display);text-transform:uppercase;margin:12px 0}.flow-detail p{font-size:12px;line-height:1.8;color:#55594a}.flow-actions{display:flex;gap:14px;align-items:center;margin-top:16px}.flow-detail .button{background:#111;color:var(--lime);border:0;padding:13px 18px;border-radius:99px;font-weight:800;font-size:10px;text-transform:uppercase;cursor:pointer}.flow-reset{border:0;background:none;text-decoration:underline;cursor:pointer;font-size:11px}.flow-security{font-size:10px;color:#46521e;margin-top:18px}
+.manifesto{padding:125px 5vw;display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:center}.manifesto-art{min-height:350px;background:linear-gradient(135deg,#202a15,#141710);position:relative;overflow:hidden;display:grid;place-items:center}.manifesto-art .big-star{font-size:clamp(170px,27vw,310px);color:var(--lime);line-height:1;animation:slowspin 35s linear infinite}.manifesto-art:before{content:"";position:absolute;width:70%;aspect-ratio:1;border:1px solid #d9ff4350;border-radius:50%;animation:pulse 4s ease-in-out infinite}.manifesto h2{font:900 clamp(45px,6vw,75px)/.86 var(--display);text-transform:uppercase;margin:18px 0}.manifesto p{color:var(--muted);font-size:13px;line-height:1.9;max-width:440px}
+.footer{padding:35px 5vw;border-top:1px solid #ffffff20;display:flex;align-items:center;justify-content:space-between;gap:20px;color:#a4a69a;font-size:10px}.footer strong{color:var(--ink);letter-spacing:.14em}.footer strong span{color:var(--lime)}.footer a{color:var(--lime)}
+[data-reveal]{opacity:1;transform:none}.motion-ready [data-reveal]{opacity:0;transform:translateY(35px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}.motion-ready [data-reveal].is-visible{opacity:1;transform:translateY(0)}
+@keyframes orbit{to{transform:rotate(360deg)}}@keyframes slowspin{to{transform:rotate(360deg)}}@keyframes float{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-20px) rotate(4deg)}}@keyframes marquee{to{transform:translateX(-50%)}}@keyframes pulse{0%,100%{transform:scale(.9);opacity:.4}50%{transform:scale(1.06);opacity:1}}
+@media(max-width:760px){.site-header{height:66px;padding:0 5%}.nav{display:none}.header-cta{font-size:9px;padding:10px 12px}.hero{min-height:640px;padding:70px 6% 50px}.hero h1{font-size:clamp(69px,16vw,115px);margin-top:42px}.hero h1 .line2{margin-left:3vw}.hero h1 .line3{margin-left:13vw}.hero-orb{width:190px;right:-4%;top:13%;opacity:.75}.hero-bottom{display:block;margin-top:35px}.hero-copy{max-width:310px;font-size:12px}.hero-actions{margin-top:18px}.side-note{right:5%;bottom:30px}.marquee{padding:11px 0}.section{padding:80px 6%}.section-top{display:block;margin-bottom:30px}.section-desc{margin-top:18px}.universe-grid{grid-template-columns:1fr 1fr;gap:9px}.universe{min-height:220px;padding:16px}.universe:nth-child(4){grid-column:1/3;min-height:180px}.universe h3{font-size:clamp(25px,7vw,39px)}.universe .symbol{font-size:100px}.feature{padding:0 5% 80px}.feature-panel{min-height:400px;padding:28px;display:block}.feature-copy h2{font-size:60px}.feature-stamp{width:105px;height:105px;font-size:14px;margin:25px 0 0 auto}.catalogue{padding:80px 6%}.catalogue-shell{grid-template-columns:1fr}.catalogue-tag{justify-self:start}.payment-section{padding:80px 6%}.payment-flow{grid-template-columns:1fr;gap:12px}.flow-step{min-height:85px;padding:14px}.flow-step b{font-size:18px}.flow-detail{padding:22px;min-height:210px}.manifesto{padding:80px 6%;grid-template-columns:1fr;gap:25px}.manifesto-art{min-height:260px}.footer{padding:25px 6%;display:block;line-height:2}.footer>*+*{display:block;margin-top:8px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}.motion-ready [data-reveal]{opacity:1;transform:none}}
+</style>
 </head>
 <body>
-  <div class="topline">Une nouvelle façon de découvrir le quotidien</div>
-  <header>
-    <nav class="nav" aria-label="Navigation principale">
-      <a class="brand" href="#" aria-label="SHOPLINOUS AFRICA accueil"><img src="assets/logo-animated.svg" alt="" width="38" height="38"> <span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
-      <div class="navlinks" id="navlinks">
-        <a href="#univers">Nos univers</a><a href="catalogue.html">Catalogue</a><a href="#selection">La sélection</a><a href="#histoire">Notre approche</a><a href="#parcours-paiement">Paiement sécurisé</a><a href="#contact">Contact</a>
-      </div>
-      <a class="nav-cta" href="catalogue.html">Explorer la boutique ↗</a>
-      <button class="menu" id="menu" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
-    </nav>
-  </header>
-  <main>
-    <section class="hero">
-      <div>
-        <div class="eyebrow">L'essentiel, avec intention</div>
-        <h1>Découvrez mieux.<br><em>Vivez mieux.</em></h1>
-        <p class="hero-copy">Des découvertes utiles, des idées qui inspirent et une sélection pensée pour accompagner votre quotidien. Bienvenue dans le nouvel univers SHOPLINOUS.</p>
-        <div class="hero-actions"><a class="button" href="catalogue.html">Voir le catalogue</a><a class="text-link" href="#histoire">Notre philosophie</a></div>
-        <div class="hero-note">SHOPLINOUS AFRICA · Lancement progressif</div>
-      </div>
-      <div class="visual visual-motion" role="img" aria-label="Illustration animée abstraite : soleil levant, formes végétales et motifs géométriques">
-        <img src="assets/hero-motion.svg" alt="" width="760" height="700" fetchpriority="high">
-        <div class="visual-label">Discover More. Live Better.</div>
-      </div>
-    </section>
-    <section class="section" id="univers">
-      <div class="section-head"><div><div class="section-kicker">Explorez à votre rythme</div><h2>Des univers à découvrir</h2></div><p class="section-intro">Nous préparons une sélection de produits autour de besoins concrets, avec une attention particulière portée à la qualité, à l'utilité et au rapport valeur-prix.</p></div>
-      <div class="categories">
-        <a class="category" href="#selection"><span class="category-icon">⌂</span><span><strong>Maison & quotidien</strong><br><small>Des idées pratiques</small></span></a>
-        <a class="category" href="#selection"><span class="category-icon">✳</span><span><strong>Style & accessoires</strong><br><small>Les détails qui comptent</small></span></a>
-        <a class="category" href="#selection"><span class="category-icon">◉</span><span><strong>Tech & innovation</strong><br><small>Des usages plus simples</small></span></a>
-        <a class="category" href="#selection"><span class="category-icon">♡</span><span><strong>Bien-être & loisirs</strong><br><small>Prendre du temps pour soi</small></span></a>
-      </div>
-    </section>
-    <section class="payment-section" id="parcours-paiement" data-reveal>
-      <div class="payment-inner">
-        <div class="section-kicker">Une expérience pensée pour la confiance</div>
-        <h2>Un paiement suivi à chaque étape.</h2>
-        <p class="payment-intro">Découvrez comment une commande sera sécurisée avec GeniusPay. Cette démonstration est interactive et n'effectue aucun paiement.</p>
-        <div class="payment-flow" data-payment-flow>
-          <ol class="flow-steps" aria-label="Étapes du parcours de paiement">
-            <li class="flow-step is-current" data-flow-step aria-current="step"><span>01</span><b>Commande</b></li>
-            <li class="flow-step" data-flow-step><span>02</span><b>GeniusPay</b></li>
-            <li class="flow-step" data-flow-step><span>03</span><b>Webhook</b></li>
-            <li class="flow-step" data-flow-step><span>04</span><b>Confirmation</b></li>
-          </ol>
-          <div class="flow-detail" aria-live="polite" aria-atomic="true">
-            <span class="flow-status" data-flow-status>Étape 1 sur 4</span>
-            <h3 data-flow-title>Commande préparée</h3>
-            <p data-flow-detail>Le client vérifie son panier et choisit son pays de livraison.</p>
-            <div class="flow-actions"><button class="button" type="button" data-flow-next>Étape suivante</button><button class="flow-reset" type="button" data-flow-reset hidden>Recommencer</button></div>
-          </div>
-        </div>
-        <p class="flow-security">La confirmation dépendra toujours d'un webhook signé et vérifié côté serveur, jamais d'une simple redirection du navigateur.</p>
-      </div>
-    </section>
-    <section class="catalogue" id="selection">
-      <div class="catalogue-inner">
-        <div class="section-head"><div><div class="section-kicker">La sélection SHOPLINOUS</div><h2>Les bonnes découvertes arrivent.</h2></div><p class="section-intro">Chaque produit devra passer nos contrôles de disponibilité, de livraison, de conformité et de prix avant d'être proposé à la vente.</p></div>
-        <div class="empty-catalogue"><div class="symbol">✳</div><h3>Notre catalogue se prépare</h3><p>Nous finalisons les premières références. Aucun produit n'est affiché comme disponible tant que son fournisseur, son coût total et ses conditions de livraison ne sont pas vérifiés.</p><a class="text-link" href="#contact">Nous contacter</a></div>
-        <div class="promise">
-          <article><b>Une sélection vérifiée</b><p>Les références seront contrôlées avant leur mise en ligne. Pas de disponibilité ni de promesse de livraison inventée.</p></article>
-          <article><b>Des prix transparents</b><p>Le prix affiché devra tenir compte des frais connus et des conditions réelles de livraison vers la destination choisie.</p></article>
-          <article><b>Un lancement progressif</b><p>Les pays et moyens de paiement seront ouverts uniquement après vérification de leur fonctionnement.</p></article>
-        </div>
-      </div>
-    </section>
-    <section class="section about" id="histoire">
-      <div class="about-mark"><strong>NOTRE ENGAGEMENT</strong><span>Le bon produit.<br>Au bon moment.</span><small>SHOPLINOUS AFRICA</small></div>
-      <div class="about-copy"><div class="section-kicker">Une autre idée du commerce en ligne</div><h2>Utile avant tout.<br>Fiable à chaque étape.</h2><p>SHOPLINOUS AFRICA est une plateforme en construction, pensée pour faciliter l'accès à des produits intéressants depuis l'Afrique et, progressivement, d'autres marchés.</p><p>Notre priorité : construire une expérience claire, vérifier les informations essentielles et ne proposer que ce que nous pouvons réellement livrer dans les conditions annoncées.</p></div>
-    </section>
-    <section class="newsletter" id="contact"><h2>Une question ? Parlons-en.</h2><p>Le service client et les informations de commande seront ajoutés avant l'ouverture commerciale.</p><span class="contact-link">Coordonnées de contact bientôt disponibles</span></section>
-  </main>
-  <footer><div class="footer-inner"><div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="30" height="30"> SHOPLINOUS <span>AFRICA</span></div><p>Discover More. Live Better.<br>Une plateforme en construction.</p></div><div><a href="#univers">Nos univers</a>　 <a href="#histoire">Notre approche</a>　 <a href="#contact">Contact</a><p>© <span id="year"></span> SHOPLINOUS AFRICA. Tous droits réservés.</p></div></div></footer>
-  <script src="animations.js" defer></script>
-  <script>
-    const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
-    menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
-    links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
-    document.getElementById('year').textContent=new Date().getFullYear();
-  </script>
-</body>
-</html>
+<div class="cursor-glow" aria-hidden="true"></div>
+<header class="site-header"><a class="logo" href="#" aria-label="SHOPLINOUS AFRICA accueil"><span class="logo-mark">✳</span><span>SHOPLINOUS<small>AFRICA / DISCOVERY LAB</small></span></a><nav class="nav" aria-label="Navigation"><a href="#univers">Univers</a><a href="#selection">Sélection</a><a href="#vision">Notre vision</a><a href="#paiement">Paiement</a></nav><a class="header-cta" href="#selection">Explorer la boutique ↗</a></header>
+<main>
+<section class="hero">
+<div class="hero-kicker">Curiosité en mouvement · Abidjan to the world</div>
+<div class="hero-orb" aria-hidden="true"></div>
+<h1>Move<span class="line2">beyond</span><span class="line3">ordinary.</span></h1>
+<div class="hero-bottom"><p class="hero-copy">Le quotidien mérite mieux. Des découvertes inattendues, des objets utiles et des idées qui ouvrent de nouvelles possibilités. Bienvenue dans une autre dimension du shopping.</p><div class="hero-actions"><a class="pill" href="#univers">Explorer l'univers <span class="round-arrow">↘</span></a><a href="#vision" style="font-size:10px;color:#c1c3b7;text-transform:uppercase;letter-spacing:.12em">Notre manifeste ↗</a></div></div>
+<div class="side-note">New energy · New discoveries · 2026</div>
+</section>
+<div class="marquee" aria-label="Discover more live better"><div class="marquee-track"><span>DISCOVER MORE <i>✳</i> LIVE BETTER <i>✳</i> MOVE DIFFERENT <i>✳</i> DISCOVER MORE <i>✳</i> LIVE BETTER <i>✳</i> MOVE DIFFERENT <i>✳</i></span><span aria-hidden="true">DISCOVER MORE <i>✳</i> LIVE BETTER <i>✳</i> MOVE DIFFERENT <i>✳</i> DISCOVER MORE <i>✳</i> LIVE BETTER <i>✳</i> MOVE DIFFERENT <i>✳</i></span></div></div>
+<section class="section" id="univers" data-reveal><div class="section-top"><div><div class="eyebrow">01 / Choisis ton univers</div><h2 class="section-title">Find your<br><span>next thing.</span></h2></div><p class="section-desc">Pas de rayon sans âme. Des univers visuels et vivants, conçus pour inspirer tes prochaines découvertes.</p></div>
+<div class="universe-grid"><a class="universe" href="#selection"><span class="number">01 — LIVING</span><span class="symbol">⌂</span><h3>Living<br>spaces.</h3><span class="explore">Maison & quotidien ↗</span></a><a class="universe" href="#selection"><span class="number">02 — STYLE</span><span class="symbol">✳</span><h3>Own<br>your look.</h3><span class="explore">Style & accessoires ↗</span></a><a class="universe" href="#selection"><span class="number">03 — TECH</span><span class="symbol">◉</span><h3>Future<br>mode.</h3><span class="explore">Tech & innovation ↗</span></a><a class="universe" href="#selection"><span class="number">04 — WELLNESS / PLAY</span><span class="symbol">∞</span><h3>Feel good. Play more. Be curious.</h3><span class="explore">Bien-être & loisirs ↗</span></a></div></section>
+<section class="feature" data-reveal><div class="feature-panel"><div class="feature-copy"><div class="eyebrow">The new everyday starts here</div><h2>Not just<br>a shop.<br>A feeling.</h2><p>Une expérience qui mélange culture visuelle, technologie et découvertes du monde. Pensée en Afrique, ouverte sur le monde.</p><a class="pill" href="#selection" style="background:#111;color:#fff">Voir la sélection <span class="round-arrow" style="background:var(--orange);color:#111">↗</span></a></div><div class="feature-stamp">Africa<br>to the<br>world ✳</div></div></section>
+<section class="catalogue" id="selection" data-reveal><div class="section-top"><div><div class="eyebrow">02 / First drop loading</div><h2 class="section-title">The next<br><span>big thing.</span></h2></div><p class="section-desc">Les premières références arrivent. Nous ne publions que les produits dont le stock, le fournisseur, le prix et la livraison ont été vérifiés.</p></div><div class="catalogue-shell"><div><h3>Something good<br>is coming.</h3><p>Le catalogue est en préparation. Pas de faux produits, pas de prix inventés, pas de promesses de livraison non vérifiées. Les premières découvertes seront dévoilées dès validation.</p></div><span class="catalogue-tag">First collection · In preparation</span></div></section>
+<section class="payment-section" id="paiement" data-reveal><div class="eyebrow">03 / Trust is the real luxury</div><h2>Pay smart.<br>Feel secure.</h2><p class="payment-intro">Voici le parcours de paiement prévu avec GeniusPay. Cette démonstration est interactive et ne déclenche aucune transaction réelle.</p><div class="payment-flow" data-payment-flow><ol class="flow-steps" aria-label="Étapes du parcours de paiement"><li class="flow-step is-current" data-flow-step aria-current="step"><span>01 / ORDER</span><b>Commande</b></li><li class="flow-step" data-flow-step><span>02 / PAY</span><b>GeniusPay</b></li><li class="flow-step" data-flow-step><span>03 / VERIFY</span><b>Webhook</b></li><li class="flow-step" data-flow-step><span>04 / DONE</span><b>Confirmation</b></li></ol><div class="flow-detail" aria-live="polite" aria-atomic="true"><span class="flow-status" data-flow-status>Étape 1 sur 4</span><h3 data-flow-title>Commande préparée</h3><p data-flow-detail>Le client vérifie son panier et choisit son pays de livraison.</p><div class="flow-actions"><button class="button" type="button" data-flow-next>Étape suivante ↗</button><button class="flow-reset" type="button" data-flow-reset hidden>Recommencer</button></div></div></div><p class="flow-security">Une commande ne sera marquée payée qu'après vérification du webhook signé côté serveur.</p></section>
+<section class="manifesto" id="vision" data-reveal><div class="manifesto-art" aria-hidden="true"><div class="big-star">✳</div></div><div><div class="eyebrow">04 / Our mindset</div><h2>Born in Africa.<br>Open to<br>everything.</h2><p>SHOPLINOUS AFRICA veut connecter les bonnes découvertes aux personnes qui les recherchent. Une marque audacieuse, une expérience fluide et une exigence simple : proposer uniquement ce que nous pouvons réellement tenir.</p><a class="pill" href="#univers">Repartir à l'exploration <span class="round-arrow">↗</span></a></div></section>
+</main>
+<footer class="footer"><strong>SHOPLINOUS <span>AFRICA</span></strong><span>Discover more. Live better. · © <span id="year"></span></span><a href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false">Back to top ↑</a></footer>
+<script src="animations.js" defer></script><script>document.getElementById('year').textContent=new Date().getFullYear();</script>
+</body></html>
