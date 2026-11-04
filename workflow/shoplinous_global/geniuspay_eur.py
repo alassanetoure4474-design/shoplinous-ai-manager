@@ -56,8 +56,7 @@ class GeniusPayEurSandboxTester(GeniusPayClient):
         secret = data.get("secret")
         if not secret:
             raise GeniusPayError(
-                "GeniusPay n'a pas retourne de secret webhook Sand
-box"
+                "GeniusPay n'a pas retourne de secret webhook Sandbox"
             )
         return str(secret)
 
@@ -105,8 +104,7 @@ box"
         if lu is None or lu != Decimal(self.MONTANT_TEST_CENTIMES):
             raise GeniusPayError(
                 "Le montant EUR relu ne correspond pas (attendu "
-                + 
-str(self.MONTANT_TEST_CENTIMES) + " centimes)"
+                + str(self.MONTANT_TEST_CENTIMES) + " centimes)"
             )
         if str(detail.get("currency", "")).upper() != self.DEVISE_TEST:
             raise GeniusPayError("La devise EUR relue ne correspond pas")
@@ -118,8 +116,8 @@ str(self.MONTANT_TEST_CENTIMES) + " centimes)"
                 + " (reference " + checkout["reference"] + ")"
             )
         statut = str(detail.get("status", "")).strip().lower()
-        # "none" = transaction creee, aucun moyen de paiement encore choisi
-        # (etat initial reel du checkout carte EUR en Sandbox GeniusPay).
+        # "none" = transaction creee, aucun moyen de paiement encore
+        # choisi (etat initial reel du checkout carte EUR Sandbox).
         # Fail-closed : ce statut ne confirme jamais un paiement.
         if statut not in ("pending", "processing", "completed", "none"):
             raise GeniusPayError(
@@ -158,8 +156,7 @@ str(self.MONTANT_TEST_CENTIMES) + " centimes)"
         )
         webhook_verifie = True
 
-        # ---- at
-taques : chacune doit etre repoussee ----
+        # ---- attaques : chacune doit etre repoussee ----
         attaques = 0
 
         # 1. signature invalide
@@ -210,8 +207,7 @@ taques : chacune doit etre repoussee ----
         expire["timestamp"] = vieux_ts
         raw_vieux, sig_vieux = self._signer(expire, vieux_ts, self.webhook_secret)
         try:
-  
-          self.verifier_webhook(
+            self.verifier_webhook(
                 raw_vieux, sig_vieux, str(vieux_ts),
                 "payment.success", "sandbox"
             )
