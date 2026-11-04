@@ -20,20 +20,20 @@ jobs:
           GENIUSPAY_ENVIRONMENT: sandbox
         run: |
           python3 - <<'PY'
-          import os, sys, json, urllib.request
-          sys.path.insert(0, "workflow")
-          from shoplinous_global.geniuspay import GeniusPayClient
-          client = GeniusPayClient.from_env()
-          req = urllib.request.Request(client.base_url + "/account")
-          for k, v in client._headers().items():
-              req.add_header(k, v)
+          import sys, json, traceback, urllib.request
           try:
+              sys.path.insert(0, "workflow")
+              from shoplinous_global.geniuspay import GeniusPayClient
+              client = GeniusPayClient.from_env()
+              req = urllib.request.Request(client.base_url + "/account")
+              for k, v in client._headers().items():
+                  req.add_header(k, v)
               with urllib.request.urlopen(req, timeout=20) as resp:
                   body = json.loads(resp.read().decode())
                   data = body.get("data", body)
                   print("::notice::COMPTE " + json.dumps(data, default=str)[:700])
-          except Exception as e:
-              print("::notice::COMPTE erreur " + type(e).__name__ + " " + str(e)[:300])
+          except Exception:
+              print("::warning::COMPTE diagnostic indisponible : " + traceback.format_exc()[:500].replace(chr(10), " | "))
           PY
 
       - name: Installer la CLI Supabase
@@ -120,6 +120,7 @@ jobs:
           WEBHOOK_URL = "https://" + PROJECT + ".supabase.co/functions/v1/geniuspay-webhook"
           NL = chr(10)
           failures = []
+          simulated_seen = False
 
           def http(method, url, body=None, headers=None, raw=False):
               data = None
@@ -203,6 +204,10 @@ jobs:
                 json.dumps(st))
           check("EUR: montant API en centimes", st.get("amount_api") == 2490 and
                 st.get("currency") == "EUR", "amount_api=" + str(st.get("amount_api")))
+
+          if parsed.get("simulated"):
+              simulated_seen = True
+              print("::warning::CHECKOUT SIMULE : quota sandbox GeniusPay epuise, reference synthetique utilisee pour la suite de la chaine")
 
           # ---- 2. Webhook signe payment.success EUR ----
           ts = int(time.time())
@@ -358,7 +363,10 @@ jobs:
           if failures:
               print("::error::E2E ECHEC : " + ", ".join(failures))
               sys.exit(1)
-          print("::notice::E2E TOUT PASS : parcours client complet EUR + Wave + 6 scenarios de securite valides")
+          if simulated_seen:
+              print("::warning::E2E TOUT PASS (MODE SIMULE) : chaine interne complete validee (reservation, finalisation, webhook HMAC, rapprochement, securite) mais creation de checkout GeniusPay reelle BLOQUEE par quota sandbox epuise (0 token). Boutique NON prete : revalider apres recharge du quota fournisseur.")
+          else:
+              print("::notice::E2E TOUT PASS : parcours client complet EUR + Wave + 6 scenarios de securite valides")
           PY
 
       - name: Rapport des logs bruts

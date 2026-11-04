@@ -482,6 +482,7 @@ async function handleStart(req: StartRequest): Promise<Response> {
 
   const amountApi = apiUnitsFromOrder(amountMajor, currency);
   let checkout: { reference: string; checkout_url: string };
+  let simulated = false;
   try {
     checkout = await createGeniuspayCheckout(
       apiKey,
@@ -494,13 +495,32 @@ async function handleStart(req: StartRequest): Promise<Response> {
     );
   } catch (err) {
     if (err instanceof GeniuspayError) {
-      return json({
-        error: err.code,
-        detail: err.detail.slice(0, 120),
-        order_number: req.orderNumber,
-      }, 502);
+      // En mode TEST uniquement : si GeniusPay refuse la creation de
+      // paiement parce que le quota sandbox marchand est epuise
+      // ("No tokens remaining"), on simule une reference pour valider le
+      // reste de la chaine (finalisation, webhook HMAC, rapprochement).
+      // La reponse porte "simulated": true : ce n'est JAMAIS une preuve
+      // de checkout reel GeniusPay.
+      if (isTestOrder && err.code === "geniuspay_checkout_refused" &&
+          /No tokens remaining/i.test(err.detail) &&
+          Deno.env.get("GENIUSPAY_TEST_MODE") === "true") {
+        simulated = true;
+        const simRef = "TESTREF-" +
+          crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase();
+        checkout = {
+          reference: simRef,
+          checkout_url: "https://geniuspay.ci/checkout/" + simRef,
+        };
+      } else {
+        return json({
+          error: err.code,
+          detail: err.detail.slice(0, 120),
+          order_number: req.orderNumber,
+        }, 502);
+      }
+    } else {
+      return json({ error: "geniuspay_api_unavailable" }, 502);
     }
-    return json({ error: "geniuspay_api_unavailable" }, 502);
   }
 
   try {
@@ -514,6 +534,17 @@ async function handleStart(req: StartRequest): Promise<Response> {
     return json({ error: "checkout_finalization_failed" }, 503);
   }
 
+  if (simulated) {
+    return json({
+      order_number: req.orderNumber,
+      checkout_url: checkout.checkout_url,
+      reference: checkout.reference,
+      status: "pending",
+      environment: "sandbox",
+      simulated: true,
+      notice: "Checkout simule : quota sandbox GeniusPay epuise (creation reelle refusee). A revalider apres recharge du quota.",
+    });
+  }
   return finish(req, checkout.checkout_url, checkout.reference);
 }
 
