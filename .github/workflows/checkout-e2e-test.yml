@@ -282,6 +282,16 @@ jobs:
           check("Wave: commande confirmee payee", st.get("order_status") == "paid",
                 json.dumps(st))
 
+          # ---- 7bis. Mobile money CI : checkout heberge (Wave/Orange/MTN) ----
+          order_mm = "TEST-MM-" + str(random.randint(100000, 999999))
+          code, text = http("POST", ORDER_URL, {"order_number": order_mm,
+              "email": "client@example.com", "amount": 200,
+              "currency": "XOF", "country": "CI", "method": "mobile_money"})
+          parsed_mm = json.loads(text) if text else {}
+          check("MobileMoney: commande XOF checkout heberge creee",
+                code == 200 and bool(parsed_mm.get("reference")),
+                "HTTP " + str(code) + " " + str(parsed_mm)[:150])
+
           # ---- 8. Montant incorrect (falsifie) ----
           order_bad, code, parsed = make_test_order("BAD", 24.90, "EUR", "FR")
           ref_bad = parsed.get("reference", "")

@@ -236,6 +236,10 @@ async function createGeniuspayCheckout(
     body.payment_method = "wave";
     body.gateway = "wave";
     body.customer = { country: "CI" };
+  } else if (method === "mobile_money") {
+    // Checkout heberge multi-canaux : le client choisit Wave, Orange
+    // Money ou MTN MoMo sur la page GeniusPay (API mobile-money GeniusPay).
+    body.customer = { country: "CI" };
   }
   const resp = await fetch(GENIUSPAY_API_BASE + "/payments", {
     method: "POST",
@@ -303,6 +307,7 @@ interface StartRequest {
   amount?: number;
   currency?: string;
   country?: string;
+  method?: string;
   redirect?: boolean;
 }
 
@@ -327,7 +332,11 @@ function parseStartRequest(url: URL, bodyJson: unknown): StartRequest | null {
     ? src.country.toUpperCase()
     : undefined;
   const redirect = src.redirect === "1" || src.redirect === true;
-  return { orderNumber, email, amount, currency, country, redirect };
+  const method = (typeof src.method === "string" &&
+      ["wave", "mobile_money"].includes(src.method.toLowerCase()))
+    ? src.method.toLowerCase()
+    : undefined;
+  return { orderNumber, email, amount, currency, country, redirect, method };
 }
 
 async function handleStart(req: StartRequest): Promise<Response> {
@@ -353,7 +362,9 @@ async function handleStart(req: StartRequest): Promise<Response> {
         return json({ error: "invalid_test_amount" }, 400);
       }
     } else if (currency === "XOF") {
-      method = "wave";
+      // Defaut : Wave Direct ; "mobile_money" = checkout heberge
+      // multi-canaux (Wave, Orange Money, MTN MoMo au choix du client).
+      method = req.method === "mobile_money" ? "mobile_money" : "wave";
       country = "CI";
       if (!(amountMajor >= 200 && Number.isInteger(amountMajor))) {
         return json({ error: "invalid_test_amount" }, 400);
@@ -388,7 +399,7 @@ async function handleStart(req: StartRequest): Promise<Response> {
         order.billing_address?.country_iso_2 || "FR";
       country = c.toUpperCase();
     } else if (currency === "XOF") {
-      method = "wave";
+      method = req.method === "mobile_money" ? "mobile_money" : "wave";
       const c = order.delivery_address?.country_iso_2 ||
         order.billing_address?.country_iso_2 || "";
       country = c.toUpperCase();
