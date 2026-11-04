@@ -464,10 +464,13 @@ async function handleStart(req: StartRequest): Promise<Response> {
     return json({ error: "reservation_failed" }, 503);
   }
   if (existingUrl && isAllowedCheckoutHost(existingUrl)) {
-    return finish(req, existingUrl);
+    const ref = typeof reserve.provider_reference === "string"
+      ? reserve.provider_reference
+      : null;
+    return finish(req, existingUrl, ref);
   }
   if (reusedCheckoutUrl && isAllowedCheckoutHost(reusedCheckoutUrl)) {
-    return finish(req, reusedCheckoutUrl);
+    return finish(req, reusedCheckoutUrl, null);
   }
 
   const amountApi = apiUnitsFromOrder(amountMajor, currency);
@@ -504,22 +507,30 @@ async function handleStart(req: StartRequest): Promise<Response> {
     return json({ error: "checkout_finalization_failed" }, 503);
   }
 
-  return finish(req, checkout.checkout_url);
+  return finish(req, checkout.checkout_url, checkout.reference);
 }
 
-function finish(req: StartRequest, checkoutUrl: string): Response {
+function finish(
+  req: StartRequest,
+  checkoutUrl: string,
+  reference: string | null,
+): Response {
   if (req.redirect) {
     return new Response(null, {
       status: 303,
       headers: { ...CORS_HEADERS, location: checkoutUrl },
     });
   }
-  return json({
+  const body: Record<string, unknown> = {
     order_number: req.orderNumber,
     checkout_url: checkoutUrl,
     status: "pending",
     environment: "sandbox",
-  });
+  };
+  if (reference) {
+    body.reference = reference;
+  }
+  return json(body);
 }
 
 Deno.serve(async (request: Request) => {
