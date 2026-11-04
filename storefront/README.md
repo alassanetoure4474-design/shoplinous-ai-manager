@@ -39,3 +39,12 @@ La table publique est volontairement en lecture seule pour les visiteurs. La pub
 ## Contrôles
 
 Le workflow `.github/workflows/storefront-check.yml` vérifie la syntaxe JavaScript et la structure des pages sans dépendance payante.
+
+## Identité et animations
+
+- `assets/logo-animated.svg` : emblème vectoriel animé, avec prise en charge de `prefers-reduced-motion`.
+- `assets/hero-motion.svg` : illustration de couverture SVG animée, motifs géométriques abstraits et formes organiques.
+- `animations.js` : contrôleur léger du parcours interactif de paiement et des apparitions au défilement.
+- La section `#parcours-paiement` présente quatre étapes : commande, checkout GeniusPay, vérification du webhook et confirmation serveur.
+- Le parcours est une démonstration visuelle uniquement : aucun appel à GeniusPay, aucune transaction et aucune commande ne sont créés.
+- Les animations respectent le réglage système de réduction des mouvements ; les étapes restent utilisables au clavier.
