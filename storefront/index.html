@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10251f">
+  <meta name="description" content="SHOPLINOUS AFRICA — une sélection de produits utiles, soigneusement étudiés pour votre quotidien.">
+  <meta property="og:title" content="SHOPLINOUS AFRICA — Découvrez mieux. Vivez mieux.">
+  <meta property="og:description" content="Une nouvelle façon de découvrir des produits utiles pour le quotidien.">
+  <title>SHOPLINOUS AFRICA — Découvrez mieux. Vivez mieux.</title>
+  <style>
+    :root{--ink:#14251f;--muted:#66756e;--paper:#fbfaf6;--green:#173d31;--lime:#d6f36a;--line:#e7e9df;--white:#fff;--gold:#c69b57}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:inherit;text-decoration:none}button{font:inherit}
+    .topline{background:var(--green);color:#edf4e8;text-align:center;padding:9px 14px;font-size:11px;letter-spacing:.13em;text-transform:uppercase}
+    header{position:sticky;top:0;z-index:10;background:rgba(251,250,246,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+    .nav{max-width:1200px;margin:auto;padding:17px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .brand{font-weight:900;font-size:21px;letter-spacing:.09em;white-space:nowrap}.brand span{color:#78933b}.navlinks{display:flex;align-items:center;gap:30px;font-size:13px;color:#526159}.navlinks a:hover{color:var(--green)}
+    .nav-cta,.button{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:13px 21px;background:var(--green);color:white;font-size:13px;font-weight:700;border:1px solid var(--green);transition:.2s}.nav-cta:hover,.button:hover{background:#245443;transform:translateY(-1px)}
+    .menu{display:none;border:1px solid var(--line);background:white;border-radius:50%;width:42px;height:42px;font-size:20px}
+    .hero{max-width:1200px;margin:0 auto;padding:64px 28px 54px;display:grid;grid-template-columns:1.05fr .95fr;gap:46px;align-items:center;min-height:590px}
+    .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#71834b;font-weight:800;display:flex;align-items:center;gap:10px}.eyebrow:before{content:"";width:27px;height:1px;background:#9aaf68}
+    h1{font-family:Georgia,"Times New Roman",serif;font-weight:500;font-size:clamp(48px,6vw,78px);line-height:.99;letter-spacing:-.045em;margin:23px 0 22px;max-width:630px}
+    h1 em{font-style:italic;color:#78933b}.hero-copy{max-width:480px;color:var(--muted);font-size:16px;line-height:1.8}.hero-actions{display:flex;align-items:center;gap:20px;margin-top:30px}.text-link{font-size:13px;font-weight:700;border-bottom:1px solid #a8b39f;padding-bottom:5px}
+    .hero-note{font-size:11px;color:#87928b;margin-top:30px;letter-spacing:.04em}
+    .visual{position:relative;min-height:460px;border-radius:5px 110px 5px 5px;overflow:hidden;background:linear-gradient(145deg,#dfe8d4,#b7c9a7 52%,#718c70)}
+    .visual:before{content:"";position:absolute;width:340px;height:340px;border:1px solid rgba(255,255,255,.55);border-radius:50%;right:-40px;top:36px}
+    .visual:after{content:"";position:absolute;width:240px;height:240px;border:1px solid rgba(255,255,255,.45);border-radius:50%;right:10px;top:86px}
+    .sun{position:absolute;width:180px;height:180px;border-radius:50%;background:#f3e5bc;right:85px;top:65px;box-shadow:0 0 70px rgba(255,255,255,.3)}
+    .arch{position:absolute;bottom:-72px;left:50%;transform:translateX(-50%);width:270px;height:390px;border-radius:150px 150px 0 0;background:linear-gradient(90deg,#294d3c,#466b4f 55%,#203e32);box-shadow:24px 18px 50px rgba(24,53,39,.2)}
+    .arch:before{content:"";position:absolute;inset:35px 35px 0;border:1px solid rgba(255,255,255,.3);border-bottom:0;border-radius:130px 130px 0 0}
+    .leaf{position:absolute;width:130px;height:54px;background:#78966d;border-radius:100% 0 100% 0;transform:rotate(-35deg);left:13%;bottom:100px;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
+    .leaf.two{left:auto;right:8%;bottom:165px;transform:rotate(35deg) scale(.8);background:#91a77b}
+    .visual-label{position:absolute;left:25px;bottom:25px;color:white;font-family:Georgia,serif;font-size:19px;z-index:2}
+    .section{padding:78px 28px;max-width:1200px;margin:auto}.section-head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:30px}.section-kicker{font-size:10px;letter-spacing:.18em;color:#83916d;text-transform:uppercase;font-weight:800}.section h2{font:500 clamp(32px,4vw,48px)/1.1 Georgia,serif;letter-spacing:-.03em;margin:12px 0 0}.section-intro{max-width:390px;color:var(--muted);font-size:13px;line-height:1.7}
+    .categories{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.category{min-height:205px;padding:22px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--line);background:#f3f2eb;transition:.2s}.category:nth-child(2){background:#e9eee5}.category:nth-child(3){background:#eee8dc}.category:nth-child(4){background:#e8ece8}.category:hover{transform:translateY(-4px);border-color:#bdc8b2}.category-icon{font-size:27px}.category strong{font:500 22px Georgia,serif}.category small{color:var(--muted);font-size:11px;margin-top:6px}
+    .catalogue{background:#f0f1e9;padding:78px 0}.catalogue-inner{max-width:1200px;margin:auto;padding:0 28px}.empty-catalogue{border:1px dashed #b8c2b1;background:rgba(255,255,255,.45);padding:42px 24px;text-align:center}.empty-catalogue .symbol{font:42px Georgia,serif;color:#81936c}.empty-catalogue h3{font:500 27px Georgia,serif;margin:12px 0}.empty-catalogue p{font-size:13px;line-height:1.7;color:var(--muted);max-width:490px;margin:0 auto 22px}
+    .promise{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:28px}.promise article{background:var(--paper);padding:28px}.promise b{display:block;font:500 21px Georgia,serif;margin:0 0 9px}.promise p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+    .about{display:grid;grid-template-columns:.8fr 1.2fr;gap:65px;align-items:center}.about-mark{background:var(--green);color:#eff4e7;min-height:290px;padding:35px;display:flex;flex-direction:column;justify-content:space-between}.about-mark strong{font-size:12px;letter-spacing:.16em}.about-mark span{font:italic 43px/1.1 Georgia,serif}.about-copy p{color:var(--muted);font-size:14px;line-height:1.9}
+    .newsletter{background:#e6ebdd;padding:58px 28px;text-align:center}.newsletter h2{font:500 38px Georgia,serif;margin:0 0 12px}.newsletter p{color:var(--muted);font-size:13px;margin:0 auto 22px;max-width:480px}.contact-link{display:inline-block;border-bottom:1px solid #87977a;padding-bottom:5px;font-weight:700;font-size:13px}
+    footer{background:#12271f;color:#eaf0e5;padding:40px 28px}.footer-inner{max-width:1200px;margin:auto;display:flex;justify-content:space-between;gap:25px;align-items:center}.footer-brand{font-size:17px;font-weight:900;letter-spacing:.1em}.footer-brand span{color:var(--lime)}footer p{color:#aebbb1;font-size:11px;line-height:1.7}footer a{font-size:11px;color:#d8e3d7}
+    @media(max-width:760px){.nav{padding:13px 18px}.navlinks{display:none;position:absolute;top:66px;left:0;right:0;background:var(--paper);padding:20px;flex-direction:column;align-items:flex-start;border-bottom:1px solid var(--line)}.navlinks.open{display:flex}.nav-cta{display:none}.menu{display:block}.hero{padding:43px 18px 30px;grid-template-columns:1fr;gap:30px;min-height:auto}.hero h1{font-size:53px}.hero-copy{font-size:14px}.visual{min-height:340px;border-top-right-radius:75px}.sun{width:135px;height:135px;right:55px}.arch{width:220px;height:310px}.section{padding:57px 18px}.section-head{display:block}.section-intro{margin-top:14px}.categories{grid-template-columns:repeat(2,1fr);gap:9px}.category{min-height:160px;padding:16px}.category strong{font-size:19px}.catalogue{padding:58px 0}.catalogue-inner{padding:0 18px}.promise{grid-template-columns:1fr}.promise article{padding:22px}.about{grid-template-columns:1fr;gap:25px}.about-mark{min-height:220px}.about-mark span{font-size:38px}.newsletter{padding:48px 20px}.newsletter h2{font-size:32px}.footer-inner{display:block}.footer-inner>div+div{margin-top:18px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important}}
+  </style>
+</head>
+<body>
+  <div class="topline">Une nouvelle façon de découvrir le quotidien</div>
+  <header>
+    <nav class="nav" aria-label="Navigation principale">
+      <a class="brand" href="#" aria-label="SHOPLINOUS AFRICA accueil">SHOPLINOUS <span>AFRICA</span></a>
+      <div class="navlinks" id="navlinks">
+        <a href="#univers">Nos univers</a><a href="#selection">La sélection</a><a href="#histoire">Notre approche</a><a href="#contact">Contact</a>
+      </div>
+      <a class="nav-cta" href="#selection">Explorer la boutique ↗</a>
+      <button class="menu" id="menu" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">L'essentiel, avec intention</div>
+        <h1>Découvrez mieux.<br><em>Vivez mieux.</em></h1>
+        <p class="hero-copy">Des découvertes utiles, des idées qui inspirent et une sélection pensée pour accompagner votre quotidien. Bienvenue dans le nouvel univers SHOPLINOUS.</p>
+        <div class="hero-actions"><a class="button" href="#univers">Découvrir nos univers</a><a class="text-link" href="#histoire">Notre philosophie</a></div>
+        <div class="hero-note">SHOPLINOUS AFRICA · Lancement progressif</div>
+      </div>
+      <div class="visual" role="img" aria-label="Illustration abstraite aux tons naturels et végétaux">
+        <div class="sun"></div><div class="arch"></div><div class="leaf"></div><div class="leaf two"></div>
+        <div class="visual-label">Discover More. Live Better.</div>
+      </div>
+    </section>
+    <section class="section" id="univers">
+      <div class="section-head"><div><div class="section-kicker">Explorez à votre rythme</div><h2>Des univers à découvrir</h2></div><p class="section-intro">Nous préparons une sélection de produits autour de besoins concrets, avec une attention particulière portée à la qualité, à l'utilité et au rapport valeur-prix.</p></div>
+      <div class="categories">
+        <a class="category" href="#selection"><span class="category-icon">⌂</span><span><strong>Maison & quotidien</strong><br><small>Des idées pratiques</small></span></a>
+        <a class="category" href="#selection"><span class="category-icon">✳</span><span><strong>Style & accessoires</strong><br><small>Les détails qui comptent</small></span></a>
+        <a class="category" href="#selection"><span class="category-icon">◉</span><span><strong>Tech & innovation</strong><br><small>Des usages plus simples</small></span></a>
+        <a class="category" href="#selection"><span class="category-icon">♡</span><span><strong>Bien-être & loisirs</strong><br><small>Prendre du temps pour soi</small></span></a>
+      </div>
+    </section>
+    <section class="catalogue" id="selection">
+      <div class="catalogue-inner">
+        <div class="section-head"><div><div class="section-kicker">La sélection SHOPLINOUS</div><h2>Les bonnes découvertes arrivent.</h2></div><p class="section-intro">Chaque produit devra passer nos contrôles de disponibilité, de livraison, de conformité et de prix avant d'être proposé à la vente.</p></div>
+        <div class="empty-catalogue"><div class="symbol">✳</div><h3>Notre catalogue se prépare</h3><p>Nous finalisons les premières références. Aucun produit n'est affiché comme disponible tant que son fournisseur, son coût total et ses conditions de livraison ne sont pas vérifiés.</p><a class="text-link" href="#contact">Nous contacter</a></div>
+        <div class="promise">
+          <article><b>Une sélection vérifiée</b><p>Les références seront contrôlées avant leur mise en ligne. Pas de disponibilité ni de promesse de livraison inventée.</p></article>
+          <article><b>Des prix transparents</b><p>Le prix affiché devra tenir compte des frais connus et des conditions réelles de livraison vers la destination choisie.</p></article>
+          <article><b>Un lancement progressif</b><p>Les pays et moyens de paiement seront ouverts uniquement après vérification de leur fonctionnement.</p></article>
+        </div>
+      </div>
+    </section>
+    <section class="section about" id="histoire">
+      <div class="about-mark"><strong>NOTRE ENGAGEMENT</strong><span>Le bon produit.<br>Au bon moment.</span><small>SHOPLINOUS AFRICA</small></div>
+      <div class="about-copy"><div class="section-kicker">Une autre idée du commerce en ligne</div><h2>Utile avant tout.<br>Fiable à chaque étape.</h2><p>SHOPLINOUS AFRICA est une plateforme en construction, pensée pour faciliter l'accès à des produits intéressants depuis l'Afrique et, progressivement, d'autres marchés.</p><p>Notre priorité : construire une expérience claire, vérifier les informations essentielles et ne proposer que ce que nous pouvons réellement livrer dans les conditions annoncées.</p></div>
+    </section>
+    <section class="newsletter" id="contact"><h2>Une question ? Parlons-en.</h2><p>Le service client et les informations de commande seront ajoutés avant l'ouverture commerciale.</p><a class="contact-link" href="mailto:contact@shoplinous.com">Contacter SHOPLINOUS ↗</a></section>
+  </main>
+  <footer><div class="footer-inner"><div><div class="footer-brand">SHOPLINOUS <span>AFRICA</span></div><p>Discover More. Live Better.<br>Une plateforme en construction.</p></div><div><a href="#univers">Nos univers</a>　 <a href="#histoire">Notre approche</a>　 <a href="#contact">Contact</a><p>© <span id="year"></span> SHOPLINOUS AFRICA. Tous droits réservés.</p></div></div></footer>
+  <script>
+    const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+    menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+    links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+    document.getElementById('year').textContent=new Date().getFullYear();
+  </script>
+</body>
+</html>
