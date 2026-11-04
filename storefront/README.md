@@ -2,6 +2,12 @@
 
 Ce dossier contient le site public, indépendant de Freewebstore et distinct de l'ancien tableau de gestion. Tout le contenu est en français ; l'architecture est prête pour des traductions ultérieures (contenus regroupés par page, aucun texte codé en dur dans les composants partagés).
 
+## Nouvelle direction visuelle — novembre 2026
+
+- `index.html` : nouvelle page d'accueil complète, indépendante de l'ancienne direction artistique, avec hero éditorial, univers illustrés, cartes de collection, engagements et animations Motion Design.
+- `shop.css` : nouvelle identité cohérente pour le catalogue dynamique, les fiches produits et le panier.
+- `dashboard-apercu.html` : maquette visuelle du tableau de bord administrateur (indicateurs, commandes, catalogue, fournisseurs, livraisons, paiements). Les valeurs sont volontairement affichées comme indisponibles : ce tableau de bord n'est pas encore relié aux données réelles et ne doit pas être considéré comme une interface d'administration sécurisée.
+
 ## Pages livrées
 
 Boutique :
@@ -57,3 +63,7 @@ Le workflow `.github/workflows/storefront-check.yml` vérifie la syntaxe JavaScr
 - `assets/logo-animated.svg` : emblème vectoriel animé, avec prise en charge de `prefers-reduced-motion`.
 - `assets/hero-motion.svg` : illustration de couverture SVG animée.
 - Le parcours de paiement interactif de l'accueil est une démonstration visuelle : aucun appel à GeniusPay, aucune transaction.
+
+### Prévisualisation configurée via GitHub Actions
+
+Le workflow manuel `.github/workflows/storefront-preview.yml` construit un artefact de prévisualisation sans déploiement. Il lit `SUPABASE_PROJECT_ID` et `SUPABASE_PUBLISHABLE_KEY` (ou `SUPABASE_ANON_KEY`) depuis les secrets GitHub; `SUPABASE_URL` est facultatif car l'URL du projet SHOPLINOUS vérifié peut être déduite du project-ref. La configuration est générée uniquement dans `dist/config.js` pendant le workflow et n'est jamais commitée. L'artefact contient une clé publique destinée au navigateur : elle ne doit jamais être remplacée par `service_role` ou une clé `sb_secret_`. Ce workflow ne lance aucune migration et ne déploie rien.

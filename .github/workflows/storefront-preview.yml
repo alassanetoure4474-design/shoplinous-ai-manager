@@ -1,0 +1,70 @@
+name: Build SHOPLINOUS storefront preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate public Supabase configuration
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_PROJECT_ID" || { echo "::error::Secret SUPABASE_PROJECT_ID absent"; exit 1; }
+          if [[ "$SUPABASE_PROJECT_ID" != "giarkrdmwfrlagkqnkvi" ]]; then
+            echo "::error::Le project-ref ne correspond pas au projet SHOPLINOUS vérifié."
+            exit 1
+          fi
+          KEY="${SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}"
+          test -n "$KEY" || { echo "::error::Ajouter SUPABASE_PUBLISHABLE_KEY ou SUPABASE_ANON_KEY dans GitHub Actions Secrets."; exit 1; }
+          if [[ "$KEY" == sb_secret_* || "$KEY" == *service_role* ]]; then
+            echo "::error::Une clé serveur/service_role ne doit jamais être intégrée à la vitrine."
+            exit 1
+          fi
+          URL="${SUPABASE_URL:-https://${SUPABASE_PROJECT_ID}.supabase.co}"
+          case "$URL" in https://*) ;; *) echo "::error::SUPABASE_URL doit utiliser HTTPS."; exit 1;; esac
+          export URL KEY
+          mkdir -p dist
+          cp -R storefront/. dist/
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const url = process.env.URL.replace(/\/$/, '');
+          const key = process.env.KEY;
+          const config = 'window.SHOPLINOUS_CONFIG = Object.freeze({\n' +
+            '  supabaseUrl: ' + JSON.stringify(url) + ',\n' +
+            '  supabaseAnonKey: ' + JSON.stringify(key) + '\n' +
+            '});\n';
+          fs.writeFileSync('dist/config.js', config, { mode: 0o644 });
+          NODE
+          unset KEY
+          echo "Configuration publique injectée dans l'artefact de prévisualisation; aucune clé serveur utilisée."
+
+      - name: Verify generated storefront configuration
+        run: |
+          test -s dist/config.js
+          grep -q 'supabaseUrl: "https://' dist/config.js
+          grep -q 'supabaseAnonKey:' dist/config.js
+          test -f dist/index.html
+          test -f dist/catalogue.html
+          test -f dist/shop.js
+          echo "Vitrine compilée. Aucun déploiement ni changement Supabase effectué."
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shoplinous-africa-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
