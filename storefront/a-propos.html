@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<meta name="description" content="SHOPLINOUS AFRICA : une boutique née en Afrique, ouverte sur le monde. Découvrez plus. Vivez mieux.">
+<meta property="og:title" content="À propos | SHOPLINOUS AFRICA">
+<meta property="og:description" content="SHOPLINOUS AFRICA : une boutique née en Afrique, ouverte sur le monde. Découvrez plus. Vivez mieux.">
+<meta property="og:type" content="website">
+<title>À propos | SHOPLINOUS AFRICA</title>
+<link rel="stylesheet" href="shop.css"><link rel="stylesheet" href="pages.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="topline">Découvrez plus. Vivez mieux.</div>
+<header>
+<nav class="nav" aria-label="Navigation principale">
+<a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+<div class="navlinks" id="navlinks">
+<a href="index.html">Accueil</a>
+<a href="catalogue.html">Catalogue</a>
+<a href="favoris.html">Favoris</a>
+<a href="panier.html">Mon panier</a>
+<a href="contact.html">Contact</a>
+</div>
+<a class="nav-cta" href="panier.html">Mon panier ↗</a>
+<button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+</nav>
+</header>
+<main class="shop-wrap"><div class="page-hero"><div class="shop-eyebrow">Notre maison</div><h1>À propos de SHOPLINOUS AFRICA</h1><p class="shop-muted">Née en Afrique, ouverte sur le monde. Une boutique pensée à Abidjan pour celles et ceux qui cherchent des découvertes fiables et inspirantes.</p></div>
+<div class="page-prose">
+<h2>Notre promesse</h2>
+<p>SHOPLINOUS AFRICA réunit des produits sélectionnés auprès de fournisseurs fiables en Côte d'Ivoire, en Afrique et dans le reste du monde. Chaque produit publié a été vérifié : fournisseur, stock, prix complet, images et conditions de livraison réelles. Ce que nous ne pouvons pas garantir, nous ne l'affichons pas.</p>
+<h2>Notre modèle</h2>
+<ul>
+<li>Nous ne détenons pas de stock : chaque commande est transmise au fournisseur uniquement après vérification du paiement par notre serveur.</li>
+<li>Le colis est expédié directement du fournisseur vers le client.</li>
+<li>Les prix affichés intègrent le coût réel du produit et de sa livraison, complétés par notre marge commerciale.</li>
+</ul>
+<h2>Notre trajectoire</h2>
+<p>La Côte d'Ivoire est notre premier marché. L'Afrique puis l'Europe et le reste du monde suivront, pays par pays, seulement après validation des paiements, des livraisons, des frais et des obligations locales.</p>
+</div>
+<div class="page-cards">
+<div class="page-card"><h3>Véracité</h3><p>Aucun prix, stock, avis ou délai inventé. Un produit non vérifié n'est jamais publié.</p></div>
+<div class="page-card"><h3>Confiance</h3><p>Une commande n'est confirmée qu'après validation sécurisée du paiement côté serveur.</p></div>
+<div class="page-card"><h3>Élégance</h3><p>Une expérience sobre, claire et soignée, inspirée des standards internationaux.</p></div>
+</div></main>
+<footer><div class="footer-inner">
+<div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div>
+<div class="footer-cols">
+<div><a href="catalogue.html">Catalogue</a><a href="favoris.html">Favoris</a><a href="panier.html">Panier</a><a href="blog.html">Blog</a></div>
+<div><a href="a-propos.html">À propos</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a></div>
+<div><a href="cgv.html">CGV</a><a href="confidentialite.html">Confidentialité</a><a href="livraison.html">Livraison</a><a href="remboursement.html">Remboursements</a></div>
+</div>
+<div><p>© <span id="year"></span> SHOPLINOUS AFRICA — Abidjan, Côte d'Ivoire.</p></div>
+</div></footer>
+<script>
+const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

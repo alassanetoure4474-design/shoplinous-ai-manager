@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<meta name="description" content="Politique de livraison SHOPLINOUS AFRICA : frais et délais réels affichés pays par pays, uniquement après vérification transporteur.">
+<meta property="og:title" content="Livraison | SHOPLINOUS AFRICA">
+<meta property="og:description" content="Politique de livraison SHOPLINOUS AFRICA : frais et délais réels affichés pays par pays, uniquement après vérification transporteur.">
+<meta property="og:type" content="website">
+<title>Livraison | SHOPLINOUS AFRICA</title>
+<link rel="stylesheet" href="shop.css"><link rel="stylesheet" href="pages.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="topline">Découvrez plus. Vivez mieux.</div>
+<header>
+<nav class="nav" aria-label="Navigation principale">
+<a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+<div class="navlinks" id="navlinks">
+<a href="index.html">Accueil</a>
+<a href="catalogue.html">Catalogue</a>
+<a href="favoris.html">Favoris</a>
+<a href="panier.html">Mon panier</a>
+<a href="contact.html">Contact</a>
+</div>
+<a class="nav-cta" href="panier.html">Mon panier ↗</a>
+<button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+</nav>
+</header>
+<main class="shop-wrap"><div class="page-hero"><div class="shop-eyebrow">Logistique</div><h1>Politique de livraison</h1><p class="shop-muted">La vérité avant la promesse : chaque frais et délai affiché a été vérifié auprès du transporteur pour votre pays.</p></div>
+<div class="page-prose">
+<h2>Couverture</h2>
+<p>La Côte d'Ivoire est le premier marché desservi. D'autres pays d'Afrique, puis d'Europe et du reste du monde, seront ouverts un par un, après validation des transporteurs, des tarifs, des délais et des obligations locales. Un pays non vérifié n'est jamais proposé à la commande.</p>
+<h2>Frais et délais</h2>
+<p>Les frais et délais de livraison dépendent du produit, du fournisseur, du transporteur et du pays de destination. Ils sont calculés et affichés au moment de la commande, après vérification réelle pour votre adresse. Aucune estimation générique n'est affichée à la place d'un tarif vérifié.</p>
+<h2>Suivi</h2>
+<ul>
+<li>Une confirmation vous est envoyée dès la validation de votre paiement par notre serveur.</li>
+<li>Un ou plusieurs numéros de suivi vous sont communiqués dès l'expédition, y compris lorsqu'une commande provient de plusieurs fournisseurs.</li>
+<li>Les retards et anomalies détectés par notre surveillance sont signalés proactivement.</li>
+</ul>
+<h2>Retours</h2>
+<p>Les conditions de retour et de remboursement sont détaillées dans notre <a class="shop-link" href="remboursement.html">politique de remboursement</a> et s'appliquent conformément à la réglementation du pays de livraison.</p>
+</div></main>
+<footer><div class="footer-inner">
+<div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div>
+<div class="footer-cols">
+<div><a href="catalogue.html">Catalogue</a><a href="favoris.html">Favoris</a><a href="panier.html">Panier</a><a href="blog.html">Blog</a></div>
+<div><a href="a-propos.html">À propos</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a></div>
+<div><a href="cgv.html">CGV</a><a href="confidentialite.html">Confidentialité</a><a href="livraison.html">Livraison</a><a href="remboursement.html">Remboursements</a></div>
+</div>
+<div><p>© <span id="year"></span> SHOPLINOUS AFRICA — Abidjan, Côte d'Ivoire.</p></div>
+</div></footer>
+<script>
+const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

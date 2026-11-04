@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<meta name="description" content="Contactez le service client SHOPLINOUS AFRICA. Nous répondons à vos questions sur vos commandes, livraisons et produits.">
+<meta property="og:title" content="Contact | SHOPLINOUS AFRICA">
+<meta property="og:description" content="Contactez le service client SHOPLINOUS AFRICA. Nous répondons à vos questions sur vos commandes, livraisons et produits.">
+<meta property="og:type" content="website">
+<title>Contact | SHOPLINOUS AFRICA</title>
+<link rel="stylesheet" href="shop.css"><link rel="stylesheet" href="pages.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="topline">Découvrez plus. Vivez mieux.</div>
+<header>
+<nav class="nav" aria-label="Navigation principale">
+<a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+<div class="navlinks" id="navlinks">
+<a href="index.html">Accueil</a>
+<a href="catalogue.html">Catalogue</a>
+<a href="favoris.html">Favoris</a>
+<a href="panier.html">Mon panier</a>
+<a href="contact.html">Contact</a>
+</div>
+<a class="nav-cta" href="panier.html">Mon panier ↗</a>
+<button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+</nav>
+</header>
+<main class="shop-wrap"><div class="page-hero"><div class="shop-eyebrow">Service client</div><h1>Nous sommes à votre écoute</h1><p class="shop-muted">Une question sur un produit, une commande ou une livraison ? Écrivez-nous : notre équipe vous répond en français.</p></div>
+<div class="page-prose">
+<h2>Écrivez-nous</h2>
+<form class="form-static" aria-label="Formulaire de contact">
+<label for="c-nom">Nom</label><input id="c-nom" type="text" name="nom" autocomplete="name" required>
+<label for="c-email">Adresse e-mail</label><input id="c-email" type="email" name="email" autocomplete="email" required>
+<label for="c-msg">Votre message</label><textarea id="c-msg" name="message" rows="6" required></textarea>
+<button class="btn-pill" type="submit" disabled>Envoyer le message</button>
+</form>
+<div class="disabled-note">Le raccordement du formulaire est en préparation : aucun message n'est encore transmis. Les coordonnées officielles (e-mail et téléphone du service client) seront publiées ici dès leur activation, sans valeur inventée.</div>
+<h2>Délais de réponse</h2>
+<p>L'objectif du service client est de répondre sous 24 à 48 heures ouvrées. Ce délai sera confirmé et affiché ici dès l'ouverture officielle du canal de contact.</p>
+</div></main>
+<footer><div class="footer-inner">
+<div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div>
+<div class="footer-cols">
+<div><a href="catalogue.html">Catalogue</a><a href="favoris.html">Favoris</a><a href="panier.html">Panier</a><a href="blog.html">Blog</a></div>
+<div><a href="a-propos.html">À propos</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a></div>
+<div><a href="cgv.html">CGV</a><a href="confidentialite.html">Confidentialité</a><a href="livraison.html">Livraison</a><a href="remboursement.html">Remboursements</a></div>
+</div>
+<div><p>© <span id="year"></span> SHOPLINOUS AFRICA — Abidjan, Côte d'Ivoire.</p></div>
+</div></footer>
+<script>
+const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

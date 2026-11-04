@@ -1,0 +1,27 @@
+/* SHOPLINOUS AFRICA — styles des pages éditoriales (ivoire / vert forêt / terre cuite / or doux) */
+.page-hero{margin:6px 0 18px;max-width:720px}
+.page-hero h1{font:500 clamp(34px,5vw,52px)/1.08 Georgia,serif;margin:10px 0 12px}
+.page-prose{max-width:780px}
+.page-prose h2{font:500 26px Georgia,serif;margin:32px 0 10px}
+.page-prose h3{font:500 19px Georgia,serif;margin:20px 0 6px}
+.page-prose p,.page-prose li{font-size:14px;line-height:1.85;color:#54635a}
+.page-prose ul{padding-left:18px;margin:8px 0}
+.page-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0}
+.page-card{background:#fffdf8;border:1px solid #e4dbcd;padding:22px}
+.page-card h3{font:500 19px Georgia,serif;margin:0 0 8px}
+.page-card p{font-size:12.5px;color:#69776f;line-height:1.7;margin:0}
+.faq details{background:#fffdf8;border:1px solid #e4dbcd;padding:16px 18px;margin-bottom:10px}
+.faq summary{cursor:pointer;font-weight:750;font-size:14px}
+.faq details p{margin:10px 0 0;font-size:13px;line-height:1.8;color:#54635a}
+.form-static{max-width:560px;display:grid;gap:12px;margin-top:14px}
+.form-static input,.form-static textarea{border:1px solid #ded5c6;background:#fffdf8;padding:13px;font:inherit;color:#173b32;width:100%}
+.form-static label{font-size:12px;font-weight:700}
+.btn-pill{display:inline-flex;align-items:center;gap:10px;border-radius:99px;padding:13px 20px;background:#173b32;color:#f5f0e6;font-weight:750;font-size:13px;border:0;cursor:pointer}
+.btn-pill.ghost{background:none;color:#173b32;border:1px solid #173b32}
+.btn-pill:disabled{opacity:.45;cursor:not-allowed}
+.note{font-size:11px;color:#758078;line-height:1.7}
+.disabled-note{padding:14px 16px;background:#e9e3d7;border:1px dashed #bdc8b2;font-size:12.5px;color:#536157;line-height:1.7;margin-top:14px}
+.footer-inner{flex-wrap:wrap}
+.footer-cols{display:flex;gap:40px}
+.footer-cols div{display:flex;flex-direction:column;gap:6px}
+@media(max-width:760px){.page-cards{grid-template-columns:1fr}.footer-cols{gap:22px;flex-wrap:wrap}}

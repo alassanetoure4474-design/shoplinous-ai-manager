@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173b32">
+<meta name="description" content="Conditions générales de vente SHOPLINOUS AFRICA : vendeur, prix, commande, paiement, livraison, garanties.">
+<meta property="og:title" content="CGV | SHOPLINOUS AFRICA">
+<meta property="og:description" content="Conditions générales de vente SHOPLINOUS AFRICA : vendeur, prix, commande, paiement, livraison, garanties.">
+<meta property="og:type" content="website">
+<title>CGV | SHOPLINOUS AFRICA</title>
+<link rel="stylesheet" href="shop.css"><link rel="stylesheet" href="pages.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="topline">Découvrez plus. Vivez mieux.</div>
+<header>
+<nav class="nav" aria-label="Navigation principale">
+<a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+<div class="navlinks" id="navlinks">
+<a href="index.html">Accueil</a>
+<a href="catalogue.html">Catalogue</a>
+<a href="favoris.html">Favoris</a>
+<a href="panier.html">Mon panier</a>
+<a href="contact.html">Contact</a>
+</div>
+<a class="nav-cta" href="panier.html">Mon panier ↗</a>
+<button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+</nav>
+</header>
+<main class="shop-wrap"><div class="page-hero"><div class="shop-eyebrow">Légal</div><h1>Conditions générales de vente</h1><p class="shop-muted">Les règles de la vente en ligne SHOPLINOUS AFRICA. Les champs liés à l'immatriculation de l'entreprise sont à compléter par le propriétaire avant la première vente.</p></div>
+<div class="page-prose">
+<h2>1. Vendeur</h2>
+<p>SHOPLINOUS AFRICA — raison sociale, adresse, registre du commerce et coordonnées : <strong>[à compléter par le propriétaire avant la première vente]</strong>.</p>
+<h2>2. Objet</h2>
+<p>Les présentes conditions régissent la vente de produits présentés sur ce site. Elles sont rédigées en français ; des traductions pourront être fournies à titre informatif.</p>
+<h2>3. Produits et prix</h2>
+<p>Les prix sont indiqués dans la devise du pays de livraison sélectionné, toutes taxes comprises. Chaque produit publié a fait l'objet d'une vérification de disponibilité et de coût réel auprès du fournisseur ; si un produit devient indisponible avant expédition, le client est informé et remboursé.</p>
+<h2>4. Commande et paiement</h2>
+<ul>
+<li>La commande est ferme après confirmation du paiement validée par notre serveur (notification de paiement signée et vérifiée).</li>
+<li>Aucune commande fournisseur n'est déclenchée sur la seule foi d'un retour de navigateur.</li>
+<li>En cas d'échec, d'annulation ou de remboursement du paiement, la commande est annulée sans frais.</li>
+</ul>
+<h2>5. Livraison</h2>
+<p>Les modalités, frais et délais sont ceux affichés au moment de la commande pour le pays de livraison, conformément à notre <a class="shop-link" href="livraison.html">politique de livraison</a>.</p>
+<h2>6. Droit de rétractation et garanties</h2>
+<p>Le droit de rétractation et les garanties légales s'appliquent conformément à la réglementation du pays de livraison (voir <a class="shop-link" href="remboursement.html">politique de remboursement</a>).</p>
+<h2>7. Données personnelles</h2>
+<p>Les données collectées sont traitées selon notre <a class="shop-link" href="confidentialite.html">politique de confidentialité</a>.</p>
+<h2>8. Droit applicable</h2>
+<p>Les présentes conditions sont soumises au droit ivoirien pour les ventes livrées en Côte d'Ivoire, et au droit local applicable pour tout autre pays ouvert. Tribunal compétent : <strong>[à compléter]</strong>.</p>
+</div></main>
+<footer><div class="footer-inner">
+<div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div>
+<div class="footer-cols">
+<div><a href="catalogue.html">Catalogue</a><a href="favoris.html">Favoris</a><a href="panier.html">Panier</a><a href="blog.html">Blog</a></div>
+<div><a href="a-propos.html">À propos</a><a href="faq.html">FAQ</a><a href="contact.html">Contact</a></div>
+<div><a href="cgv.html">CGV</a><a href="confidentialite.html">Confidentialité</a><a href="livraison.html">Livraison</a><a href="remboursement.html">Remboursements</a></div>
+</div>
+<div><p>© <span id="year"></span> SHOPLINOUS AFRICA — Abidjan, Côte d'Ivoire.</p></div>
+</div></footer>
+<script>
+const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+document.getElementById('year').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

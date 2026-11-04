@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173b32">
+  <meta name="description" content="Retrouvez les produits sélectionnés dans votre panier SHOPLINOUS AFRICA.">
+  <title>Panier | SHOPLINOUS AFRICA</title>
+  <link rel="stylesheet" href="shop.css">
+  <link rel="icon" href="data:,">
+  <script src="config.js"></script>
+  <script defer src="shop.js"></script>
+</head>
+<body>
+  <div class="topline">Découvrez plus. Vivez mieux.</div>
+  <header>
+    <nav class="nav" aria-label="Navigation principale">
+      <a class="brand" href="index.html" aria-label="Accueil SHOPLINOUS AFRICA"><img src="assets/logo-animated.svg" alt="" width="36" height="36"><span class="brand-name">SHOPLINOUS <b>AFRICA</b></span></a>
+      <div class="navlinks" id="navlinks">
+        <a href="index.html#univers">Nos univers</a>
+        <a href="catalogue.html">Catalogue</a>
+        <a href="panier.html">Mon panier</a>
+        <a href="index.html#vision">Contact</a>
+      </div>
+      <a class="nav-cta" href="panier.html">Mon panier ↗</a>
+      <button class="menu" id="menu" aria-label="Ouvrir le menu de navigation" aria-expanded="false">☰</button>
+    </nav>
+  </header>
+  <main class="shop-wrap" data-shop-page="panier">
+    <div class="shop-message">Chargement de votre sélection…</div>
+  </main>
+  <footer><div class="footer-inner"><div><div class="footer-brand"><img src="assets/logo-animated.svg" alt="" width="28" height="28"> SHOPLINOUS <span>AFRICA</span></div><p>Découvrez plus. Vivez mieux.</p></div><div><a href="catalogue.html">Catalogue</a>　<a href="panier.html">Panier</a>　<a href="index.html#vision">Contact</a><p>© <span id="year"></span> SHOPLINOUS AFRICA.</p></div></div></footer>
+  <script>
+    const menu=document.getElementById('menu'),links=document.getElementById('navlinks');
+    menu.addEventListener('click',()=>{const open=links.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰';});
+    links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰';}));
+    document.getElementById('year').textContent=new Date().getFullYear();
+  </script>
+</body>
+</html>
