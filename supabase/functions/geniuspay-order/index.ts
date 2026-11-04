@@ -241,6 +241,7 @@ async function createGeniuspayCheckout(
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "accept": "application/json",
       "x-api-key": apiKey,
       "x-api-secret": apiSecret,
     },
@@ -250,10 +251,10 @@ async function createGeniuspayCheckout(
   let parsed: Record<string, unknown> | null = null;
   try { parsed = text ? JSON.parse(text) : null; } catch (_) { parsed = null; }
   if (!resp.ok || !parsed || parsed.success !== true) {
-    throw new GeniuspayError(
-      "geniuspay_checkout_refused",
-      String((parsed && parsed.message) || ("HTTP " + resp.status)).slice(0, 200),
-    );
+    const detail = parsed && typeof parsed.message === "string"
+      ? parsed.message
+      : ("HTTP " + resp.status + " " + text.slice(0, 150));
+    throw new GeniuspayError("geniuspay_checkout_refused", detail.slice(0, 200));
   }
   const data = (parsed.data ?? {}) as Record<string, unknown>;
   const reference = typeof data.reference === "string" ? data.reference : null;
