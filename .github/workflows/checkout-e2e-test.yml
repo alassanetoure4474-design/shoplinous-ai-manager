@@ -13,29 +13,79 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Attendre que la fonction geniuspay-order reponde
+      - name: Installer la CLI Supabase
+        run: |
+          set -e
+          curl -fsSL https://github.com/supabase/cli/releases/download/v2.121.0/supabase_linux_amd64.tar.gz -o /tmp/sb.tar.gz
+          tar -xzf /tmp/sb.tar.gz -C /usr/local/bin supabase
+          supabase --version
+
+      - name: Installer httpx
+        run: python3 -m pip install --quiet httpx
+
+      - name: Synchroniser le webhook et son secret
         env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          GENIUSPAY_API_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
+          GENIUSPAY_API_SECRET: ${{ secrets.GENIUSPAY_API_SECRET }}
+          GENIUSPAY_ENVIRONMENT: sandbox
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "workflow")
+          import httpx
+          from shoplinous_global.geniuspay import GeniusPayClient
+
+          client = GeniusPayClient.from_env()
+          url = "https://giarkrdmwfrlagkqnkvi.supabase.co/functions/v1/geniuspay-webhook"
+          headers = client._headers()
+          removed = 0
+          try:
+              resp = httpx.get(client.base_url + "/webhooks", headers=headers, timeout=20.0)
+              body = resp.text
+              print("GET /webhooks HTTP " + str(resp.status_code))
+              try:
+                  data = resp.json()
+                  items = data.get("data") if isinstance(data, dict) else data
+                  if isinstance(items, dict):
+                      items = items.get("webhooks") or items.get("items") or []
+                  if isinstance(items, list):
+                      for item in items:
+                          if not isinstance(item, dict):
+                              continue
+                          iurl = str(item.get("url") or item.get("endpoint") or "")
+                          iid = str(item.get("id") or item.get("webhook_id") or "")
+                          if "supabase.co" in iurl and iid:
+                              dresp = httpx.delete(client.base_url + "/webhooks/" + iid, headers=headers, timeout=20.0)
+                              print("DELETE ancien webhook " + iid + " -> HTTP " + str(dresp.status_code))
+                              if 200 <= dresp.status_code < 300:
+                                  removed += 1
+              except ValueError:
+                  print("Liste webhooks non JSON (anciens webhooks conserves)")
+          except Exception as exc:
+              print("Liste des webhooks indisponible: " + type(exc).__name__)
+          data = client.creer_webhook(url=url, nom="SHOPLINOUS Edge Function webhook")
+          secret = str(data["secret"])
+          wid = str(data.get("id") or data.get("webhook_id") or "")
+          print("::add-mask::" + secret)
+          print("Webhook actif cree (id " + wid + ", anciens supprimes: " + str(removed) + ")")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
+              out.write("GP_WEBHOOK_SECRET=" + secret + chr(10))
+          PY
+
+      - name: Pousser le secret webhook vers Supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
-          url="https://$PROJECT_ID.supabase.co/functions/v1/geniuspay-order?action=status"
-          for i in $(seq 1 60); do
-            code=$(curl -s -o /tmp/wait.json -w "%{http_code}" --max-time 10 "$url" || echo 000)
-            echo "tentative $i : HTTP $code"
-            cat /tmp/wait.json || true
-            echo ""
-            if [ "$code" != "000" ] && [ "$code" != "404" ]; then
-              echo "::notice::Fonction joignable apres $i tentatives (HTTP $code)"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::La fonction geniuspay-order n'est jamais devenue joignable"
-          exit 1
+          test -n "$GP_WEBHOOK_SECRET" || { echo "::error::Secret webhook absent"; exit 1; }
+          supabase secrets set "GENIUSPAY_WEBHOOK_SECRET=$GP_WEBHOOK_SECRET" --project-ref "$PROJECT_ID"
+          echo "::notice::Secret webhook synchronise dans Supabase"
 
       - name: Parcours client complet EUR + Wave + scenarios d'echec
         env:
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-          WEBHOOK_SECRET: ${{ secrets.GENIUSPAY_WEBHOOK_SECRET }}
+          WEBHOOK_SECRET: ${{ env.GP_WEBHOOK_SECRET }}
         run: |
           python3 - <<'PY'
           import json, time, hmac, hashlib, random, sys, os

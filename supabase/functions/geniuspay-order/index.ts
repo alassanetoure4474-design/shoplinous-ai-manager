@@ -210,7 +210,10 @@ async function handleStatus(orderNumber: string): Promise<Response> {
     if (err instanceof SupabaseRpcError && err.status === 404) {
       return json({ error: "order_not_found" }, 404);
     }
-    return json({ error: "status_unavailable" }, 503);
+    return json({
+      error: "status_unavailable",
+      detail: err instanceof SupabaseRpcError ? err.message.slice(0, 160) : "",
+    }, 503);
   }
 }
 
@@ -449,7 +452,10 @@ async function handleStart(req: StartRequest): Promise<Response> {
           order_number: req.orderNumber,
         }, 409);
       }
-      return json({ error: "reservation_failed" }, 409);
+      return json({
+        error: "reservation_failed",
+        detail: err.message.slice(0, 160),
+      }, 409);
     }
     return json({ error: "reservation_failed" }, 503);
   }

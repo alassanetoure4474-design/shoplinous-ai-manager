@@ -68,37 +68,42 @@ jobs:
             fi
           fi
 
-      - name: Appliquer la migration via l'API Management (HTTPS)
+      - name: Appliquer les migrations via l'API Management (HTTPS)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           set +e
-          sql=$(cat supabase/migrations/20261104000000_extend_payments_card_eur.sql)
-          payload=$(jq -n --arg q "$sql" '{query:$q}')
-          http=$(curl -s -o /tmp/migr.json -w "%{http_code}" -X POST \
-            "https://api.supabase.com/api/v1/projects/$PROJECT_ID/database/query" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$payload")
-          cat /tmp/migr.json
-          echo ""
-          echo "HTTP $http"
-          if [ "$http" != "200" ]; then
-            echo "::error::Migration API code=$http: $(head -c 400 /tmp/migr.json)"
-            exit 1
-          fi
-          hist="insert into supabase_migrations.schema_migrations (version, statements) values ('20261104000000', 1) on conflict (version) do nothing"
-          hpayload=$(jq -n --arg q "$hist" '{query:$q}')
-          hhttp=$(curl -s -o /tmp/hist.json -w "%{http_code}" -X POST \
-            "https://api.supabase.com/api/v1/projects/$PROJECT_ID/database/query" \
-            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$hpayload")
-          cat /tmp/hist.json
-          echo ""
-          echo "HTTP historique: $hhttp"
-          echo "::notice::Migration 20261104000000 appliquee via API Management"
+          API="https://api.supabase.com/api/v1/projects/$PROJECT_ID/database/query"
+          AUTH="Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
+          CT="Content-Type: application/json"
+          req() {
+            payload=$(jq -n --arg q "$1" '{query:$q}')
+            curl -s -o /tmp/q.json -w "%{http_code}" -X POST "$API" -H "$AUTH" -H "$CT" -d "$payload"
+          }
+          http=$(req "select version from supabase_migrations.schema_migrations")
+          applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u)
+          echo "Migrations deja appliquees: $(echo $applied | tr '\n' ' ')"
+          for f in supabase/migrations/*.sql; do
+            version=$(basename "$f" .sql)
+            if echo "$applied" | grep -q "$version"; then
+              echo "Deja appliquee: $version"
+              continue
+            fi
+            echo "Application de $version ..."
+            sql=$(cat "$f")
+            http=$(req "$sql")
+            if [ "$http" != "200" ]; then
+              echo "::error::Migration $version code=$http: $(head -c 400 /tmp/q.json)"
+              exit 1
+            fi
+            http=$(req "insert into supabase_migrations.schema_migrations (version, statements) values ('$version', 1) on conflict (version) do nothing")
+            if [ "$http" != "200" ]; then
+              echo "::error::Historique $version code=$http"
+              exit 1
+            fi
+            echo "::notice::Migration $version appliquee via API Management"
+          done
 
       - name: Deployer la fonction geniuspay-order
         env:
