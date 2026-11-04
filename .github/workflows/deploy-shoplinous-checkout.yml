@@ -13,24 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verifier les secrets requis
-        env:
-          SB_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SB_PROJECT: ${{ secrets.SUPABASE_PROJECT_ID }}
-          GP_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
-          GP_SECRET: ${{ secrets.GENIUSPAY_API_SECRET }}
-        run: |
-          missing=0
-          for pair in "SUPABASE_ACCESS_TOKEN:$SB_TOKEN" "SUPABASE_PROJECT_ID:$SB_PROJECT" "GENIUSPAY_API_KEY:$GP_KEY" "GENIUSPAY_API_SECRET:$GP_SECRET"; do
-            name="${pair%%:*}"
-            value="${pair#*:}"
-            if [ -z "$value" ]; then
-              echo "::error::Secret manquant: $name"
-              missing=1
-            fi
-          done
-          [ "$missing" = "0" ] || exit 1
-
       - uses: supabase/setup-cli@v1
         with:
           version: latest
@@ -41,6 +23,7 @@ jobs:
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           FW_KEY: ${{ secrets.FREEWEBSTORE_API_KEY }}
         run: |
+          set +e
           args=""
           args="$args GENIUSPAY_API_KEY=${{ secrets.GENIUSPAY_API_KEY }}"
           args="$args GENIUSPAY_API_SECRET=${{ secrets.GENIUSPAY_API_SECRET }}"
@@ -54,20 +37,44 @@ jobs:
           else
             echo "::warning::Secret FREEWEBSTORE_API_KEY absent : le mode commandes Freewebstore reelles renverra 503 jusqu'a son ajout."
           fi
-          # shellcheck disable=SC2086
-          supabase secrets set $args --project-ref "$PROJECT_ID"
+          echo "Nombre de secrets a pousser : $(echo $args | wc -w)"
+          output=$(supabase secrets set $args --project-ref "$PROJECT_ID" 2>&1)
+          code=$?
+          echo "$output"
+          if [ $code -ne 0 ]; then
+            echo "::error::supabase secrets set code=$code sortie: ${output:0:500}"
+            exit 1
+          fi
 
       - name: Appliquer les migrations (db push)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-        run: supabase db push --project-ref "$PROJECT_ID"
+        run: |
+          set +e
+          output=$(supabase db push --project-ref "$PROJECT_ID" 2>&1)
+          code=$?
+          echo "$output"
+          if [ $code -ne 0 ]; then
+            echo "::error::db push code=$code sortie: ${output:0:500}"
+            exit 1
+          fi
+          echo "::notice::Migrations appliquees"
 
       - name: Deployer la fonction geniuspay-order
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-        run: supabase functions deploy geniuspay-order --no-verify-jwt --project-ref "$PROJECT_ID"
+        run: |
+          set +e
+          output=$(supabase functions deploy geniuspay-order --no-verify-jwt --project-ref "$PROJECT_ID" 2>&1)
+          code=$?
+          echo "$output"
+          if [ $code -ne 0 ]; then
+            echo "::error::functions deploy code=$code sortie: ${output:0:500}"
+            exit 1
+          fi
+          echo "::notice::geniuspay-order deployee"
 
       - name: Sonder la fonction deployee
         env:
@@ -82,4 +89,4 @@ jobs:
             echo "::error::La fonction geniuspay-order ne repond pas"
             exit 1
           fi
-          echo "::notice::geniuspay-order deployee et joignable (HTTP $code)"
+          echo "::notice::geniuspay-order joignable (HTTP $code)"
