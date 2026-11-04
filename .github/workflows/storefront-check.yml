@@ -1,0 +1,69 @@
+name: SHOPLINOUS storefront checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "storefront/**"
+      - "supabase/migrations/**"
+      - ".github/workflows/storefront-check.yml"
+  push:
+    branches: [feat/shoplinous-africa-storefront]
+    paths:
+      - "storefront/**"
+      - "supabase/migrations/**"
+      - ".github/workflows/storefront-check.yml"
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Check storefront JavaScript syntax
+        run: node --check storefront/shop.js
+
+      - name: Check storefront pages and configuration
+        run: |
+          python - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class PageCheck(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.shop_page = None
+                  self.has_styles = False
+                  self.has_script = False
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag == "main" and attrs.get("data-shop-page"):
+                      self.shop_page = attrs["data-shop-page"]
+                  if tag == "link" and attrs.get("href") == "shop.css":
+                      self.has_styles = True
+                  if tag == "script" and attrs.get("src") == "shop.js":
+                      self.has_script = True
+
+          expected = {
+              "catalogue.html": "catalogue",
+              "produit.html": "produit",
+              "panier.html": "panier",
+          }
+          for filename, page in expected.items():
+              parser = PageCheck()
+              parser.feed((Path("storefront") / filename).read_text(encoding="utf-8"))
+              assert parser.shop_page == page, f"{filename}: data-shop-page missing"
+              assert parser.has_styles, f"{filename}: shop.css missing"
+              assert parser.has_script, f"{filename}: shop.js missing"
+          config = Path("storefront/config.js").read_text(encoding="utf-8")
+          assert "service_role" not in config, "A service role key must never be put in browser config"
+          migration = Path("supabase/migrations/20261104000500_storefront_public_catalog.sql")
+          assert migration.exists(), "Public catalogue migration missing"
+          print("STOREFRONT_STATIC_CHECKS_OK")
+          PY
