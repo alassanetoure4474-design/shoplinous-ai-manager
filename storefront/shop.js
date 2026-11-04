@@ -62,7 +62,7 @@
   const renderCatalog = async () => {
     root.replaceChildren(el("div","shop-message","Chargement du catalogue…"));
     try {
-      const products = await api("select=" + encodeURIComponent(fields) + "&order=published_at.desc&limit=100");
+      const products = await api("select=" + encodeURIComponent(fields) + "&order=published_at.desc&limit=1000");
       const heading = el("div","shop-heading");
       const left = el("div");
       left.append(el("div","shop-eyebrow","La sélection vérifiée"),el("h1","","Tous nos produits"),el("p","shop-muted","Les produits affichés sont ceux qui sont publiés et dont les contrôles requis sont encore valides."));
@@ -151,7 +151,7 @@
       const currencies=[...new Set(available.map(x=>x.product.currency))];
       sum.append(el("div","shop-muted","Sous-total indicatif"));
       if(currencies.length===1 && markets.length===1){const total=available.reduce((n,x)=>n+Number(x.product.price)*x.qty,0);sum.append(el("strong","",money(total,currencies[0])));}
-      else sum.append(el("strong","","Plusieurs devises"),el("p","shop-muted","Le total ne peut pas être calculé tant que les devises ne sont pas harmonisées."));
+      else sum.append(el("strong","","Total à confirmer"),el("p","shop-muted","Le total ne peut pas être calculé avec plusieurs devises ou plusieurs marchés."));
       const checkout=el("button","shop-action","Commander");checkout.type="button";checkout.disabled=true;
       sum.append(checkout,el("p","shop-footer-note","Le paiement et la création de commande ne sont pas encore activés. Le bouton restera désactivé jusqu'à la mise en place du serveur de commande sécurisé et du paiement Sandbox."));
       root.replaceChildren(heading,list,sum);
