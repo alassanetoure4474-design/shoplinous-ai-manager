@@ -315,7 +315,11 @@ class GeniusPayClient:
         if host not in domaines_autorises:
             raise GeniusPayError("Domaine de checkout inattendu : redirection refusee")
         statut_initial = str(data.get("status", "")).lower()
-        if statut_initial not in ("pending", "processing"):
+        # "none" = transaction creee, aucun moyen de paiement choisi
+        # (reponse reelle observee en Sandbox pour un checkout carte EUR).
+        # Fail-closed : ce statut ne confirme JAMAIS un paiement ; seule la
+        # validation du webhook signe (HMAC) confirme un encaissement.
+        if statut_initial not in ("pending", "processing", "none"):
             raise GeniusPayError(
                 "Statut initial inattendu pour le checkout: "
                 + (statut_initial or "absent")
