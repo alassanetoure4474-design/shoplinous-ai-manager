@@ -3,9 +3,9 @@
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const steps = [
     {title:"Commande préparée",detail:"Le client vérifie son panier et choisit son pays de livraison.",status:"Étape 1 sur 4"},
-    {title:"Checkout GeniusPay",detail:"Le serveur crée une session de paiement Sandbox et associe une référence unique à la commande.",status:"Étape 2 sur 4"},
-    {title:"Webhook vérifié",detail:"Le serveur vérifie la signature, le montant, la devise et l'identifiant. Un simple retour navigateur ne suffit pas.",status:"Étape 3 sur 4"},
-    {title:"Confirmation sécurisée",detail:"La commande passe à payée uniquement après validation serveur du webhook. Le client reçoit alors sa confirmation.",status:"Étape 4 sur 4"}
+    {title:"Paiement sécurisé GeniusPay",detail:"Le serveur prépare une session de paiement de test et associe une référence unique à la commande.",status:"Étape 2 sur 4"},
+    {title:"Notification vérifiée",detail:"Le serveur vérifie la signature, le montant, la devise et la référence. Un simple retour du navigateur ne suffit pas.",status:"Étape 3 sur 4"},
+    {title:"Confirmation sécurisée",detail:"La commande est marquée comme payée uniquement après validation de la notification par le serveur. Le client reçoit ensuite sa confirmation.",status:"Étape 4 sur 4"}
   ];
   const flow = document.querySelector("[data-payment-flow]");
   if (flow) {
