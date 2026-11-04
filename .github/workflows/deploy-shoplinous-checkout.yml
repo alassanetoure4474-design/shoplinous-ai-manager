@@ -79,10 +79,10 @@ jobs:
             payload=$(jq -n --arg t "$MIGRATE_TOKEN" --arg q "$1" '{token:$t, sql:$q}')
             curl -s -o /tmp/q.json -w "%{http_code}" -X POST "$FUNC" -H "content-type: application/json" -d "$payload"
           }
-          http=$(run_sql "select version from supabase_migrations.schema_migrations" || true)
+          http=$(run_sql "select version from supabase_migrations.schema_migrations") || true
           applied=""
           if grep -q '"ok": *true' /tmp/q.json; then
-            applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u)
+            applied=$(tr ',' '\n' < /tmp/q.json | grep -oE '[0-9]{14}' | sort -u || true)
           else
             echo "::notice::Historique absent ou illisible : $(head -c 200 /tmp/q.json)"
           fi
