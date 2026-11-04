@@ -314,8 +314,12 @@ class GeniusPayClient:
         )
         if host not in domaines_autorises:
             raise GeniusPayError("Domaine de checkout inattendu : redirection refusee")
-        if str(data.get("status", "")).lower() not in ("pending", "processing"):
-            raise GeniusPayError("Statut initial inattendu pour le checkout")
+        statut_initial = str(data.get("status", "")).lower()
+        if statut_initial not in ("pending", "processing"):
+            raise GeniusPayError(
+                "Statut initial inattendu pour le checkout: "
+                + (statut_initial or "absent")
+            )
         response_env = str(data.get("environment", self.environment)).lower()
         if response_env != self.environment:
             raise GeniusPayError("L'environnement du checkout ne correspond pas")
@@ -350,7 +354,7 @@ class GeniusPayClient:
         return {
             "reference": reference,
             "checkout_url": checkout_url,
-            "statut": str(data["status"]).lower(),
+            "statut": statut_initial,
             "montant": amount_api,
             "montant_saisi": str(amount),
             "unite_api": "centimes" if code_devise != "XOF" else "unites",
