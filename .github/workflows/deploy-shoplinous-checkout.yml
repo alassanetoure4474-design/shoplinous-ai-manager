@@ -102,9 +102,13 @@ jobs:
             echo "Migration $version : HTTP $http"
             echo "Corps : $(head -c 400 /tmp/q.json)"
             if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
-              echo "::error::Migration $version echouee (HTTP $http) : $(head -c 350 /tmp/q.json)"
-              fail=1
-              break
+              if grep -q 'already exists' /tmp/q.json; then
+                echo "::notice::Migration $version deja integree en base (already exists)"
+              else
+                echo "::error::Migration $version echouee (HTTP $http) : $(head -c 350 /tmp/q.json)"
+                fail=1
+                break
+              fi
             fi
             http=$(run_sql "insert into supabase_migrations.schema_migrations (version, statements) values ('$version', 1) on conflict (version) do nothing")
             if [ "$http" != "200" ] || grep -q '"ok": *false' /tmp/q.json; then
