@@ -27,7 +27,9 @@ jobs:
           node-version: "22"
 
       - name: Check storefront JavaScript syntax
-        run: node --check storefront/shop.js
+        run: |
+          node --check storefront/shop.js
+          node --check storefront/animations.js
 
       - name: Check storefront pages and configuration
         run: |
@@ -63,6 +65,13 @@ jobs:
               assert parser.has_script, f"{filename}: shop.js missing"
           config = Path("storefront/config.js").read_text(encoding="utf-8")
           assert "service_role" not in config, "A service role key must never be put in browser config"
+          home = Path("storefront/index.html").read_text(encoding="utf-8")
+          assert "assets/logo-animated.svg" in home, "Animated brand logo missing from homepage"
+          assert "assets/hero-motion.svg" in home, "Animated hero artwork missing from homepage"
+          assert "data-payment-flow" in home, "Interactive payment flow missing from homepage"
+          assert Path("storefront/animations.js").exists(), "Animation controller missing"
+          assert Path("storefront/assets/logo-animated.svg").exists(), "Animated logo SVG missing"
+          assert Path("storefront/assets/hero-motion.svg").exists(), "Animated hero SVG missing"
           migration = Path("supabase/migrations/20261104000500_storefront_public_catalog.sql")
           assert migration.exists(), "Public catalogue migration missing"
           print("STOREFRONT_STATIC_CHECKS_OK")
