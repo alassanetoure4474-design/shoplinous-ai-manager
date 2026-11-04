@@ -74,7 +74,7 @@ jobs:
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           set +e
-          API="https://api.supabase.com/api/v1/projects/$PROJECT_ID/database/query"
+          API="https://api.supabase.com/v1/projects/$PROJECT_ID/database/query"
           AUTH="Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
           CT="Content-Type: application/json"
           req() {
@@ -97,6 +97,11 @@ jobs:
               echo "::error::Migration $version code=$http: $(head -c 400 /tmp/q.json)"
               exit 1
             fi
+            if grep -q '"error"' /tmp/q.json 2>/dev/null; then
+              echo "::error::Migration $version erreur SQL: $(head -c 400 /tmp/q.json)"
+              exit 1
+            fi
+            echo "Reponse: $(head -c 200 /tmp/q.json)"
             http=$(req "insert into supabase_migrations.schema_migrations (version, statements) values ('$version', 1) on conflict (version) do nothing")
             if [ "$http" != "200" ]; then
               echo "::error::Historique $version code=$http"
@@ -111,7 +116,7 @@ jobs:
           PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           set +e
-          API="https://api.supabase.com/api/v1/projects/$PROJECT_ID/database/query"
+          API="https://api.supabase.com/v1/projects/$PROJECT_ID/database/query"
           payload=$(jq -n --arg q "select proname from pg_proc where proname in ('shoplinous_reserve_payment','shoplinous_finalize_checkout','shoplinous_order_status','shoplinous_process_geniuspay_webhook')" '{query:$q}')
           http=$(curl -s -o /tmp/rpc.json -w "%{http_code}" -X POST "$API" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
