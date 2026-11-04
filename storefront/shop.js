@@ -38,7 +38,7 @@
     }
     const base = cfg.supabaseUrl.replace(/\/$/, "");
     const response = await fetch(base + "/rest/v1/storefront_products?" + query, {
-      headers: { apikey: cfg.supabaseAnonKey, authorization: "Bearer " + cfg.supabaseAnonKey, accept: "application/json" }
+      headers: { apikey: cfg.supabaseAnonKey, accept: "application/json" }
     });
     if (!response.ok) throw new Error("catalogue_unavailable");
     return response.json();
