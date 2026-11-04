@@ -2,6 +2,12 @@
 
 Ce dossier contient le site public, indépendant de Freewebstore et distinct de l'ancien tableau de gestion. Tout le contenu est en français ; l'architecture est prête pour des traductions ultérieures (contenus regroupés par page, aucun texte codé en dur dans les composants partagés).
 
+## Nouvelle direction visuelle — novembre 2026
+
+- `index.html` : nouvelle page d'accueil complète, indépendante de l'ancienne direction artistique, avec hero éditorial, univers illustrés, cartes de collection, engagements et animations Motion Design.
+- `shop.css` : nouvelle identité cohérente pour le catalogue dynamique, les fiches produits et le panier.
+- `dashboard-apercu.html` : maquette visuelle du tableau de bord administrateur (indicateurs, commandes, catalogue, fournisseurs, livraisons, paiements). Les valeurs sont volontairement affichées comme indisponibles : ce tableau de bord n'est pas encore relié aux données réelles et ne doit pas être considéré comme une interface d'administration sécurisée.
+
 ## Pages livrées
 
 Boutique :
