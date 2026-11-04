@@ -44,8 +44,11 @@ jobs:
           output=$(supabase secrets set $args --project-ref "$PROJECT_ID" 2>&1)
           code=$?
           echo "$output"
+          echo "LIGNES SORTIE: $(echo "$output" | wc -l)"
           if [ $code -ne 0 ]; then
-            echo "::error::supabase secrets set code=$code sortie: ${output:0:500}"
+            echo "::error::secrets set code=$code debut: ${output:0:400}"
+            tailvar="${output: -400}"
+            echo "::error::secrets set fin: $tailvar"
             exit 1
           fi
 
