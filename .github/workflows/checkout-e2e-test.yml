@@ -1,0 +1,293 @@
+name: Checkout E2E Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHECKOUT_E2E_NOW
+      - .github/workflows/checkout-e2e-test.yml
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Attendre que la fonction geniuspay-order reponde
+        env:
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          url="https://$PROJECT_ID.supabase.co/functions/v1/geniuspay-order?action=status"
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /tmp/wait.json -w "%{http_code}" --max-time 10 "$url" || echo 000)
+            echo "tentative $i : HTTP $code"
+            cat /tmp/wait.json || true
+            echo ""
+            if [ "$code" != "000" ] && [ "$code" != "404" ]; then
+              echo "::notice::Fonction joignable apres $i tentatives (HTTP $code)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::La fonction geniuspay-order n'est jamais devenue joignable"
+          exit 1
+
+      - name: Parcours client complet EUR + Wave + scenarios d'echec
+        env:
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          WEBHOOK_SECRET: ${{ secrets.GENIUSPAY_WEBHOOK_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import json, time, hmac, hashlib, random, sys, os
+          import urllib.request, urllib.error
+
+          PROJECT = os.environ["PROJECT_ID"]
+          SECRET = os.environ["WEBHOOK_SECRET"].encode()
+          ORDER_URL = "https://" + PROJECT + ".supabase.co/functions/v1/geniuspay-order"
+          WEBHOOK_URL = "https://" + PROJECT + ".supabase.co/functions/v1/geniuspay-webhook"
+          NL = chr(10)
+          failures = []
+
+          def http(method, url, body=None, headers=None, raw=False):
+              data = None
+              if body is not None:
+                  data = body.encode() if isinstance(body, str) else json.dumps(body).encode()
+              req = urllib.request.Request(url, data=data, method=method)
+              req.add_header("content-type", "application/json")
+              for k, v in (headers or {}).items():
+                  req.add_header(k, v)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      text = resp.read().decode()
+                      return resp.status, text
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read().decode()
+              except Exception as e:
+                  return 0, str(e)
+
+          def php_json(payload):
+              return json.dumps(payload, separators=(",", ":"), ensure_ascii=True).replace("/", "\/")
+
+          def signature(payload, ts):
+              canonical = php_json(payload)
+              msg = str(ts) + "." + canonical
+              return hmac.new(SECRET, msg.encode(), hashlib.sha256).hexdigest(), canonical
+
+          def send_webhook(payload, ts, sig=None):
+              canonical = php_json(payload)
+              if sig is None:
+                  sig, _ = signature(payload, ts)
+              headers = {
+                  "X-Webhook-Signature": sig,
+                  "X-Webhook-Timestamp": str(ts),
+                  "X-Webhook-Event": payload["event"],
+                  "X-Webhook-Environment": "sandbox",
+              }
+              return http("POST", WEBHOOK_URL, canonical, headers)
+
+          def notice(msg):
+              print("::notice::" + msg)
+
+          def check(name, ok, detail=""):
+              if ok:
+                  notice("PASS " + name + (" : " + detail if detail else ""))
+              else:
+                  failures.append(name)
+                  print("::error::ECHEC " + name + (" : " + detail if detail else ""))
+
+          def make_test_order(prefix, amount, currency, country):
+              order = "TEST-" + prefix + "-" + str(random.randint(100000, 999999))
+              body = {"order_number": order, "email": "client@example.com",
+                      "amount": amount, "currency": currency, "country": country}
+              code, text = http("POST", ORDER_URL, body)
+              try:
+                  parsed = json.loads(text)
+              except Exception:
+                  parsed = {}
+              return order, code, parsed
+
+          def status(order):
+              code, text = http("GET", ORDER_URL + "?action=status&order_number=" + order)
+              try:
+                  return code, json.loads(text)
+              except Exception:
+                  return code, {}
+
+          # ---- 1. Commande EUR 24.90 (carte) ----
+          order_eur, code, parsed = make_test_order("EUR", 24.90, "EUR", "FR")
+          check("EUR: creation de commande", code == 200 and "checkout_url" in parsed,
+                "HTTP " + str(code) + " " + str(parsed)[:200])
+          ref_eur = parsed.get("reference", "")
+          url_eur = parsed.get("checkout_url", "")
+          check("EUR: reference et checkout_url valides",
+                bool(ref_eur) and url_eur.startswith("https://") and
+                ("geniuspay" in url_eur or "wave" in url_eur),
+                "ref=" + ref_eur[:40])
+          code, st = status(order_eur)
+          check("EUR: statut avant paiement", code == 200 and
+                st.get("order_status") == "awaiting_payment" and
+                st.get("payment_status") == "pending",
+                json.dumps(st))
+          check("EUR: montant API en centimes", st.get("amount_api") == 2490 and
+                st.get("currency") == "EUR", "amount_api=" + str(st.get("amount_api")))
+
+          # ---- 2. Webhook signe payment.success EUR ----
+          ts = int(time.time())
+          payload = {"id": "evt-eur-" + str(random.randint(100000, 999999)),
+                     "event": "payment.success", "environment": "sandbox",
+                     "timestamp": ts,
+                     "data": {"reference": ref_eur, "status": "completed",
+                              "amount": 2490, "currency": "EUR",
+                              "metadata": {"order_id": order_eur}}}
+          code, text = send_webhook(payload, ts)
+          parsed = json.loads(text) if text else {}
+          check("EUR: webhook payment.success accepte", code == 200 and
+                parsed.get("order_status") == "paid" and
+                parsed.get("payment_status") == "succeeded",
+                "HTTP " + str(code) + " " + text)
+          code, st = status(order_eur)
+          check("EUR: commande confirmee payee", code == 200 and
+                st.get("order_status") == "paid", json.dumps(st))
+
+          # ---- 3. Doublon du meme event_id ----
+          code, text = send_webhook(payload, ts)
+          parsed = json.loads(text) if text else {}
+          check("EUR: doublon idempotent", code == 200 and parsed.get("duplicate") is True,
+                "HTTP " + str(code) + " " + text)
+          code, st = status(order_eur)
+          check("EUR: pas de double mutation", st.get("order_status") == "paid" and
+                st.get("attempts") == 1, json.dumps(st))
+
+          # ---- 4. Event_id reutilise avec un payload different ----
+          bad = dict(payload)
+          bad["data"] = dict(payload["data"])
+          bad["data"]["amount"] = 2990
+          code, text = send_webhook(bad, ts)
+          check("EUR: event_id reutilise rejete", code == 400,
+                "HTTP " + str(code))
+
+          # ---- 5. Signature invalide ----
+          code, text = send_webhook(payload, ts, sig="0" * 64)
+          check("Securite: signature invalide rejetee (401)", code == 401,
+                "HTTP " + str(code))
+
+          # ---- 6. Timestamp expire ----
+          code, text = send_webhook(dict(payload, timestamp=ts - 400,
+                                         data=dict(payload["data"])), ts - 400,
+                                    sig=signature(dict(payload, timestamp=ts - 400,
+                                                       data=dict(payload["data"])), ts - 400)[0])
+          check("Securite: timestamp expire rejete (401)", code == 401,
+                "HTTP " + str(code))
+
+          # ---- 7. Wave Direct CI/XOF 200 ----
+          order_xof, code, parsed = make_test_order("XOF", 200, "XOF", "CI")
+          ref_xof = parsed.get("reference", "")
+          url_xof = parsed.get("checkout_url", "")
+          check("Wave: creation de commande XOF", code == 200 and bool(ref_xof),
+                "HTTP " + str(code) + " ref=" + str(ref_xof)[:40])
+          code, st = status(order_xof)
+          check("Wave: montant XOF unites entieres", st.get("amount_api") == 200 and
+                st.get("currency") == "XOF", json.dumps(st))
+          ts2 = int(time.time())
+          payload2 = {"id": "evt-xof-" + str(random.randint(100000, 999999)),
+                      "event": "payment.success", "environment": "sandbox",
+                      "timestamp": ts2,
+                      "data": {"reference": ref_xof, "status": "completed",
+                               "amount": 200, "currency": "XOF",
+                               "metadata": {"order_id": order_xof}}}
+          code, text = send_webhook(payload2, ts2)
+          parsed = json.loads(text) if text else {}
+          check("Wave: webhook payment.success accepte", code == 200 and
+                parsed.get("order_status") == "paid", "HTTP " + str(code))
+          code, st = status(order_xof)
+          check("Wave: commande confirmee payee", st.get("order_status") == "paid",
+                json.dumps(st))
+
+          # ---- 8. Montant incorrect (falsifie) ----
+          order_bad, code, parsed = make_test_order("BAD", 24.90, "EUR", "FR")
+          ref_bad = parsed.get("reference", "")
+          ts3 = int(time.time())
+          payload3 = {"id": "evt-bad-" + str(random.randint(100000, 999999)),
+                      "event": "payment.success", "environment": "sandbox",
+                      "timestamp": ts3,
+                      "data": {"reference": ref_bad, "status": "completed",
+                               "amount": 2400, "currency": "EUR",
+                               "metadata": {"order_id": order_bad}}}
+          code, text = send_webhook(payload3, ts3)
+          check("Securite: montant falsifie rejete", code == 400, "HTTP " + str(code))
+          code, st = status(order_bad)
+          check("Securite: commande non payee apres montant falsifie",
+                st.get("order_status") == "awaiting_payment" and
+                st.get("payment_status") == "pending", json.dumps(st))
+          payload3["data"]["amount"] = 2490
+          payload3["data"]["status"] = "completed"
+          ts4 = int(time.time())
+          payload3["timestamp"] = ts4
+          payload3["id"] = "evt-bad2-" + str(random.randint(100000, 999999))
+          code, text = send_webhook(payload3, ts4)
+          parsed = json.loads(text) if text else {}
+          check("Recuperation: paiement correct ensuite accepte",
+                code == 200 and parsed.get("order_status") == "paid",
+                "HTTP " + str(code))
+
+          # ---- 9. Annulation puis nouvelle tentative ----
+          order_cxl, code, parsed = make_test_order("CXL", 24.90, "EUR", "FR")
+          ref_cxl = parsed.get("reference", "")
+          ts5 = int(time.time())
+          payload5 = {"id": "evt-cxl-" + str(random.randint(100000, 999999)),
+                      "event": "payment.cancelled", "environment": "sandbox",
+                      "timestamp": ts5,
+                      "data": {"reference": ref_cxl, "status": "cancelled",
+                               "amount": 2490, "currency": "EUR",
+                               "metadata": {"order_id": order_cxl}}}
+          code, text = send_webhook(payload5, ts5)
+          parsed = json.loads(text) if text else {}
+          check("Annulation: payment.cancelled accepte",
+                code == 200 and parsed.get("payment_status") == "cancelled",
+                "HTTP " + str(code))
+          code, st = status(order_cxl)
+          check("Annulation: commande revenue en attente",
+                st.get("order_status") == "awaiting_payment", json.dumps(st))
+          code, text2 = http("POST", ORDER_URL, {"order_number": order_cxl,
+              "email": "client@example.com", "amount": 24.90,
+              "currency": "EUR", "country": "FR"})
+          parsed2 = json.loads(text2) if text2 else {}
+          ref_cxl2 = parsed2.get("reference", "")
+          check("Recuperation: nouvelle tentative de paiement autorisee",
+                code == 200 and bool(ref_cxl2) and ref_cxl2 != ref_cxl,
+                "ref2=" + str(ref_cxl2)[:40])
+          ts6 = int(time.time())
+          payload6 = {"id": "evt-cxl2-" + str(random.randint(100000, 999999)),
+                      "event": "payment.success", "environment": "sandbox",
+                      "timestamp": ts6,
+                      "data": {"reference": ref_cxl2, "status": "completed",
+                               "amount": 2490, "currency": "EUR",
+                               "metadata": {"order_id": order_cxl}}}
+          code, text = send_webhook(payload6, ts6)
+          parsed = json.loads(text) if text else {}
+          check("Recuperation: paiement final accepte apres annulation",
+                code == 200 and parsed.get("order_status") == "paid",
+                "HTTP " + str(code))
+
+          # ---- 10. Reference inconnue ----
+          ts7 = int(time.time())
+          payload7 = {"id": "evt-unk-" + str(random.randint(100000, 999999)),
+                      "event": "payment.success", "environment": "sandbox",
+                      "timestamp": ts7,
+                      "data": {"reference": "ref-inconnue-" + str(random.randint(100000, 999999)),
+                               "status": "completed", "amount": 2490,
+                               "currency": "EUR",
+                               "metadata": {"order_id": order_eur}}}
+          code, text = send_webhook(payload7, ts7)
+          check("Securite: reference inconnue rejetee", code != 200,
+                "HTTP " + str(code))
+
+          if failures:
+              print("::error::E2E ECHEC : " + ", ".join(failures))
+              sys.exit(1)
+          print("::notice::E2E TOUT PASS : parcours client complet EUR + Wave + 6 scenarios de securite valides")
+          PY
+
+      - name: Rapport des logs bruts
+        if: always()
+        run: echo "Les details PASS/ECHEC sont dans les annotations et les logs du run."
