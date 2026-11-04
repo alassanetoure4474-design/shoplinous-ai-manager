@@ -13,6 +13,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Diagnostic compte GeniusPay (lecture seule)
+        env:
+          GENIUSPAY_API_KEY: ${{ secrets.GENIUSPAY_API_KEY }}
+          GENIUSPAY_API_SECRET: ${{ secrets.GENIUSPAY_API_SECRET }}
+          GENIUSPAY_ENVIRONMENT: sandbox
+        run: |
+          python3 - <<'PY'
+          import os, sys, json
+          sys.path.insert(0, "workflow")
+          import httpx
+          from shoplinous_global.geniuspay import GeniusPayClient
+          client = GeniusPayClient.from_env()
+          headers = client._headers()
+          resp = httpx.get(client.base_url + "/account", headers=headers, timeout=20.0)
+          print("GET /account HTTP " + str(resp.status_code))
+          try:
+              body = resp.json()
+              data = body.get("data", body)
+              print(json.dumps(data, indent=2, default=str)[:2000])
+          except ValueError:
+              print(resp.text[:500])
+          PY
+
       - name: Installer la CLI Supabase
         run: |
           set -e
